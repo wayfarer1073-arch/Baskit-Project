@@ -9,12 +9,13 @@ export default async function PeriodicDashboardPage({ searchParams }: { searchPa
   const today = todayKstDateString();
   const asOfDate = isDateString(params.date) && params.date <= today ? params.date : today;
   const tenant = await requireTenant();
-  const [{ rows, stockoutSoonDays }, warehouses] = await Promise.all([getPeriodicRows(tenant.orgId, asOfDate), listWarehouses(tenant.orgId)]);
+  const [{ rows, stockoutSoonDays, recountDays }, warehouses] = await Promise.all([getPeriodicRows(tenant.orgId, asOfDate), listWarehouses(tenant.orgId)]);
 
   return (
     <PeriodicDashboard
       asOfDate={asOfDate}
       stockoutSoonDays={stockoutSoonDays}
+      recountDays={recountDays}
       rows={rows}
       warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
     />

@@ -1,32 +1,42 @@
 import { estimatePeriodicStock } from '@/domain/segments/periodic-count';
-import type { PeriodicRow } from '@/domain/segments/read-model';
-import { loadActiveSkusWithSeries, loadInboundsBySku } from '@/server/repositories/inventory-repository';
-import { getSettings } from '@/server/repositories/settings-repository';
+import type { PeriodicRow, PeriodicSkuDetail } from '@/domain/segments/read-model';
+import { loadInboundsBySku } from '@/server/repositories/inventory-repository';
+import { loadCountedSkus } from '@/server/repositories/count-repository';
+import { getSegmentSettings, getSettings } from '@/server/repositories/settings-repository';
 
-/** 실사 스냅샷(업로드)마다의 정상재고를 "실사 수량"으로 보고, 마지막 실사 이후 재고를 추정한다. */
+async function loadOptions(orgId: string) {
+  const [settings, { periodicRecountDays }] = await Promise.all([getSettings(orgId), getSegmentSettings(orgId)]);
+  return { stockoutSoonDays: settings.stockoutSoonDays, recountDays: periodicRecountDays };
+}
+
+/** 상품마다 자기 실사 이력(엑셀 업로드·직접 입력)으로 마지막 실사 이후 재고를 추정한다. */
 export async function getPeriodicRows(orgId: string, asOfDate: string) {
-  const settings = await getSettings(orgId);
-  const skus = await loadActiveSkusWithSeries(orgId, undefined, asOfDate);
-  const inboundsBySku = await loadInboundsBySku(skus.map((s) => s.descriptor.skuId), asOfDate);
+  const [options, skus] = await Promise.all([loadOptions(orgId), loadCountedSkus(orgId, asOfDate)]);
+  const inboundsBySku = await loadInboundsBySku(
+    skus.map((s) => s.descriptor.skuId),
+    asOfDate,
+  );
 
   const rows: PeriodicRow[] = [];
-  for (const { descriptor, observations } of skus) {
-    const estimate = estimatePeriodicStock(
-      observations.map((o) => ({ date: o.date, quantity: o.normalStock })),
-      inboundsBySku.get(descriptor.skuId) ?? [],
-      asOfDate,
-      { stockoutSoonDays: settings.stockoutSoonDays },
-    );
-    if (!estimate) continue;
-    rows.push({
-      skuId: descriptor.skuId,
-      warehouseId: descriptor.warehouseId,
-      warehouseCode: descriptor.warehouseCode,
-      warehouseName: descriptor.warehouseName,
-      productCode: descriptor.productCode,
-      productName: descriptor.productName,
-      estimate,
-    });
+  for (const { descriptor, counts } of skus) {
+    const estimate = estimatePeriodicStock(counts, inboundsBySku.get(descriptor.skuId) ?? [], asOfDate, options);
+    if (estimate) rows.push({ ...descriptor, estimate });
   }
-  return { rows, stockoutSoonDays: settings.stockoutSoonDays };
+  return { rows, ...options };
+}
+
+export async function getPeriodicSkuDetail(orgId: string, skuId: string, asOfDate: string): Promise<PeriodicSkuDetail | null> {
+  const [options, [sku]] = await Promise.all([loadOptions(orgId), loadCountedSkus(orgId, asOfDate, skuId)]);
+  if (!sku) return null;
+  const inbounds = (await loadInboundsBySku([skuId], asOfDate)).get(skuId) ?? [];
+  const estimate = estimatePeriodicStock(sku.counts, inbounds, asOfDate, options);
+  if (!estimate) return null;
+  return {
+    ...sku.descriptor,
+    estimate,
+    unitCost: sku.unitCost,
+    counts: [...sku.counts].reverse(),
+    inbounds: inbounds.map((i) => ({ date: i.date, quantity: i.quantity })).reverse(),
+    ...options,
+  };
 }

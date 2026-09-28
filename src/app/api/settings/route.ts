@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getTenant } from '@/server/tenant';
-import { updateSettings } from '@/server/repositories/settings-repository';
+import { updateSegmentSettings, updateSettings } from '@/server/repositories/settings-repository';
 
-const schema = z.object({
-  stockoutSoonDays: z.number().int().min(1).max(365),
-  manageMaxDays: z.number().int().min(1).max(365),
-  overstockCoverageDays: z.number().int().min(1).max(1000),
-  stagnantDays: z.number().int().min(1).max(365),
-});
+/** 세그먼트별 설정 탭이 자기 항목만 보내므로 모든 항목은 선택이다. */
+const schema = z
+  .object({
+    stockoutSoonDays: z.number().int().min(1).max(365),
+    manageMaxDays: z.number().int().min(1).max(365),
+    overstockCoverageDays: z.number().int().min(1).max(1000),
+    stagnantDays: z.number().int().min(1).max(365),
+    periodicRecountDays: z.number().int().min(1).max(365),
+    storeCheckRemainingPct: z.number().int().min(5).max(80),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0);
 
 export async function PATCH(request: Request) {
   const tenant = await getTenant();
@@ -19,6 +25,13 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 });
 
-  const settings = await updateSettings(tenant.orgId, parsed.data);
-  return NextResponse.json({ settings });
+  const { periodicRecountDays, storeCheckRemainingPct, ...risk } = parsed.data;
+  if (Object.keys(risk).length > 0) await updateSettings(tenant.orgId, risk);
+  if (periodicRecountDays !== undefined || storeCheckRemainingPct !== undefined) {
+    await updateSegmentSettings(tenant.orgId, {
+      ...(periodicRecountDays !== undefined ? { periodicRecountDays } : {}),
+      ...(storeCheckRemainingPct !== undefined ? { storeCheckRemainingPct } : {}),
+    });
+  }
+  return NextResponse.json({ ok: true });
 }

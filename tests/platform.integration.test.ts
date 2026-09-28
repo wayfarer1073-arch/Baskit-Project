@@ -32,7 +32,7 @@ it('creates demo workspaces whose data drives each segment dashboard', async () 
   expect(rows.filter((r) => r.estimate.dailyUsage !== null).length).toBeGreaterThan(20);
   const storeData = await getStoreDashboard(store.id, today);
   expect(storeData.rows).toHaveLength(6);
-  expect(storeData.rows.filter((r) => r.forecast.recommendedOrderDate !== null).length).toBeGreaterThanOrEqual(5);
+  expect(storeData.rows.filter((r) => r.analysis.estimate.amount !== null).length).toBeGreaterThanOrEqual(5);
 
   const metrics = computePlatformMetrics(await listWorkspaceSummaries());
   expect(metrics.demoCount).toBeGreaterThanOrEqual(3);

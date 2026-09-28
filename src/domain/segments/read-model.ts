@@ -1,5 +1,5 @@
 import type { PeriodicEstimate } from './periodic-count';
-import type { OrderForecast, SalesTrend } from './order-cycle';
+import type { CoverageAnalysis, SalesTrend } from './sales-coverage';
 
 export interface PeriodicRow {
   skuId: string;
@@ -11,17 +11,88 @@ export interface PeriodicRow {
   estimate: PeriodicEstimate;
 }
 
-export interface StoreForecastRow {
+/** 실사 때 롯트별로 센 수량. 합계가 그 SKU의 실사 수량이 된다. */
+export interface CountLot {
+  lot: string;
+  quantity: number;
+}
+
+/** 직접 입력 화면의 "최근 센 상품" — 골라서 수량만 고치거나 롯트를 더할 수 있게 마지막 실사 값을 함께 준다. */
+export interface RecentCountSku {
+  skuId: string;
+  productCode: string;
+  productName: string;
+  lastCountDate: string | null;
+  lastQuantity: number | null;
+  unitCost: number | null;
+  lots: CountLot[];
+}
+
+export interface PeriodicCountEntry {
+  date: string;
+  quantity: number;
+  unitCost: number | null;
+  lots: CountLot[];
+  /** 직접 입력으로 기록된 실사인지(아니면 엑셀 업로드). */
+  manual: boolean;
+}
+
+export interface PeriodicSkuDetail extends PeriodicRow {
+  unitCost: number | null;
+  counts: PeriodicCountEntry[];
+  inbounds: { date: string; quantity: number }[];
+  recountDays: number;
+  stockoutSoonDays: number;
+}
+
+/** InventoryItem.extra에 저장된 롯트 목록을 안전하게 읽는다(엑셀 업로드 행에는 없다). */
+export function readLots(extra: unknown): CountLot[] {
+  if (!extra || typeof extra !== 'object' || !('lots' in extra) || !Array.isArray((extra as { lots: unknown }).lots)) return [];
+  return (extra as { lots: unknown[] }).lots.flatMap((l) =>
+    l && typeof l === 'object' && typeof (l as CountLot).lot === 'string' && typeof (l as CountLot).quantity === 'number'
+      ? [{ lot: (l as CountLot).lot, quantity: (l as CountLot).quantity }]
+      : [],
+  );
+}
+
+export interface StoreCoverageRow {
   itemId: string;
   name: string;
   unit: string;
+  /** 실제로 쓰는 리드타임(발주처 값 우선). */
   leadTimeDays: number;
-  forecast: OrderForecast;
+  supplierName: string | null;
+  analysis: CoverageAnalysis;
 }
 
 export interface StoreDashboardData {
-  rows: StoreForecastRow[];
+  rows: StoreCoverageRow[];
   sales: SalesTrend;
+  /** 가장 최근에 매출이 입력된 날짜. 입력이 밀렸는지 알려주는 데 쓴다. */
+  lastSalesDate: string | null;
+  /** 설정의 '발주 확인 기준'(%) — 진행 막대의 확인 구간 표시에 쓴다. */
+  checkRemainingPct: number;
+}
+
+export interface StoreItemDetail extends StoreCoverageRow {
+  orders: OrderEntryRow[];
+  checkRemainingPct: number;
+}
+
+/** 발주 입력 화면에서 "과거 기록상 이 수량이면 얼마를 감당했는지"를 바로 계산하기 위한 품목별 학습값. */
+export interface StoreItemLearning {
+  id: string;
+  name: string;
+  unit: string;
+  leadTimeDays: number;
+  itemLeadTimeDays: number;
+  supplierId: string | null;
+  supplierName: string | null;
+  /** 지금 발주분의 예상 잔량 — 재발주할 때 잔량 입력의 기본값으로 쓴다. */
+  estimatedRemainingUnits: number | null;
+  orderCount: number;
+  salesPerUnit: number | null;
+  learnedCycles: number;
 }
 
 export interface OrderEntryRow {
@@ -31,10 +102,19 @@ export interface OrderEntryRow {
   unit: string;
   date: string;
   quantity: number;
+  coverageAmount: number | null;
+  leftoverQuantity: number | null;
   createdByName: string;
 }
 
 export interface SalesEntryRow {
   date: string;
   amount: number;
+}
+
+export interface SupplierRow {
+  id: string;
+  name: string;
+  leadTimeDays: number;
+  itemCount: number;
 }

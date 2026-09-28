@@ -53,7 +53,7 @@ export interface ParsedInventoryRow {
   location: string | null;
   category: string | null;
   /** 호환성을 위한 빈 객체. 최소 업로드에서는 불필요한 원본 열을 저장하지 않는다. */
-  extra: Record<string, string>;
+  extra: Record<string, unknown>;
   /** 원가 헤더가 없거나 해당 셀이 비어 있어 이전 SKU 원가를 이어받아야 하는지 여부 */
   costMissing: boolean;
 }

@@ -52,21 +52,42 @@ interface PackagingUploadStatus {
   lastUpload: { uploadedAt: string; uploadedByName: string; sourceFileName: string; rowCount: number } | null;
 }
 
-interface SettingsFormProps {
+type UserRow = { id: string; email: string; name: string; role: 'MEMBER' | 'ADMIN'; createdAt: string };
+
+/** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 사용자). */
+export function CommonSettings({
+  isAdmin,
+  currentUserId,
+  warehouses,
+  users: initialUsers,
+}: {
   isAdmin: boolean;
   currentUserId: string | null;
   warehouses: { id: string; code: string; name: string }[];
+  users: UserRow[];
+}) {
+  const [users, setUsers] = useState(initialUsers);
+  return (
+    <div className="space-y-6">
+      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
+      {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
+    </div>
+  );
+}
+
+interface DailySettingsProps {
+  isAdmin: boolean;
+  warehouses: { id: string; code: string; name: string }[];
   settings: RiskThresholdSettings;
-  users: { id: string; email: string; name: string; role: 'MEMBER' | 'ADMIN'; createdAt: string }[];
   skus: SkuVisibilityRow[];
   expirations: ExpirationLotRow[];
   holidays: { id: string; date: string; name: string }[];
   packagingStatuses: PackagingUploadStatus[];
 }
 
-export function SettingsForm({ isAdmin, currentUserId, warehouses, settings, users: initialUsers, skus, expirations, holidays, packagingStatuses }: SettingsFormProps) {
+/** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
+export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses }: DailySettingsProps) {
   const [thresholds, setThresholds] = useState(settings);
-  const [users, setUsers] = useState(initialUsers);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
   async function saveThresholds() {
@@ -88,16 +109,13 @@ export function SettingsForm({ isAdmin, currentUserId, warehouses, settings, use
 
   return (
     <div className="space-y-6">
-      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
-
       <Card>
         <CardHeader>
           <div className="flex items-center gap-1.5">
             <CardTitle>위험 / 정체 판단 기준</CardTitle>
             <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-              상품마다 위험/경고 수량을 직접 정할 수 있어요. 따로 정하지 않으면, 아래 &quot;품절 임박 기준&quot;·&quot;관리 필요 경계&quot;에 입력한
-              일수를 그 상품의 최근 판매 속도에 맞춰 자동으로 계산합니다. 이 기준은 재고가 앞으로 며칠 버틸 수 있는지, 오래 안 팔린 상품인지,
-              너무 많이 쌓인 상품인지를 판단할 때도 똑같이 쓰여요.
+              상품마다 위험/경고 수량을 직접 정할 수 있어요. 따로 정하지 않으면, 아래 &quot;품절 임박 기준&quot;·&quot;관리 필요 경계&quot;에 입력한 일수를 그 상품의 최근 판매
+              속도에 맞춰 자동으로 계산합니다. 이 기준은 재고가 앞으로 며칠 버틸 수 있는지, 오래 안 팔린 상품인지, 너무 많이 쌓인 상품인지를 판단할 때도 똑같이 쓰여요.
             </InfoTooltip>
           </div>
         </CardHeader>
@@ -143,8 +161,6 @@ export function SettingsForm({ isAdmin, currentUserId, warehouses, settings, use
       <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={packagingStatuses} />
 
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
-
-      {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
     </div>
   );
 }
@@ -231,8 +247,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
         <div className="flex items-center gap-1.5">
           <CardTitle>SKU 대시보드 노출 관리</CardTitle>
           <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-            특정 상품을 화면(요약 숫자·그래프·재고 표·알림·다운로드 파일)에서 안 보이게 숨길 수 있어요. 업로드한 자료는 그대로 남아 있고,
-            언제든 다시 보이게 되돌릴 수 있습니다.
+            특정 상품을 화면(요약 숫자·그래프·재고 표·알림·다운로드 파일)에서 안 보이게 숨길 수 있어요. 업로드한 자료는 그대로 남아 있고, 언제든 다시 보이게 되돌릴 수 있습니다.
           </InfoTooltip>
         </div>
       </CardHeader>
@@ -333,17 +348,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
   );
 }
 
-function SkuVisibilityItem({
-  sku,
-  isAdmin,
-  updating,
-  onToggle,
-}: {
-  sku: SkuVisibilityRow;
-  isAdmin: boolean;
-  updating: boolean;
-  onToggle: (hidden: boolean) => void;
-}) {
+function SkuVisibilityItem({ sku, isAdmin, updating, onToggle }: { sku: SkuVisibilityRow; isAdmin: boolean; updating: boolean; onToggle: (hidden: boolean) => void }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
       <div className="min-w-0">
@@ -477,7 +482,9 @@ function UserManagement({
           <div className="space-y-1.5">
             <Label htmlFor="new-user-role">권한</Label>
             <Select value={role} onValueChange={(v) => setRole(v as 'MEMBER' | 'ADMIN')}>
-              <SelectTrigger id="new-user-role"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="new-user-role">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="MEMBER">멤버</SelectItem>
                 <SelectItem value="ADMIN">관리자</SelectItem>

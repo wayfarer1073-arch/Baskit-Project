@@ -46,9 +46,21 @@ export function SummaryMetric({ label, value, detail, emphasis }: { label: strin
   );
 }
 
-export function SectionPanel({ title, description, action, children }: { title: string; description?: string; action?: React.ReactNode; children: React.ReactNode }) {
+export function SectionPanel({
+  id,
+  title,
+  description,
+  action,
+  children,
+}: {
+  id?: string;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-xl border border-border bg-card" aria-label={title}>
+    <section id={id} className="scroll-mt-20 rounded-xl border border-border bg-card" aria-label={title}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3.5">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{title}</h2>

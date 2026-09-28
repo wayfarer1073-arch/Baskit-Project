@@ -12,6 +12,7 @@ export async function POST(request: Request) {
 
   try {
     const item = await createStoreItem(tenant.orgId, parsed.data);
+    if (!item) return NextResponse.json({ error: '발주처를 찾을 수 없습니다.' }, { status: 404 });
     return NextResponse.json({ item: { id: item.id, name: item.name } }, { status: 201 });
   } catch (e) {
     if (e instanceof StoreItemNameTakenError) return NextResponse.json({ error: e.message }, { status: 409 });

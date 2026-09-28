@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatCurrency } from '@/lib/format';
-import type { SalesTrend } from '@/domain/segments/order-cycle';
+import type { SalesTrend } from '@/domain/segments/sales-coverage';
 
 interface Datum {
   label: string;

@@ -44,7 +44,8 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     dashboardHref: '/dashboard/periodic',
     nav: [
       { href: '/dashboard/periodic', label: '대시보드', icon: 'dashboard' },
-      { href: '/upload', label: '실사 기록', icon: 'calendar' },
+      { href: '/count', label: '실사 입력', icon: 'records' },
+      { href: '/upload', label: '엑셀 실사', icon: 'calendar' },
       ...COMMON_TAIL,
     ],
   },
@@ -74,5 +75,6 @@ export function segmentForPath(pathname: string): Segment | null {
     if (pathname === meta.dashboardHref || pathname.startsWith(`${meta.dashboardHref}/`)) return segment;
   }
   if (pathname.startsWith('/store/')) return 'ORDER_CYCLE';
+  if (pathname === '/count') return 'PERIODIC_COUNT';
   return null;
 }

@@ -145,38 +145,77 @@ async function seedPeriodic(tx: Prisma.TransactionClient, orgId: string, uploade
   await seedWarehouseSeries(tx, { warehouseId: wh.id, uploaderId, plans: planSkus(rand, 35, 'P'), start, end: addDays(end, -1), countDates, rand, recordAllInbound: true });
 }
 
-const STORE_ITEMS = [
-  { name: '원두 (1kg)', unit: '봉', leadTimeDays: 2, everyDays: 7, qty: 8, jitter: 1 },
-  { name: '우유 (1L)', unit: '팩', leadTimeDays: 1, everyDays: 3, qty: 24, jitter: 1 },
-  { name: '테이크아웃 컵 16oz', unit: '박스', leadTimeDays: 3, everyDays: 14, qty: 2, jitter: 2 },
-  { name: '바닐라 시럽', unit: '병', leadTimeDays: 2, everyDays: 20, qty: 3, jitter: 3 },
-  { name: '크루아상 생지', unit: '박스', leadTimeDays: 1, everyDays: 4, qty: 3, jitter: 1 },
-  { name: '종이 빨대', unit: '박스', leadTimeDays: 3, everyDays: 10, qty: 1, jitter: 1, stopDaysAgo: 60 },
+const STORE_SUPPLIERS = [
+  { key: 'bean', name: '로스터리 원두상사', leadTimeDays: 2 },
+  { key: 'dairy', name: '동네 유업', leadTimeDays: 1 },
+  { key: 'pack', name: '포장재몰', leadTimeDays: 3 },
+] as const;
+
+const STORE_ITEMS: { name: string; unit: string; leadTimeDays: number; everyDays: number; qty: number; supplier?: (typeof STORE_SUPPLIERS)[number]['key']; stopDaysAgo?: number }[] = [
+  { name: '원두 (1kg)', unit: '봉', leadTimeDays: 2, everyDays: 7, qty: 8, supplier: 'bean' },
+  { name: '우유 (1L)', unit: '팩', leadTimeDays: 1, everyDays: 3, qty: 24, supplier: 'dairy' },
+  { name: '테이크아웃 컵 16oz', unit: '박스', leadTimeDays: 3, everyDays: 14, qty: 2, supplier: 'pack' },
+  { name: '바닐라 시럽', unit: '병', leadTimeDays: 2, everyDays: 20, qty: 3 },
+  { name: '크루아상 생지', unit: '박스', leadTimeDays: 1, everyDays: 4, qty: 3 },
+  { name: '종이 빨대', unit: '박스', leadTimeDays: 3, everyDays: 10, qty: 1, supplier: 'pack', stopDaysAgo: 60 },
 ];
 
-/** 카페 데모: 품목 6개, 최근 12주 발주 기록, 일 매출(최근 4주 약 15% 성장). */
+const BASE_DAILY_SALES = 900_000;
+
+/**
+ * 카페 데모: 발주처 3곳, 품목 6개, 최근 12주 일 매출(최근 4주 약 15% 성장)과 그에 맞춘 발주 기록.
+ * 실제 매출로 재고가 줄어드는 것을 하루씩 따라가며, 잔량이 조금 남았을 때 재발주한다. 사장님은 충족 매출을
+ * 실제보다 15% 정도 보수적으로 적는 습관이 있어, 학습값이 입력값보다 크게 나오는 모습을 볼 수 있다.
+ */
 export async function seedStoreData(tx: Prisma.TransactionClient, orgId: string, uploaderId: string, rand: Rand) {
   const today = utcToday();
   const start = addDays(today, -84);
+
+  const days: { date: Date; amount: number; recorded: boolean }[] = [];
+  for (let d = start; d <= addDays(today, -1); d = addDays(d, 1)) {
+    const growth = d > addDays(today, -28) ? 1.15 : 1;
+    const amount = Math.round((BASE_DAILY_SALES * (isWeekend(d) ? 1.3 : 1) * growth * (0.9 + rand() * 0.2)) / 100) * 100;
+    days.push({ date: d, amount, recorded: rand() >= 0.08 }); // 가끔 입력을 빼먹은 날
+  }
+  await tx.dailySales.createMany({ data: days.filter((d) => d.recorded).map((d) => ({ organizationId: orgId, date: d.date, amount: d.amount })) });
+
+  const supplierIds = new Map<string, string>();
+  for (const sup of STORE_SUPPLIERS) {
+    const row = await tx.supplier.create({ data: { organizationId: orgId, name: sup.name, leadTimeDays: sup.leadTimeDays } });
+    supplierIds.set(sup.key, row.id);
+  }
+
   for (const spec of STORE_ITEMS) {
-    const item = await tx.storeItem.create({ data: { organizationId: orgId, name: spec.name, unit: spec.unit, leadTimeDays: spec.leadTimeDays } });
+    const item = await tx.storeItem.create({
+      data: { organizationId: orgId, name: spec.name, unit: spec.unit, leadTimeDays: spec.leadTimeDays, supplierId: spec.supplier ? supplierIds.get(spec.supplier) : null },
+    });
+    // 이 품목 1단위가 실제로 감당하는 매출 — 평소 발주 간격만큼 팔면 발주량을 다 쓰도록 맞춘다.
+    const salesPerUnit = (BASE_DAILY_SALES * 1.09 * spec.everyDays) / spec.qty;
     const stop = spec.stopDaysAgo ? addDays(today, -spec.stopDaysAgo) : today;
     const orders: Prisma.PurchaseOrderCreateManyInput[] = [];
-    for (let day = addDays(start, Math.floor(rand() * spec.everyDays)); day <= stop; ) {
-      orders.push({ itemId: item.id, orderDate: day, quantity: spec.qty, createdById: uploaderId });
-      const recent = day > addDays(today, -28);
-      const gap = spec.everyDays * (recent ? 0.88 : 1) + Math.round((rand() - 0.5) * 2 * spec.jitter);
-      day = addDays(day, Math.max(1, Math.round(gap)));
+    let stock = 0;
+    let reorderAt = 0;
+    const firstDay = Math.floor(rand() * spec.everyDays);
+    for (let i = firstDay; i < days.length; i++) {
+      const day = days[i];
+      if (day.date > stop) break;
+      if (i === firstDay || stock <= reorderAt) {
+        const leftover = Math.max(0, Math.round(stock * 4) / 4);
+        orders.push({
+          itemId: item.id,
+          orderDate: day.date,
+          quantity: spec.qty,
+          coverageAmount: Math.round((spec.qty * salesPerUnit * 0.85) / 10_000) * 10_000,
+          leftoverQuantity: i === firstDay ? null : rand() < 0.75 ? leftover : null,
+          createdById: uploaderId,
+        });
+        stock = Math.max(0, stock) + spec.qty;
+        reorderAt = spec.qty * (0.05 + rand() * 0.12);
+      }
+      stock -= day.amount / salesPerUnit;
     }
     await tx.purchaseOrder.createMany({ data: orders });
   }
-  const sales: Prisma.DailySalesCreateManyInput[] = [];
-  for (let d = start; d <= addDays(today, -1); d = addDays(d, 1)) {
-    if (rand() < 0.08) continue; // 가끔 입력을 빼먹은 날
-    const growth = d > addDays(today, -28) ? 1.15 : 1;
-    sales.push({ organizationId: orgId, date: d, amount: Math.round((900_000 * (isWeekend(d) ? 1.3 : 1) * growth * (0.9 + rand() * 0.2)) / 100) * 100 });
-  }
-  await tx.dailySales.createMany({ data: sales });
 }
 
 export { makeRand };

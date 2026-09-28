@@ -31,6 +31,10 @@ export async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFi
   await prisma.eventSchedule.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.holiday.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.settings.deleteMany({ where: { organizationId: fixture.org.id } });
+  await prisma.purchaseOrder.deleteMany({ where: { item: { organizationId: fixture.org.id } } });
+  await prisma.storeItem.deleteMany({ where: { organizationId: fixture.org.id } });
+  await prisma.supplier.deleteMany({ where: { organizationId: fixture.org.id } });
+  await prisma.dailySales.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.user.delete({ where: { id: fixture.user.id } });
   await prisma.organization.delete({ where: { id: fixture.org.id } });
 }

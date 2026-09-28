@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { ParsedInventoryRow } from '@/domain/excel/types';
 
@@ -36,6 +37,8 @@ export interface CreateSnapshotInput {
   isMock?: boolean;
   rows: ParsedInventoryRow[];
   replaceExisting?: boolean;
+  /** 일부 SKU만 센 실사(직접 입력)면 true — 이번에 빠진 SKU를 품절로 보지 않는다. */
+  partial?: boolean;
 }
 
 export class SnapshotConflictError extends Error {
@@ -148,10 +151,11 @@ export async function createSnapshot(input: CreateSnapshotInput) {
             incomingStock: row.incomingStock,
             warningQty: row.warningQty,
             dangerQty: row.dangerQty,
+            ...(Object.keys(row.extra).length > 0 ? { extra: row.extra as Prisma.InputJsonValue } : {}),
         })) });
       }
 
-      if (isLatestSnapshot && touchedSkuIds.length > 0) {
+      if (isLatestSnapshot && touchedSkuIds.length > 0 && !input.partial) {
         // 직전까지 활성이던 SKU가 이번 최신 스냅샷에는 없다 — "다음 업로드 목록에서 빠짐" =
         // 품절로 인식하고, 그 시점을 이 스냅샷의 기준일로 기록한다(유예기간 계산의 시작점).
         await tx.sku.updateMany({

@@ -47,6 +47,7 @@ model Organization {
   posts      Post[]
   schedules  EventSchedule[]
   storeItems StoreItem[]
+  suppliers  Supplier[]
   dailySales DailySales[]
 
   @@map("organizations")
@@ -423,13 +424,17 @@ model SkuFavorite {
 }
 
 model Settings {
-  organizationId        String       @id
-  organization          Organization @relation(fields: [organizationId], references: [id])
-  stockoutSoonDays      Int          @default(7) // 품절 임박 기준 (Coverage일 <= 값)
-  manageMaxDays         Int          @default(30) // 관리필요/정상 경계 (Coverage일 <= 값이면 관리필요)
-  overstockCoverageDays Int          @default(90) // 과잉재고 후보 기준 (Coverage일 >= 값)
-  stagnantDays          Int          @default(30) // 장기 정체 기준일 (감소 미관측 기간 >= 값)
-  updatedAt             DateTime     @updatedAt
+  organizationId         String       @id
+  organization           Organization @relation(fields: [organizationId], references: [id])
+  stockoutSoonDays       Int          @default(7) // 품절 임박 기준 (Coverage일 <= 값)
+  manageMaxDays          Int          @default(30) // 관리필요/정상 경계 (Coverage일 <= 값이면 관리필요)
+  overstockCoverageDays  Int          @default(90) // 과잉재고 후보 기준 (Coverage일 >= 값)
+  stagnantDays           Int          @default(30) // 장기 정체 기준일 (감소 미관측 기간 >= 값)
+  // 비정기 실사: 마지막 실사 후 이 일수가 지나면 다시 세어보길 권한다.
+  periodicRecountDays    Int          @default(14)
+  // 매장 발주 예측: 남은 매출 여유가 충족 매출의 이 퍼센트 이하면 '발주 확인 필요'.
+  storeCheckRemainingPct Int          @default(20)
+  updatedAt              DateTime     @updatedAt
 
   @@map("settings")
 }
@@ -447,6 +452,9 @@ model StoreItem {
   name           String
   unit           String       @default("개") // 박스, kg, 팩 등 발주 단위
   leadTimeDays   Int          @default(1) // 발주 후 도착까지 걸리는 일수 — 권장 발주일을 이만큼 앞당긴다
+  /// 발주처를 지정하면 발주처의 리드타임을 우선 쓴다.
+  supplierId     String?
+  supplier       Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   isArchived     Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -459,14 +467,18 @@ model StoreItem {
 }
 
 model PurchaseOrder {
-  id          String    @id @default(cuid())
-  itemId      String
-  item        StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  orderDate   DateTime  @db.Date
-  quantity    Decimal   @db.Decimal(12, 2)
-  createdById String
-  createdBy   User      @relation(fields: [createdById], references: [id])
-  createdAt   DateTime  @default(now())
+  id               String    @id @default(cuid())
+  itemId           String
+  item             StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  orderDate        DateTime  @db.Date
+  quantity         Decimal   @db.Decimal(12, 2)
+  /// 사용자가 입력한 \"이 발주량으로 감당할 수 있는 매출액\"(원). 비워 두면 과거 기록으로 학습한 값으로 추정한다.
+  coverageAmount   Decimal?  @db.Decimal(14, 0)
+  /// 이 발주를 넣을 때(받기 전) 남아 있던 양. 비우면 다 쓴 것으로 본다. 입력하면 실제 사용량 기반으로 더 정확히 학습한다.
+  leftoverQuantity Decimal?  @db.Decimal(12, 2)
+  createdById      String
+  createdBy        User      @relation(fields: [createdById], references: [id])
+  createdAt        DateTime  @default(now())
 
   @@index([itemId, orderDate])
   @@map("purchase_orders")
@@ -499,4 +511,21 @@ model PlatformAuditLog {
 
   @@index([createdAt])
   @@map("platform_audit_logs")
+}
+
+/// 매장 발주처(거래처). 품목에 연결하면 발주처의 리드타임으로 발주 확인 시점을 앞당긴다.
+model Supplier {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  leadTimeDays   Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  items StoreItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("suppliers")
 }
