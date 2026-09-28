@@ -115,20 +115,25 @@ SKU와 재고 항목을 1,000행 단위로 저장합니다. 일별 추이는 Pos
 
 ### Render로 배포하기
 
-저장소 루트의 `render.yaml`이 웹 서비스(Next.js)와 PostgreSQL 인스턴스를 함께 선언하는 Blueprint입니다.
+저장소 루트의 `render.yaml`이 웹 서비스(`baskit-web`)와 PostgreSQL(`baskit-db`)을 함께 선언하는 Blueprint입니다.
+기존 사내용 서비스(`scm-inventory-*`)와 이름이 겹치지 않아, 같은 Render 워크스페이스에 만들어도 서로 영향이 없습니다.
 
-1. Render 대시보드 → **New** → **Blueprint** → 이 GitHub 저장소 연결 (배포할 브랜치 선택).
-2. Render가 `render.yaml`을 읽어 `scm-inventory-db`(Postgres)와 `scm-inventory-dashboard`(웹 서비스)를 함께 생성합니다.
-   `DATABASE_URL`은 두 서비스 간에 자동으로 연결되고, `AUTH_SECRET`은 자동 생성됩니다.
-3. 웹 서비스 환경변수에서 `NEXTAUTH_URL`을 배포된 실제 URL(예: `https://scm-inventory-dashboard.onrender.com`)로 채워주세요.
-4. 첫 배포가 끝나면 Render의 Shell 탭(또는 `DATABASE_URL`을 로컬에 임시로 지정해)에서 초기 데이터를 만듭니다:
+1. Render 대시보드 → **New** → **Blueprint** → `Baskit-Project` 저장소 연결.
+   Blueprint 파일은 **`claude/intelligent-mayer-ilfo5t` 브랜치**에 있으니 브랜치를 반드시 이것으로 선택하세요
+   (`main`에는 아직 초기 커밋만 있습니다).
+2. Render가 `baskit-db`와 `baskit-web`을 함께 생성합니다. `DATABASE_URL`은 자동 연결되고 `AUTH_SECRET`은 자동 생성됩니다.
+3. 생성 화면(또는 웹 서비스 Environment)에서 `NEXTAUTH_URL`을 배포 URL(예: `https://baskit-web.onrender.com`)로 채웁니다.
+4. 첫 배포가 끝나면 `/signup`에서 워크스페이스와 첫 관리자를 만들면 됩니다. 별도 초기화 스크립트는 필요 없습니다.
+   (카페 데모 데이터가 필요하면 Render Shell에서 `npm run db:seed-store -- --org-id <워크스페이스 id>`)
 
-   ```bash
-   npm run db:init
-   npm run db:create-admin -- --email admin@company.com --password <강력한-비밀번호> --name 관리자
-   ```
+주의:
+- Render 무료 PostgreSQL은 워크스페이스당 1개까지라 기존 `scm-inventory-db`가 무료 슬롯을 쓰고 있으면
+  `baskit-db` 생성이 실패합니다. 이 경우 `render.yaml`의 `baskit-db` `plan`을 유료(`basic-256mb` 등)로 바꾸거나,
+  `databases` 블록을 지우고 Neon·Supabase 같은 외부 Postgres 주소를 `DATABASE_URL`에 직접 넣으세요.
+- 무료 PostgreSQL은 생성 후 일정 기간이 지나면 만료되므로 실제 고객 데이터를 넣기 전에는 유료 플랜으로 옮기세요.
+- 가입(`/signup`)은 누구나 호출할 수 있습니다. 공개 전에 요청 횟수 제한·이메일 인증을 추가하세요.
 
-배포 브랜치를 바꾸거나 재배포할 때는 `startCommand`(`prisma migrate deploy`)가 스키마 변경을 자동 적용합니다.
+재배포 시 `startCommand`의 `prisma migrate deploy`가 스키마 변경을 자동 적용합니다.
 
 
 ## 스냅샷 기반 핵심 KPI (2026-09-18)
