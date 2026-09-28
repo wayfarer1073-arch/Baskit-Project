@@ -23,10 +23,10 @@ async function seed(dates = ['04', '07', '08', '09', '10', '11', '14', '15', '16
 }
 
 it('uses registered non-shipping holidays identically in list and detail services', async () => {
-  holidayId = (await prisma.holiday.create({ data: { date: new Date('2026-09-16'), name: 'Local test holiday' } })).id;
+  holidayId = (await prisma.holiday.create({ data: { organizationId: fixture.org.id, date: new Date('2026-09-16'), name: 'Local test holiday' } })).id;
   const sku = await seed(['04', '07', '08', '09', '10', '11', '14', '15', '17', '18']);
-  const rows = await getInventoryRows({ warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
-  const detail = await getSkuDetail(sku.id, '2026-09-18');
+  const rows = await getInventoryRows({ orgId: fixture.org.id,  warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
+  const detail = await getSkuDetail(fixture.org.id, sku.id, '2026-09-18');
   expect(rows[0].analysis).toEqual(detail?.analysis);
   expect(rows[0].analysis.window7.averageDailyDepletion).toBe(10);
   expect(rows[0].analysis.window7.observedIntervalDays).toBe(4);
@@ -40,7 +40,7 @@ it('keeps B2B cost and earliest lot dates while suppressing repeated-demand pred
     { rowNumber: 1, productCode: 'A', productName: 'A', lot: 'earliest', expirationDate: '2026-09-20' },
     { rowNumber: 2, productCode: 'A', productName: 'A', lot: 'later', expirationDate: '2026-12-31' },
   ]);
-  const rows = await getInventoryRows({ warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
+  const rows = await getInventoryRows({ orgId: fixture.org.id,  warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
   expect(rows[0].descriptor.expirationDate).toBe('2026-09-20');
   expect(rows[0].analysis.operating?.reason).toBe('B2B 개별 판단');
   expect(rows[0].analysis.coverage.coverageDays).toBeNull();
@@ -52,7 +52,7 @@ it('preserves departed-SKU history but excludes its last balance from current as
   await seed();
   await createSnapshot({ warehouseId: fixture.warehouse.id, uploadedById: fixture.user.id,
     snapshotDate: new Date('2026-09-21'), sourceFileName: 'metrics.xlsx', fileHash: 'departed', rows: [row('B', 20)] });
-  const rows = await getInventoryRows({ warehouseId: fixture.warehouse.id, asOfDate: '2026-09-21' });
+  const rows = await getInventoryRows({ orgId: fixture.org.id,  warehouseId: fixture.warehouse.id, asOfDate: '2026-09-21' });
   const missing = rows.find(r => r.descriptor.productCode === 'A')!;
   expect(missing.analysis.operating?.reason).toBe('품절');
   expect(missing.analysis.latest.normalStock).toBe(100);

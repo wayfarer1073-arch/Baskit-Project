@@ -2,6 +2,8 @@
  * 최초 관리자 계정 생성 스크립트.
  * 사용법: npm run db:create-admin -- --email admin@company.com --password secret123 --name 관리자
  * 이미 존재하는 이메일의 비밀번호를 바꾸려면 --reset-existing 플래그를 명시해야 한다.
+ * 새 계정은 --org-id로 지정한 워크스페이스에, 없으면 --org 이름으로 새 워크스페이스를 만들어 넣는다.
+ * (일반 사용자는 /signup 화면에서 워크스페이스와 관리자 계정을 함께 만든다.)
  */
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
@@ -40,11 +42,20 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { passwordHash, name, role: 'ADMIN' },
-    create: { email, passwordHash, name, role: 'ADMIN' },
+  if (existing) {
+    const user = await prisma.user.update({ where: { email }, data: { passwordHash, name, role: 'ADMIN' } });
+    console.log(`관리자 계정이 준비되었습니다: ${user.email} (role=${user.role})`);
+    return;
+  }
+
+  const orgId = getArg('org-id');
+  const organization = orgId
+    ? await prisma.organization.findUniqueOrThrow({ where: { id: orgId } })
+    : await prisma.organization.create({ data: { name: getArg('org') ?? '기본 워크스페이스' } });
+  const user = await prisma.user.create({
+    data: { organizationId: organization.id, email, passwordHash, name, role: 'ADMIN' },
   });
+  console.log(`워크스페이스: ${organization.name} (${organization.id})`);
 
   console.log(`관리자 계정이 준비되었습니다: ${user.email} (role=${user.role})`);
 }

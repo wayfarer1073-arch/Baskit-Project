@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { processUpload } from '@/server/services/upload-service';
 import { resetUploadForDate } from '@/server/repositories/snapshot-repository';
 import { todayKstDateString } from '@/lib/date';
+import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB — 일반적인 재고 Excel보다 훨씬 넉넉한 상한
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  }
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const formData = await request.formData();
   const warehouseId = formData.get('warehouseId');
@@ -21,6 +20,8 @@ export async function POST(request: Request) {
   if (typeof warehouseId !== 'string' || typeof snapshotDateStr !== 'string' || !(file instanceof File)) {
     return NextResponse.json({ error: '필수 항목이 누락되었습니다 (창고, 기준일, 파일).' }, { status: 400 });
   }
+
+  if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
 
   if (file.size > MAX_FILE_BYTES) {
     return NextResponse.json({ error: `파일이 너무 큽니다 (최대 ${MAX_FILE_BYTES / 1024 / 1024}MB).` }, { status: 413 });
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     snapshotDate,
     fileBuffer,
     fileName: file.name,
-    uploadedById: session.user.id,
+    uploadedById: tenant.userId,
     replaceExisting,
   });
 
@@ -63,9 +64,9 @@ export async function POST(request: Request) {
 
 /** 일자별 업로드 탭에서 특정 창고·날짜에 올라간 자료 전체를 초기화(삭제)한다. 다른 창고/날짜에는 영향 없음. */
 export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 초기화할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 초기화할 수 있습니다.' }, { status: 403 });
 
   const url = new URL(request.url);
   const warehouseId = url.searchParams.get('warehouseId');
@@ -79,6 +80,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: '존재하지 않는 날짜입니다.' }, { status: 400 });
   }
 
+  if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
   const result = await resetUploadForDate(warehouseId, snapshotDate);
   if (result.deletedSnapshotCount === 0) {
     return NextResponse.json({ error: '해당 날짜에 업로드된 자료가 없습니다.' }, { status: 404 });

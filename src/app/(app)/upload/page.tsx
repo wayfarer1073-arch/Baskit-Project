@@ -5,15 +5,15 @@ import { listHolidays } from '@/server/repositories/holiday-repository';
 import { listSchedules } from '@/server/repositories/schedule-repository';
 import { UploadCalendar } from '@/components/upload/upload-calendar';
 import { dateOnlyToString } from '@/lib/date';
-import { auth } from '@/server/auth';
+import { requireTenant } from '@/server/tenant';
 
 export default async function UploadPage() {
-  const session = await auth();
-  const isAdmin = session?.user.role === 'ADMIN';
-  const warehouses = await listWarehouses();
-  const inboundCounts = await listInboundCountsByWarehouseAndDate();
-  const holidays = await listHolidays();
-  const schedules = await listSchedules();
+  const tenant = await requireTenant();
+  const isAdmin = tenant.isAdmin;
+  const warehouses = await listWarehouses(tenant.orgId);
+  const inboundCounts = await listInboundCountsByWarehouseAndDate(tenant.orgId);
+  const holidays = await listHolidays(tenant.orgId);
+  const schedules = await listSchedules(tenant.orgId);
 
   const calendarEntries = (
     await Promise.all(

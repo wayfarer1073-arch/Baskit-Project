@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { addExpirationLot } from '@/server/repositories/expiration-repository';
 
 function isValidCalendarDate(dateStr: string): boolean {
@@ -17,15 +17,15 @@ const postSchema = z.object({
 
 /** 소비기한 관리 화면에서 로트 하나를 수동으로 추가한다. lot을 비우면 소비기한 순으로 A/B/C…가 자동 배정된다. */
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 추가할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 추가할 수 있습니다.' }, { status: 403 });
 
   const body = await request.json();
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 });
 
-  const result = await addExpirationLot(parsed.data.skuId, parsed.data.lot ?? null, parsed.data.expirationDate);
+  const result = await addExpirationLot(tenant.orgId, parsed.data.skuId, parsed.data.lot ?? null, parsed.data.expirationDate);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({ ok: true, lotId: result.lotId });

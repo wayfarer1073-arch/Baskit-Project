@@ -179,22 +179,29 @@ function buildSeries(rand: () => number, profile: Profile, unitCost: number): { 
 async function main() {
   const products: SampleProduct[] = JSON.parse(readFileSync(path.join(__dirname, 'seed-data/sample-products.json'), 'utf-8'));
 
-  const existingMock = await prisma.inventorySnapshot.count({ where: { isMock: true } });
+  const orgIdArg = process.argv.includes('--org-id') ? process.argv[process.argv.indexOf('--org-id') + 1] : undefined;
+  const org = orgIdArg
+    ? await prisma.organization.findUniqueOrThrow({ where: { id: orgIdArg } })
+    : await prisma.organization.findFirst({ orderBy: { createdAt: 'asc' } });
+  if (!org) throw new Error('워크스페이스가 없습니다. 먼저 `npm run db:create-admin`을 실행하세요.');
+  const inOrg = { warehouse: { organizationId: org.id } };
+
+  const existingMock = await prisma.inventorySnapshot.count({ where: { isMock: true, ...inOrg } });
   if (existingMock > 0 && !FORCE) {
     console.log(`이미 mock 스냅샷이 ${existingMock}건 있습니다. 다시 생성하려면 --force 옵션을 사용하세요.`);
     return;
   }
   if (existingMock > 0 && FORCE) {
     console.log('기존 mock 데이터를 삭제합니다...');
-    await prisma.inventorySnapshot.deleteMany({ where: { isMock: true } }); // items는 cascade
-    await prisma.sku.deleteMany({ where: { items: { none: {} } } });
+    await prisma.inventorySnapshot.deleteMany({ where: { isMock: true, ...inOrg } }); // items는 cascade
+    await prisma.sku.deleteMany({ where: { items: { none: {} }, ...inOrg } });
   }
 
-  const warehouses = await prisma.warehouse.findMany({ orderBy: { sortOrder: 'asc' } });
+  const warehouses = await prisma.warehouse.findMany({ where: { organizationId: org.id, isArchived: false }, orderBy: { sortOrder: 'asc' } });
   if (warehouses.length === 0) {
     throw new Error('창고가 없습니다. 먼저 `npm run db:init`을 실행하세요.');
   }
-  const seedUser = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
+  const seedUser = await prisma.user.findFirst({ where: { organizationId: org.id }, orderBy: { createdAt: 'asc' } });
   if (!seedUser) {
     throw new Error('사용자가 없습니다. 먼저 `npm run db:create-admin`을 실행하세요.');
   }

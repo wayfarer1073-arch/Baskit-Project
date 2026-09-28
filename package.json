@@ -19,7 +19,8 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx scripts/seed-mock.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
-    "db:init": "tsx scripts/init-base-data.ts"
+    "db:init": "tsx scripts/init-base-data.ts",
+    "db:seed-store": "tsx scripts/seed-store-mock.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

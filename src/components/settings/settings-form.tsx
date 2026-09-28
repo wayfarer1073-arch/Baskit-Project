@@ -16,6 +16,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { ExpirationManagement } from '@/components/settings/expiration-management';
 import { SkuPackagingManagement } from '@/components/settings/sku-packaging-management';
 import { HolidayManagement } from '@/components/settings/holiday-management';
+import { WarehouseManagement } from '@/components/settings/warehouse-management';
 import { PROTECTED_ADMIN_EMAIL } from '@/lib/constants';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 
@@ -64,28 +65,9 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ isAdmin, currentUserId, warehouses, settings, users: initialUsers, skus, expirations, holidays, packagingStatuses }: SettingsFormProps) {
-  const [warehouseNames, setWarehouseNames] = useState(Object.fromEntries(warehouses.map((w) => [w.id, w.name])));
   const [thresholds, setThresholds] = useState(settings);
   const [users, setUsers] = useState(initialUsers);
-  const [savingWarehouse, setSavingWarehouse] = useState<string | null>(null);
   const [savingThresholds, setSavingThresholds] = useState(false);
-
-  async function saveWarehouseName(id: string) {
-    setSavingWarehouse(id);
-    try {
-      const res = await fetch(`/api/warehouses/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: warehouseNames[id] }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success('창고명이 저장되었습니다.');
-    } catch {
-      toast.error('저장에 실패했습니다.');
-    } finally {
-      setSavingWarehouse(null);
-    }
-  }
 
   async function saveThresholds() {
     setSavingThresholds(true);
@@ -106,35 +88,7 @@ export function SettingsForm({ isAdmin, currentUserId, warehouses, settings, use
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-1.5">
-            <CardTitle>창고명</CardTitle>
-            <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">화면에 보이는 이름만 바뀌어요. 창고 A/B/C는 각각 다른 상품을 관리하는 별도의 공간이라, 이름을 바꿔도 재고가 서로 합쳐지지 않습니다.</InfoTooltip>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {warehouses.map((w) => (
-            <div key={w.id} className="flex items-center gap-2">
-              <Label htmlFor={`warehouse-name-${w.id}`} className="w-10 shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">
-                {w.code}
-              </Label>
-              <Input
-                id={`warehouse-name-${w.id}`}
-                value={warehouseNames[w.id]}
-                onChange={(e) => setWarehouseNames((prev) => ({ ...prev, [w.id]: e.target.value }))}
-                disabled={!isAdmin}
-                className="max-w-xs"
-              />
-              {isAdmin && (
-                <Button size="sm" variant="outline" onClick={() => saveWarehouseName(w.id)} disabled={savingWarehouse === w.id}>
-                  저장
-                </Button>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
 
       <Card>
         <CardHeader>

@@ -1,6 +1,9 @@
 // 재고관리 대시보드 데이터 모델
 // 설계 원칙:
-// - 3개 창고는 서로 다른 품목군을 관리하는 독립 Pool → 창고 간 직접 비교용 필드/뷰를 두지 않는다.
+// - 멀티테넌시: 모든 데이터는 하나의 Organization(워크스페이스)에 속한다. 최상위 모델(User·Warehouse·
+//   Settings·Holiday·Post·EventSchedule·매장 발주 모델)은 organizationId를 직접 갖고, 나머지(Sku·스냅샷·
+//   이벤트 등)는 Warehouse를 통해 조직에 묶인다. 조회/수정은 항상 세션의 조직으로 제한해야 한다.
+// - 창고들은 서로 다른 품목군을 관리하는 독립 Pool → 창고 간 직접 비교용 필드/뷰를 두지 않는다.
 // - SKU 식별자는 warehouse_id + productCode 조합이며 상품명은 PK가 아니다(상품명 변경에도 이력 유지).
 // - Excel 업로드 1건 = 특정 창고의 특정 기준일(snapshotDate) 스냅샷. 같은 (창고, 기준일)이 재업로드되면
 //   기존 스냅샷을 REPLACED로 남기고 새 버전을 ACTIVE로 만든다(덮어쓰기로 이력을 지우지 않는다).
@@ -19,18 +22,44 @@ enum Role {
   ADMIN
 }
 
+/// 워크스페이스가 주로 쓰는 재고 관리 방식. 가입 시 고르며, 사이드바에서 대시보드를 바꿔 볼 수 있다.
+enum BusinessSegment {
+  DAILY_SYNC // 매일 재고 파일을 받는 경우 (3PL·OMS)
+  PERIODIC_COUNT // 재고를 가끔 직접 세는 경우 (자체 창고)
+  ORDER_CYCLE // 재고를 세기 어려워 발주 주기로 예측하는 경우 (카페·음식점)
+}
+
+model Organization {
+  id        String          @id @default(cuid())
+  name      String
+  segment   BusinessSegment @default(DAILY_SYNC)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  users      User[]
+  warehouses Warehouse[]
+  settings   Settings?
+  holidays   Holiday[]
+  posts      Post[]
+  schedules  EventSchedule[]
+  storeItems StoreItem[]
+  dailySales DailySales[]
+
+  @@map("organizations")
+}
+
 enum SnapshotStatus {
   ACTIVE
   REPLACED
 }
 
 enum EventType {
-  INBOUND    // 입고
-  RETURN     // 반품
+  INBOUND // 입고
+  RETURN // 반품
   ADJUSTMENT // 재고조정
-  PROMOTION  // 프로모션
-  SOLD_OUT   // 품절
-  OTHER      // 기타
+  PROMOTION // 프로모션
+  SOLD_OUT // 품절
+  OTHER // 기타
 }
 
 enum EventChangeType {
@@ -40,23 +69,25 @@ enum EventChangeType {
 }
 
 enum PostTag {
-  ISSUE    // 이슈
-  NOTICE   // 공지
-  CHAT     // 잡담
+  ISSUE // 이슈
+  NOTICE // 공지
+  CHAT // 잡담
   RESOLVED // 해결
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role     @default(MEMBER)
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           Role         @default(MEMBER)
   // 삭제 요청 시 업로드/이벤트 등 참조 이력이 있으면 실제 행을 지울 수 없어 대신 false로
   // 바꾼다(로그인 차단 + 목록에서 제외). 참조 이력이 없으면 행 자체를 삭제한다.
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   uploadedSnapshots InventorySnapshot[]
   events            InventoryEvent[]
@@ -64,23 +95,32 @@ model User {
   posts             Post[]
   favorites         SkuFavorite[]
   packagingUploads  SkuPackagingUpload[]
+  purchaseOrders    PurchaseOrder[]
 
+  @@index([organizationId])
   @@map("users")
 }
 
 model Warehouse {
-  id        String   @id @default(cuid())
-  code      String   @unique // 내부 고정 식별자: A, B, C
-  name      String   // 화면 표시명 (설정에서 변경 가능)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  code           String // 조직 안에서의 내부 고정 식별자: A, B, C, D…
+  name           String // 화면 표시명 (설정에서 변경 가능)
+  sortOrder      Int          @default(0)
+  // 이력(스냅샷·이벤트)이 있어 행을 지울 수 없으므로 "삭제"는 보관으로 처리한다. 보관된 창고는
+  // 대시보드·업로드·설정 목록에서 빠지고 데이터는 그대로 남는다.
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  skus             Sku[]
-  snapshots        InventorySnapshot[]
-  events           InventoryEvent[]
-  packagingUpload  SkuPackagingUpload?
+  skus            Sku[]
+  snapshots       InventorySnapshot[]
+  events          InventoryEvent[]
+  packagingUpload SkuPackagingUpload?
 
+  @@unique([organizationId, code])
+  @@index([organizationId])
   @@map("warehouses")
 }
 
@@ -88,16 +128,16 @@ model Sku {
   id          String    @id @default(cuid())
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  productCode String    // 원본 텍스트 그대로 보존 (leading zero 등)
+  productCode String // 원본 텍스트 그대로 보존 (leading zero 등)
 
   // 가장 최근 스냅샷에서 관측된 서술 속성 (임포트마다 갱신되는 "현재값" 캐시)
   currentProductName String
-  currentOption       String?
-  currentBarcode      String?
-  currentLocation     String?
-  currentUnitCost     Decimal @default(0) @db.Decimal(14, 2)
-  currentWarningQty   Int     @default(0)
-  currentDangerQty    Int     @default(0)
+  currentOption      String?
+  currentBarcode     String?
+  currentLocation    String?
+  currentUnitCost    Decimal @default(0) @db.Decimal(14, 2)
+  currentWarningQty  Int     @default(0)
+  currentDangerQty   Int     @default(0)
 
   // 관리자가 SKU 상세에서 직접 지정한 위험/경고수량. null이면 소진 속도 기반 자동계산을 쓴다.
   // 업로드로 값이 채워지지 않는 한 스냅샷과 무관하게 SKU 자체에 붙는 값이라 재업로드해도 유지된다.
@@ -139,8 +179,8 @@ model Sku {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items  InventoryItem[]
-  events InventoryEvent[]
+  items            InventoryItem[]
+  events           InventoryEvent[]
   snapshotInbounds SnapshotInbound[]
   expirationLots   SkuExpirationLot[]
   favoritedBy      SkuFavorite[]
@@ -209,9 +249,9 @@ model InventorySnapshot {
 /// (SKU, 날짜) 단위로 독립적으로 존재한다 — 그날의 재고 스냅샷을 재업로드/교체해도 이 기록은
 /// 그대로 남으며, 사용자가 삭제 버튼을 눌러야만 없어진다.
 model SnapshotInbound {
-  id          String   @id @default(cuid())
-  skuId       String
-  sku         Sku      @relation(fields: [skuId], references: [id])
+  id           String   @id @default(cuid())
+  skuId        String
+  sku          Sku      @relation(fields: [skuId], references: [id])
   snapshotDate DateTime @db.Date // 입고를 반영할 기준일(해당 날짜까지의 입고로 해석)
 
   productCode String
@@ -231,15 +271,15 @@ model InventoryItem {
   skuId      String
   sku        Sku               @relation(fields: [skuId], references: [id])
 
-  productCode String
-  productName String
-  option      String?
-  barcode     String?
-  location    String?
-  category    String?
-  unitCost    Decimal @default(0) @db.Decimal(14, 2)
-  unitCostProvided Boolean @default(true) // 업로드 행에 원가가 명시됐는지(빈 값이면 직전 SKU 원가를 이어받음)
-  totalCost   Decimal? @db.Decimal(24, 2) // 업로드 원가합. null이면 유효 원가 × 정상재고
+  productCode      String
+  productName      String
+  option           String?
+  barcode          String?
+  location         String?
+  category         String?
+  unitCost         Decimal  @default(0) @db.Decimal(14, 2)
+  unitCostProvided Boolean  @default(true) // 업로드 행에 원가가 명시됐는지(빈 값이면 직전 SKU 원가를 이어받음)
+  totalCost        Decimal? @db.Decimal(24, 2) // 업로드 원가합. null이면 유효 원가 × 정상재고
 
   normalStock    Int @default(0) // 정상재고
   defectiveStock Int @default(0) // 불량재고
@@ -261,7 +301,7 @@ model InventoryEvent {
   id          String    @id @default(cuid())
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  skuId       String?   // null이면 창고 전체 메모
+  skuId       String? // null이면 창고 전체 메모
   sku         Sku?      @relation(fields: [skuId], references: [id])
 
   eventType       EventType
@@ -269,14 +309,14 @@ model InventoryEvent {
   note            String
   eventDate       DateTime // 사용자가 선택한 이벤트 일시(기간 선택 시 시작일)
   // 기간(시작일~종료일) 선택 시 종료일. null이면 하루짜리 이벤트(종료일 = eventDate).
-  endDate         DateTime? @db.Date
+  endDate         DateTime?      @db.Date
   // 제목을 입력하면(선택) 같은 제목·기간·유형의 이벤트를 SKU를 넘나들며 하나의 캘린더
   // 일정(EventSchedule)으로 묶는다. 제목이 없으면 캘린더에는 표시되지 않는 일반 메모로 남는다.
   title           String?
   scheduleId      String?
   schedule        EventSchedule? @relation(fields: [scheduleId], references: [id])
-  isAutoGenerated Boolean  @default(false) // "재고 증가 감지" 자동 생성 여부
-  isDeleted       Boolean  @default(false) // soft delete (이력 보존)
+  isAutoGenerated Boolean        @default(false) // "재고 증가 감지" 자동 생성 여부
+  isDeleted       Boolean        @default(false) // soft delete (이력 보존)
 
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
@@ -295,20 +335,22 @@ model InventoryEvent {
 /// InventoryEvent를 하나로 묶어서 보여준다(SKU 단위가 아니라 이벤트명 단위 표시). 색상은
 /// 이 그룹 전체에 적용되는 공유 상태라 여기 따로 둔다.
 model EventSchedule {
-  id        String    @id @default(cuid())
-  eventType EventType
-  title     String
-  startDate DateTime  @db.Date
-  endDate   DateTime  @db.Date
-  color     String    @default("red") // SCHEDULE_COLORS(빨강/주황/연분홍/라임/cyan/연보라) 중 하나
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  eventType      EventType
+  title          String
+  startDate      DateTime     @db.Date
+  endDate        DateTime     @db.Date
+  color          String       @default("red") // SCHEDULE_COLORS(빨강/주황/연분홍/라임/cyan/연보라) 중 하나
 
   events InventoryEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([eventType, title, startDate, endDate])
-  @@index([startDate, endDate])
+  @@unique([organizationId, eventType, title, startDate, endDate])
+  @@index([organizationId, startDate, endDate])
   @@map("event_schedules")
 }
 
@@ -326,29 +368,34 @@ model EventHistory {
 }
 
 model Post {
-  id       String  @id @default(cuid())
-  tag      PostTag
-  title    String  @db.VarChar(50)
-  body     String  @db.VarChar(200)
-  authorId String
-  author   User    @relation(fields: [authorId], references: [id])
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tag            PostTag
+  title          String       @db.VarChar(50)
+  body           String       @db.VarChar(200)
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([createdAt])
+  @@index([organizationId, createdAt])
   @@map("posts")
 }
 
-/// 회사 전체에 적용되는 휴무일(창고별이 아님). 주말과 동일하게 업로드 캘린더에서 업로드를 막고
+/// 조직 전체에 적용되는 휴무일(창고별이 아님). 주말과 동일하게 업로드 캘린더에서 업로드를 막고
 /// 옅은 회색으로 표시하며, KPI 계산에서는 "매출은 발생하지만 자료 미제출이 정상"인 날로 취급해
 /// 직전 영업일 관측치를 stale로 보지 않는다.
 model Holiday {
-  id        String   @id @default(cuid())
-  date      DateTime @unique @db.Date
-  name      String
-  createdAt DateTime @default(now())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  date           DateTime     @db.Date
+  name           String
+  createdAt      DateTime     @default(now())
 
+  @@unique([organizationId, date])
   @@map("holidays")
 }
 
@@ -367,12 +414,65 @@ model SkuFavorite {
 }
 
 model Settings {
-  id                    Int      @id @default(1)
-  stockoutSoonDays      Int      @default(7)  // 품절 임박 기준 (Coverage일 <= 값)
-  manageMaxDays         Int      @default(30) // 관리필요/정상 경계 (Coverage일 <= 값이면 관리필요)
-  overstockCoverageDays Int      @default(90) // 과잉재고 후보 기준 (Coverage일 >= 값)
-  stagnantDays          Int      @default(30) // 장기 정체 기준일 (감소 미관측 기간 >= 값)
-  updatedAt             DateTime @updatedAt
+  organizationId        String       @id
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  stockoutSoonDays      Int          @default(7) // 품절 임박 기준 (Coverage일 <= 값)
+  manageMaxDays         Int          @default(30) // 관리필요/정상 경계 (Coverage일 <= 값이면 관리필요)
+  overstockCoverageDays Int          @default(90) // 과잉재고 후보 기준 (Coverage일 >= 값)
+  stagnantDays          Int          @default(30) // 장기 정체 기준일 (감소 미관측 기간 >= 값)
+  updatedAt             DateTime     @updatedAt
 
   @@map("settings")
+}
+
+// ── 매장 발주 예측(ORDER_CYCLE) ─────────────────────────────────────────────────────────────
+// 재고를 세기 어려운 매장(카페·음식점)은 재고 스냅샷 대신 "언제 얼마나 발주했는지"와 일 매출
+// 추이만 기록한다. 발주 사이 간격 동안 직전 발주량을 다 썼다고 보고 하루 사용량을 구한 뒤, 최근
+// 매출 증감으로 보정해 다음 발주일을 예측한다.
+
+/// 발주하는 품목(원두, 우유, 컵 등). 이름은 조직 안에서 유일하다.
+model StoreItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  unit           String       @default("개") // 박스, kg, 팩 등 발주 단위
+  leadTimeDays   Int          @default(1) // 발주 후 도착까지 걸리는 일수 — 권장 발주일을 이만큼 앞당긴다
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  orders PurchaseOrder[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("store_items")
+}
+
+model PurchaseOrder {
+  id          String    @id @default(cuid())
+  itemId      String
+  item        StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  orderDate   DateTime  @db.Date
+  quantity    Decimal   @db.Decimal(12, 2)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([itemId, orderDate])
+  @@map("purchase_orders")
+}
+
+/// 하루 매출 합계(원). 같은 날짜를 다시 입력하면 덮어쓴다.
+model DailySales {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  date           DateTime     @db.Date
+  amount         Decimal      @db.Decimal(14, 0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, date])
+  @@map("daily_sales")
 }

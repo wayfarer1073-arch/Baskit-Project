@@ -25,7 +25,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return { id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId };
       },
     }),
   ],
@@ -34,12 +34,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.organizationId = user.organizationId;
+      } else if (token.id && !token.organizationId) {
+        // 멀티테넌시 도입 전에 발급된 토큰은 조직 정보가 없다 — 한 번만 DB에서 채워 넣는다.
+        const row = await prisma.user.findUnique({ where: { id: token.id }, select: { organizationId: true } });
+        if (row) token.organizationId = row.organizationId;
       }
       return token;
     },
     session: async ({ session, token }) => {
       session.user.id = token.id;
       session.user.role = token.role;
+      session.user.organizationId = token.organizationId ?? '';
       return session;
     },
   },

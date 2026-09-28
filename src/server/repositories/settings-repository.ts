@@ -1,11 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_RISK_SETTINGS, type RiskThresholdSettings } from '@/domain/inventory/types';
 
-export async function getSettings(): Promise<RiskThresholdSettings> {
+export async function getSettings(orgId: string): Promise<RiskThresholdSettings> {
   const row = await prisma.settings.upsert({
-    where: { id: 1 },
+    where: { organizationId: orgId },
     update: {},
-    create: { id: 1, ...DEFAULT_RISK_SETTINGS },
+    create: { organizationId: orgId, ...DEFAULT_RISK_SETTINGS },
   });
   return {
     stockoutSoonDays: row.stockoutSoonDays,
@@ -15,10 +15,10 @@ export async function getSettings(): Promise<RiskThresholdSettings> {
   };
 }
 
-export async function updateSettings(input: Partial<RiskThresholdSettings>) {
+export async function updateSettings(orgId: string, input: Partial<RiskThresholdSettings>) {
   return prisma.settings.upsert({
-    where: { id: 1 },
+    where: { organizationId: orgId },
     update: input,
-    create: { id: 1, ...DEFAULT_RISK_SETTINGS, ...input },
+    create: { organizationId: orgId, ...DEFAULT_RISK_SETTINGS, ...input },
   });
 }

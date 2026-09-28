@@ -1,31 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Menu, LogOut, LayoutDashboard, CalendarDays, MessagesSquare, Settings } from 'lucide-react';
+import { Menu, LogOut } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { cn } from '@/lib/utils';
-
-const NAV_ITEMS = [
-  { href: '/', label: '대시보드', icon: LayoutDashboard },
-  { href: '/upload', label: '캘린더', icon: CalendarDays },
-  { href: '/board', label: '게시판', icon: MessagesSquare },
-  { href: '/settings', label: '설정', icon: Settings },
-];
+import { SegmentNavLinks, SegmentSwitcher, useActiveSegment } from '@/components/layout/segment-nav';
+import type { Segment } from '@/lib/segments';
 
 interface MobileNavProps {
   userName: string;
   userRole: string;
+  defaultSegment: Segment;
 }
 
 /** sm 미만 화면 전용 — 좁은 폭에서 가로 탭 4개+사용자 정보가 글자 단위로 줄바꿈되며 깨지는 문제를 드로어로 해결한다. */
-export function MobileNav({ userName, userRole }: MobileNavProps) {
-  const pathname = usePathname();
+export function MobileNav({ userName, userRole, defaultSegment }: MobileNavProps) {
+  const segment = useActiveSegment(defaultSegment);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -60,25 +53,9 @@ export function MobileNav({ userName, userRole }: MobileNavProps) {
           </SheetTitle>
           <SheetDescription className="sr-only">사이트 이동 메뉴</SheetDescription>
         </SheetHeader>
+        <SegmentSwitcher segment={segment} variant="drawer" onNavigate={() => setOpen(false)} className="px-3 pt-3" />
         <nav className="flex flex-col gap-1 p-3">
-          {NAV_ITEMS.map((item) => {
-            const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                  active ? 'bg-brand-accent text-brand-accent-foreground' : 'text-muted-foreground hover:bg-secondary/70 hover:text-foreground',
-                )}
-              >
-                <Icon className="size-[18px]" aria-hidden="true" />
-                {item.label}
-              </Link>
-            );
-          })}
+          <SegmentNavLinks segment={segment} variant="drawer" onNavigate={() => setOpen(false)} />
         </nav>
         <div className="mt-auto flex items-center justify-between gap-3 border-t p-4">
           <div className="text-xs leading-tight">

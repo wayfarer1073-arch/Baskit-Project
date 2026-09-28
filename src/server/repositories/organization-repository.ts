@@ -1,0 +1,39 @@
+import bcrypt from 'bcryptjs';
+import { Prisma, type BusinessSegment } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { DEFAULT_RISK_SETTINGS } from '@/domain/inventory/types';
+
+export class EmailTakenError extends Error {}
+
+export interface CreateWorkspaceInput {
+  organizationName: string;
+  segment: BusinessSegment;
+  adminName: string;
+  email: string;
+  password: string;
+}
+
+/** 가입 = 새 워크스페이스 + 첫 관리자 + 기본 창고 하나 + 기본 설정을 한 트랜잭션으로 만든다. */
+export async function createWorkspace(input: CreateWorkspaceInput) {
+  const email = input.email.trim().toLowerCase();
+  const passwordHash = await bcrypt.hash(input.password, 10);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({ data: { name: input.organizationName, segment: input.segment } });
+      const user = await tx.user.create({
+        data: { organizationId: organization.id, email, name: input.adminName, passwordHash, role: 'ADMIN' },
+        select: { id: true, email: true },
+      });
+      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: '기본 창고', sortOrder: 1 } });
+      await tx.settings.create({ data: { organizationId: organization.id, ...DEFAULT_RISK_SETTINGS } });
+      return { organization, user };
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new EmailTakenError('이미 가입된 이메일입니다.');
+    throw e;
+  }
+}
+
+export function getOrganization(orgId: string) {
+  return prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { id: true, name: true, segment: true } });
+}

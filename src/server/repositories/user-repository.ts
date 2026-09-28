@@ -2,26 +2,26 @@ import bcrypt from 'bcryptjs';
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
-export function listUsers() {
+export function listUsers(orgId: string) {
   return prisma.user.findMany({
-    where: { isActive: true },
+    where: { organizationId: orgId, isActive: true },
     orderBy: { createdAt: 'asc' },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
 }
 
-export function getUserRole(userId: string) {
-  return prisma.user.findUnique({ where: { id: userId }, select: { role: true, isActive: true, email: true } });
+export function getUserRole(orgId: string, userId: string) {
+  return prisma.user.findFirst({ where: { id: userId, organizationId: orgId }, select: { role: true, isActive: true, email: true } });
 }
 
-export function countActiveAdmins() {
-  return prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
+export function countActiveAdmins(orgId: string) {
+  return prisma.user.count({ where: { organizationId: orgId, role: 'ADMIN', isActive: true } });
 }
 
-export async function createUser(input: { email: string; name: string; password: string; role: Role }) {
+export async function createUser(orgId: string, input: { email: string; name: string; password: string; role: Role }) {
   const passwordHash = await bcrypt.hash(input.password, 10);
   return prisma.user.create({
-    data: { email: input.email.trim().toLowerCase(), name: input.name, passwordHash, role: input.role },
+    data: { organizationId: orgId, email: input.email.trim().toLowerCase(), name: input.name, passwordHash, role: input.role },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
 }

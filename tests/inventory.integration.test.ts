@@ -27,12 +27,12 @@ describe('inventory database invariants', () => {
   it('keeps historical SKUs and totals after a later snapshot removes them', async () => {
     await snapshot('2026-09-10', [row('A'), row('B', 50)]);
     await snapshot('2026-09-17', [row('B', 40)]);
-    const rows = await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-10');
+    const rows = await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-10');
     expect(rows.map(r => r.descriptor.productCode).sort()).toEqual(['A', 'B']);
-    expect(await loadSkuWithSeries(await skuId(), '2026-09-10')).not.toBeNull();
-    const totals = (await loadDailyWarehouseTotals()).filter(r => r.warehouseId === fixture.warehouse.id);
+    expect(await loadSkuWithSeries(fixture.org.id, await skuId(), '2026-09-10')).not.toBeNull();
+    const totals = (await loadDailyWarehouseTotals(fixture.org.id)).filter(r => r.warehouseId === fixture.warehouse.id);
     expect(totals.find(r => r.date === '2026-09-10')?.totalAvailableStock).toBe(150);
-    const current = await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-17');
+    const current = await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-17');
     expect(current.filter(r => !r.descriptor.isSoldOut).map(r => r.descriptor.productCode)).toEqual(['B']);
     expect(current.find(r => r.descriptor.productCode === 'A')?.descriptor.isSoldOut).toBe(true);
   });
@@ -43,11 +43,11 @@ describe('inventory database invariants', () => {
     await addInboundEntry({ warehouseId: fixture.warehouse.id, skuId: id, date: '2026-09-11', quantity: 50 });
     await snapshot('2026-09-12', [row('A', 120)]);
     const check = async () => {
-      const detail = await loadSkuWithSeries(id, '2026-09-12');
+      const detail = await loadSkuWithSeries(fixture.org.id, id, '2026-09-12');
       const comparison = calculatePeriodComparison(detail!.observations, '2026-09-10', '2026-09-12');
       expect(comparison?.totalDepletion).toBe(30);
       expect(comparison?.totalInboundQuantity).toBe(50);
-      const list = await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-12');
+      const list = await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-12');
       expect(list[0].observations).toEqual(detail!.observations);
     };
     await check();
@@ -71,7 +71,7 @@ describe('inventory database invariants', () => {
     await snapshot('2026-09-10', [row('A', 100, { unitCost: 12 })]);
     await snapshot('2026-09-12', [row('A', 80, { unitCost: 0, costMissing: true })]);
     await snapshot('2026-09-10', [row('A', 100, { unitCost: 15 })]);
-    const detail = await loadSkuWithSeries(await skuId(), '2026-09-12');
+    const detail = await loadSkuWithSeries(fixture.org.id, await skuId(), '2026-09-12');
     expect(detail!.observations.at(-1)?.unitCost).toBe(15);
     expect(detail!.observations.at(-1)?.totalCost).toBe(1200);
     expect(await prisma.inventorySnapshot.count({ where: { warehouseId: fixture.warehouse.id, status: 'ACTIVE', snapshotDate: new Date('2026-09-10') } })).toBe(1);
@@ -98,7 +98,7 @@ describe('inventory database invariants', () => {
       expected.set(date, total);
     }
     for (const cutoff of ['2026-08-02', '2026-08-05', '2026-08-12']) {
-      const totals = (await loadDailyWarehouseTotals(cutoff)).filter(r => r.warehouseId === fixture.warehouse.id);
+      const totals = (await loadDailyWarehouseTotals(fixture.org.id, cutoff)).filter(r => r.warehouseId === fixture.warehouse.id);
       expect(totals).toHaveLength(Number(cutoff.slice(-2)));
       for (const total of totals) expect(total.totalInventoryValue).toBeCloseTo(expected.get(total.date)!, 6);
     }
@@ -141,24 +141,24 @@ describe('inventory database invariants', () => {
     await snapshot('2026-09-12', [row('B')]);
     await snapshot('2026-09-10', [row('A'), row('B')]);
     expect((await prisma.sku.findUniqueOrThrow({ where: { id: await skuId() } })).isActive).toBe(false);
-    expect((await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-10')).map(r => r.descriptor.productCode).sort()).toEqual(['A', 'B']);
-    expect(await loadSkuWithSeries(await skuId(), '2026-09-12')).toBeNull();
+    expect((await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-10')).map(r => r.descriptor.productCode).sort()).toEqual(['A', 'B']);
+    expect(await loadSkuWithSeries(fixture.org.id, await skuId(), '2026-09-12')).toBeNull();
   });
 
   it('uses mock history only before the first real snapshot and applies visibility consistently', async () => {
     await createSnapshot({ warehouseId: fixture.warehouse.id, uploadedById: fixture.user.id,
       snapshotDate: new Date('2026-09-10'), sourceFileName: 'mock.xlsx', fileHash: 'mock', rows: [row('A', 200)], isMock: true });
     await snapshot('2026-09-12', [row('A', 100)]);
-    const before = await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-10');
+    const before = await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-10');
     expect(before[0].observations[0].normalStock).toBe(200);
-    const after = await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-12');
+    const after = await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-12');
     expect(after[0].observations).toHaveLength(1);
     expect(after[0].observations[0].normalStock).toBe(100);
-    expect((await loadDailyWarehouseTotals('2026-09-10')).filter(r => r.warehouseId === fixture.warehouse.id)[0].totalAvailableStock).toBe(200);
-    expect((await loadDailyWarehouseTotals('2026-09-12')).filter(r => r.warehouseId === fixture.warehouse.id)).toHaveLength(1);
+    expect((await loadDailyWarehouseTotals(fixture.org.id, '2026-09-10')).filter(r => r.warehouseId === fixture.warehouse.id)[0].totalAvailableStock).toBe(200);
+    expect((await loadDailyWarehouseTotals(fixture.org.id, '2026-09-12')).filter(r => r.warehouseId === fixture.warehouse.id)).toHaveLength(1);
     await prisma.sku.update({ where: { id: await skuId() }, data: { isHiddenFromDashboard: true } });
-    expect(await loadActiveSkusWithSeries(fixture.warehouse.id, '2026-09-10')).toEqual([]);
-    expect((await loadDailyWarehouseTotals()).filter(r => r.warehouseId === fixture.warehouse.id)).toEqual([]);
+    expect(await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, '2026-09-10')).toEqual([]);
+    expect((await loadDailyWarehouseTotals(fixture.org.id)).filter(r => r.warehouseId === fixture.warehouse.id)).toEqual([]);
   });
 
   it('writes more than one batch and rolls back an invalid replacement completely', async () => {
@@ -185,12 +185,12 @@ it('preserves valuation completeness through database, service, and KPI aggregat
   const { getInventoryRows } = await import('../src/server/services/inventory-analysis-service');
   const { calculateCompanyKpis } = await import('../src/domain/inventory/aggregation');
   const { DEFAULT_RISK_SETTINGS } = await import('../src/domain/inventory/types');
-  const rows = await getInventoryRows({warehouseId: fixture.warehouse.id, asOfDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
+  const rows = await getInventoryRows({ orgId: fixture.org.id, warehouseId: fixture.warehouse.id, asOfDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
   const kpis = calculateCompanyKpis(rows, 30);
   expect(kpis.snapshot).toMatchObject({knownInventoryValue: 95, valuedSkuCount: 2, unvaluedSkuCount: 2, negativeStockSkuCount: 1, positiveStockSkuCount: 3});
   expect(rows.find(r=>r.descriptor.productCode === 'unknown')!.analysis.latest.valuationKnown).toBe(false);
   await snapshot('2026-09-11', [row('unknown', 8, {unitCost: 5})]);
-  const historical = await getInventoryRows({warehouseId: fixture.warehouse.id, asOfDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
+  const historical = await getInventoryRows({ orgId: fixture.org.id, warehouseId: fixture.warehouse.id, asOfDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
   expect(calculateCompanyKpis(historical, 30).snapshot.knownInventoryValue).toBe(95);
 });
 
@@ -201,6 +201,6 @@ it('does not mix newly introduced SKUs into requested-period KPI changes', async
   const { getInventoryRows } = await import('../src/server/services/inventory-analysis-service');
   const { calculateCompanyKpis } = await import('../src/domain/inventory/aggregation');
   const { DEFAULT_RISK_SETTINGS } = await import('../src/domain/inventory/types');
-  const rows = await getInventoryRows({warehouseId: fixture.warehouse.id, asOfDate: '2026-09-12', compareFromDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
+  const rows = await getInventoryRows({ orgId: fixture.org.id, warehouseId: fixture.warehouse.id, asOfDate: '2026-09-12', compareFromDate: '2026-09-10', settings: DEFAULT_RISK_SETTINGS});
   expect(calculateCompanyKpis(rows, 30, '2026-09-10').snapshot).toMatchObject({comparableSkuCount: 1, observedDecrease: 20, estimatedDepletion: 20});
 });

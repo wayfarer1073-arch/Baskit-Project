@@ -14,9 +14,10 @@ export function requireTestDatabase() {
 export async function createFixture() {
   requireTestDatabase();
   const tag = randomUUID();
-  const user = await prisma.user.create({ data: { email: `${tag}@test.invalid`, name: 'DB test', passwordHash: 'not-a-login' } });
-  const warehouse = await prisma.warehouse.create({ data: { code: tag, name: 'DB test warehouse' } });
-  return { user, warehouse };
+  const org = await prisma.organization.create({ data: { name: `DB test ${tag}` } });
+  const user = await prisma.user.create({ data: { organizationId: org.id, email: `${tag}@test.invalid`, name: 'DB test', passwordHash: 'not-a-login' } });
+  const warehouse = await prisma.warehouse.create({ data: { organizationId: org.id, code: tag, name: 'DB test warehouse' } });
+  return { org, user, warehouse };
 }
 
 export async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
@@ -27,7 +28,11 @@ export async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFi
   await prisma.inventorySnapshot.deleteMany({ where: { warehouseId } });
   await prisma.sku.deleteMany({ where: { warehouseId } });
   await prisma.warehouse.delete({ where: { id: warehouseId } });
+  await prisma.eventSchedule.deleteMany({ where: { organizationId: fixture.org.id } });
+  await prisma.holiday.deleteMany({ where: { organizationId: fixture.org.id } });
+  await prisma.settings.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.user.delete({ where: { id: fixture.user.id } });
+  await prisma.organization.delete({ where: { id: fixture.org.id } });
 }
 
 export function row(productCode: string, normalStock = 100, overrides: Partial<ParsedInventoryRow> = {}): ParsedInventoryRow {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { updateExpirationLot, deleteExpirationLot } from '@/server/repositories/expiration-repository';
 
 function isValidCalendarDate(dateStr: string): boolean {
@@ -19,28 +19,28 @@ const patchSchema = z
   .refine((data) => Object.keys(data).length > 0, { message: '변경할 값이 없습니다.' });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ lotId: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 변경할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 변경할 수 있습니다.' }, { status: 403 });
 
   const { lotId } = await params;
   const body = await request.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 });
 
-  const result = await updateExpirationLot(lotId, parsed.data);
+  const result = await updateExpirationLot(tenant.orgId, lotId, parsed.data);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ lotId: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 삭제할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 삭제할 수 있습니다.' }, { status: 403 });
 
   const { lotId } = await params;
-  const ok = await deleteExpirationLot(lotId);
+  const ok = await deleteExpirationLot(tenant.orgId, lotId);
   if (!ok) return NextResponse.json({ error: '로트를 찾을 수 없습니다.' }, { status: 404 });
 
   return NextResponse.json({ ok: true });

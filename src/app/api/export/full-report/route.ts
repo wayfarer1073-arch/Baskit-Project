@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { getInventoryRows } from '@/server/services/inventory-analysis-service';
 import { calculateCompanyKpis, calculateWarehouseSummaries } from '@/domain/inventory/aggregation';
 import { listAllEvents } from '@/server/repositories/event-repository';
@@ -12,8 +12,8 @@ import { isDateString, todayKstDateString } from '@/lib/date';
 import { eventTypeLabel } from '@/lib/event-types';
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const url = new URL(request.url);
   const asOfDate = url.searchParams.get('asOf') ?? todayKstDateString();
@@ -22,11 +22,11 @@ export async function GET(request: Request) {
   if (!isDateString(asOfDate) || (fromDate !== null && (!isDateString(fromDate) || fromDate > asOfDate))) {
     return NextResponse.json({ error: '유효한 조회 날짜를 입력해주세요.' }, { status: 400 });
   }
-  const settings = await getSettings();
+  const settings = await getSettings(tenant.orgId);
   const [rows, events, holidays] = await Promise.all([
-    getInventoryRows({ asOfDate, compareFromDate: fromDate ?? undefined, settings }),
-    listAllEvents(),
-    listHolidayDateStrings(),
+    getInventoryRows({ orgId: tenant.orgId, asOfDate, compareFromDate: fromDate ?? undefined, settings }),
+    listAllEvents(tenant.orgId),
+    listHolidayDateStrings(tenant.orgId),
   ]);
   const holidaySet = new Set(holidays);
   const kpis = calculateCompanyKpis(rows, settings.stagnantDays, fromDate, holidaySet);

@@ -1,18 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, MessagesSquare, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SegmentNavLinks, SegmentSwitcher, useActiveSegment } from '@/components/layout/segment-nav';
+import type { Segment } from '@/lib/segments';
 import { SignOutButton } from '@/components/layout/sign-out-button';
 import { postTagLabel, postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
-
-const NAV_ITEMS = [
-  { href: '/', label: '대시보드', icon: LayoutDashboard },
-  { href: '/upload', label: '캘린더', icon: CalendarDays },
-  { href: '/board', label: '게시판', icon: MessagesSquare },
-  { href: '/settings', label: '설정', icon: Settings },
-];
 
 export interface SidebarRecentPost {
   id: string;
@@ -23,12 +16,14 @@ export interface SidebarRecentPost {
 interface AppSidebarProps {
   userName: string;
   userRole: string;
+  workspaceName: string;
+  defaultSegment: Segment;
   recentPosts?: SidebarRecentPost[];
   className?: string;
 }
 
-export function AppSidebar({ userName, userRole, recentPosts, className }: AppSidebarProps) {
-  const pathname = usePathname();
+export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, recentPosts, className }: AppSidebarProps) {
+  const segment = useActiveSegment(defaultSegment);
 
   return (
     <aside
@@ -40,30 +35,19 @@ export function AppSidebar({ userName, userRole, recentPosts, className }: AppSi
       <div className="flex items-center gap-2.5 px-5 py-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-icon.png" alt="" className="size-9 shrink-0" />
-        <span className="text-base font-semibold tracking-tight">Limenote</span>
+        <span className="min-w-0 leading-tight">
+          <span className="block text-base font-semibold tracking-tight">Limenote</span>
+          <span className="block truncate text-xs text-sidebar-muted-foreground" title={workspaceName}>
+            {workspaceName}
+          </span>
+        </span>
       </div>
+
+      <SegmentSwitcher segment={segment} className="px-3 pb-3" />
 
       <nav className="flex flex-col gap-1 px-3 py-2">
         <p className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">메뉴</p>
-        {NAV_ITEMS.map((item) => {
-          const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-brand-accent text-brand-accent-foreground'
-                  : 'text-sidebar-muted-foreground hover:bg-sidebar-hover-bg hover:text-sidebar-foreground',
-              )}
-            >
-              <Icon className="size-[18px]" aria-hidden="true" />
-              {item.label}
-            </Link>
-          );
-        })}
+        <SegmentNavLinks segment={segment} variant="sidebar" />
       </nav>
 
       {recentPosts && recentPosts.length > 0 && (

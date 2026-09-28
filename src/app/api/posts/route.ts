@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { createPost, listPosts } from '@/server/repositories/post-repository';
 import type { PostTag } from '@prisma/client';
 
@@ -20,8 +20,8 @@ function isValidCalendarDate(dateStr: string): boolean {
 }
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const fromDate = fromParam && isValidCalendarDate(fromParam) ? fromParam : undefined;
   const toDate = toParam && isValidCalendarDate(toParam) ? toParam : undefined;
 
-  const { posts, totalCount } = await listPosts(page, PAGE_SIZE, { keyword, tags, fromDate, toDate });
+  const { posts, totalCount } = await listPosts(tenant.orgId, page, PAGE_SIZE, { keyword, tags, fromDate, toDate });
   return NextResponse.json({
     posts,
     page,
@@ -49,8 +49,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const body = await request.json();
   const parsed = createPostSchema.safeParse(body);
@@ -58,6 +58,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '입력값이 올바르지 않습니다.' }, { status: 400 });
   }
 
-  const post = await createPost({ ...parsed.data, authorId: session.user.id });
+  const post = await createPost(tenant.orgId, { ...parsed.data, authorId: tenant.userId });
   return NextResponse.json({ post }, { status: 201 });
 }

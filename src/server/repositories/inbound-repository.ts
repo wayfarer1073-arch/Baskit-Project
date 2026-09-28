@@ -22,8 +22,9 @@ export function listInboundEntriesForDate(warehouseId: string, date: string): Pr
 }
 
 /** 업로드 캘린더의 창고별 "입고 특이사항 N건" 뱃지용 — 전체 창고·날짜별 건수를 한 번에 로드한다(N+1 방지). */
-export async function listInboundCountsByWarehouseAndDate(): Promise<Map<string, number>> {
+export async function listInboundCountsByWarehouseAndDate(orgId: string): Promise<Map<string, number>> {
   const entries = await prisma.snapshotInbound.findMany({
+    where: { sku: { warehouse: { organizationId: orgId } } },
     select: { snapshotDate: true, sku: { select: { warehouseId: true } } },
   });
   const map = new Map<string, number>();
@@ -85,11 +86,7 @@ export async function addInboundEntry(input: AddInboundEntryInput): Promise<AddI
   });
 }
 
-export async function deleteInboundEntry(id: string): Promise<boolean> {
-  try {
-    await prisma.snapshotInbound.delete({ where: { id } });
-    return true;
-  } catch {
-    return false;
-  }
+export async function deleteInboundEntry(orgId: string, id: string): Promise<boolean> {
+  const result = await prisma.snapshotInbound.deleteMany({ where: { id, sku: { warehouse: { organizationId: orgId } } } });
+  return result.count > 0;
 }

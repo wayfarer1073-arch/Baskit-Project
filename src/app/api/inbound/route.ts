@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { listInboundEntriesForDate, addInboundEntry } from '@/server/repositories/inbound-repository';
 import { todayKstDateString } from '@/lib/date';
+import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 
 function isValidCalendarDate(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
@@ -11,8 +12,8 @@ function isValidCalendarDate(dateStr: string): boolean {
 }
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const url = new URL(request.url);
   const warehouseId = url.searchParams.get('warehouseId');
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
   if (!warehouseId || !date || !isValidCalendarDate(date)) {
     return NextResponse.json({ error: 'warehouseId와 date가 필요합니다.' }, { status: 400 });
   }
+
+  if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
 
   const entries = await listInboundEntriesForDate(warehouseId, date);
   return NextResponse.json({ entries });
@@ -33,8 +36,8 @@ const postSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const body = await request.json();
   const parsed = postSchema.safeParse(body);
@@ -44,6 +47,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '미래 날짜는 입고일로 선택할 수 없습니다.' }, { status: 400 });
   }
 
+  if (!(await getWarehouseInOrg(tenant.orgId, parsed.data.warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
   const result = await addInboundEntry(parsed.data);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 

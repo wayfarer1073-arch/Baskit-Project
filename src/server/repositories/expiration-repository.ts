@@ -48,9 +48,9 @@ function generateAutoLabels(exclude: Set<string>, count: number): string[] {
 }
 
 /** 오래된 데이터(로트 없이 Sku.expirationDate만 있던 시절) 하나를 로트 A로 옮겨 심는다. 멱등적이라 여러 번 불러도 안전하다. */
-async function backfillLegacyExpirationDates(): Promise<void> {
+async function backfillLegacyExpirationDates(orgId: string): Promise<void> {
   const legacySkus = await prisma.sku.findMany({
-    where: { expirationDate: { not: null }, expirationLots: { none: {} } },
+    where: { warehouse: { organizationId: orgId }, expirationDate: { not: null }, expirationLots: { none: {} } },
     select: { id: true, expirationDate: true },
   });
   if (legacySkus.length === 0) return;
@@ -83,11 +83,11 @@ async function syncSkuExpirationDate(tx: Tx, skuId: string): Promise<void> {
 
 /** 최신 업로드에 남아 있고 로트가 하나 이상 등록된 SKU의 모든 로트를, 상품코드 순으로 나열한다(같은
  *  상품코드는 창고, 그 다음 소비기한 순으로 정렬). */
-export async function listExpirationLots(): Promise<ExpirationLotRow[]> {
-  await backfillLegacyExpirationDates();
+export async function listExpirationLots(orgId: string): Promise<ExpirationLotRow[]> {
+  await backfillLegacyExpirationDates(orgId);
 
   const lots = await prisma.skuExpirationLot.findMany({
-    where: { sku: { isActive: true } },
+    where: { sku: { isActive: true, warehouse: { organizationId: orgId, isArchived: false } } },
     include: { sku: { include: { warehouse: { select: { code: true, name: true } } } } },
     orderBy: [{ sku: { productCode: 'asc' } }, { sku: { warehouse: { code: 'asc' } } }, { expirationDate: 'asc' }],
   });
@@ -172,8 +172,8 @@ export async function applyExpirationLotRows(warehouseId: string, rows: ParsedEx
 export type AddExpirationLotResult = { ok: true; lotId: string } | { ok: false; error: string };
 
 /** 소비기한 관리 화면에서 로트 하나를 수동으로 추가한다. lot을 비우면 자동 배정(A/B/C…)된다. */
-export async function addExpirationLot(skuId: string, lot: string | null, expirationDate: string): Promise<AddExpirationLotResult> {
-  const sku = await prisma.sku.findUnique({ where: { id: skuId }, select: { id: true } });
+export async function addExpirationLot(orgId: string, skuId: string, lot: string | null, expirationDate: string): Promise<AddExpirationLotResult> {
+  const sku = await prisma.sku.findFirst({ where: { id: skuId, warehouse: { organizationId: orgId } }, select: { id: true } });
   if (!sku) return { ok: false, error: 'SKU를 찾을 수 없습니다.' };
 
   const trimmedLot = lot?.trim() || null;
@@ -201,10 +201,11 @@ export type MutateExpirationLotResult = { ok: true } | { ok: false; error: strin
 
 /** 로트의 날짜 및/또는 로트명을 수정한다. lot을 명시적으로 null/빈 문자열로 보내면 자동 배정으로 되돌린다. */
 export async function updateExpirationLot(
+  orgId: string,
   lotId: string,
   data: { lot?: string | null; expirationDate?: string },
 ): Promise<MutateExpirationLotResult> {
-  const existing = await prisma.skuExpirationLot.findUnique({ where: { id: lotId } });
+  const existing = await prisma.skuExpirationLot.findFirst({ where: { id: lotId, sku: { warehouse: { organizationId: orgId } } } });
   if (!existing) return { ok: false, error: '로트를 찾을 수 없습니다.' };
 
   const skuId = existing.skuId;
@@ -233,8 +234,8 @@ export async function updateExpirationLot(
 }
 
 /** 로트를 삭제하고, 같은 SKU에 남은 자동 로트 라벨을 다시 매긴 뒤 대표 소비기한을 갱신한다. */
-export async function deleteExpirationLot(lotId: string): Promise<boolean> {
-  const existing = await prisma.skuExpirationLot.findUnique({ where: { id: lotId } });
+export async function deleteExpirationLot(orgId: string, lotId: string): Promise<boolean> {
+  const existing = await prisma.skuExpirationLot.findFirst({ where: { id: lotId, sku: { warehouse: { organizationId: orgId } } } });
   if (!existing) return false;
 
   await prisma.$transaction(async (tx) => {
@@ -246,19 +247,19 @@ export async function deleteExpirationLot(lotId: string): Promise<boolean> {
 }
 
 /** null을 넘기면 앱 기본값(자동계산)으로 되돌린다. */
-export async function setExpirationRiskDays(skuId: string, riskDays: number | null): Promise<boolean> {
+export async function setExpirationRiskDays(orgId: string, skuId: string, riskDays: number | null): Promise<boolean> {
   const result = await prisma.sku.updateMany({
-    where: { id: skuId, isActive: true },
+    where: { id: skuId, isActive: true, warehouse: { organizationId: orgId } },
     data: { expirationRiskDays: riskDays },
   });
   return result.count > 0;
 }
 
 /** 체크박스로 선택한 여러 SKU에 같은 위험 판정 일수를 한 번에 적용한다. */
-export async function setExpirationRiskDaysBulk(skuIds: string[], riskDays: number): Promise<number> {
+export async function setExpirationRiskDaysBulk(orgId: string, skuIds: string[], riskDays: number): Promise<number> {
   if (skuIds.length === 0) return 0;
   const result = await prisma.sku.updateMany({
-    where: { id: { in: skuIds }, isActive: true },
+    where: { id: { in: skuIds }, isActive: true, warehouse: { organizationId: orgId } },
     data: { expirationRiskDays: riskDays },
   });
   return result.count;

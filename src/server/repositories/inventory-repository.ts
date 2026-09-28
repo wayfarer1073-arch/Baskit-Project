@@ -8,6 +8,11 @@ import type { SkuDescriptor, DailyWarehouseTotal } from '@/domain/inventory/read
 import { attachIntervalInbounds, type DatedInbound } from '@/domain/inventory/inbounds';
 import { NO_HOLIDAYS } from '@/domain/inventory/shipping-calendar';
 
+/** 조직의 사용 중인(보관되지 않은) 창고에 속한 데이터만 보도록 하는 공통 조건. */
+function activeWarehouseOf(orgId: string) {
+  return { organizationId: orgId, isArchived: false };
+}
+
 /** 품절 인식일로부터 정확히 1개월 뒤(유예기간 종료일, 이 날짜부터는 더 이상 노출하지 않음). */
 function soldOutGraceEndDate(soldOutDetectedDateStr: string): string {
   return format(addMonths(parseISO(soldOutDetectedDateStr), 1), 'yyyy-MM-dd');
@@ -18,11 +23,12 @@ function soldOutGraceEndDate(soldOutDetectedDateStr: string): string {
  * 유예기간 이내인 SKU의 id를 돌려준다. 마지막 관측 데이터가 그대로 노출되도록(휘발 방지) 하는 게
  * 목적이라 관측치 자체는 건드리지 않고, 어떤 SKU를 결과 집합에 추가로 포함할지만 결정한다.
  */
-async function resolveSoldOutGraceSkuIds(warehouseId: string | undefined, asOfDate: string): Promise<Set<string>> {
+async function resolveSoldOutGraceSkuIds(orgId: string, warehouseId: string | undefined, asOfDate: string): Promise<Set<string>> {
   const asOfDateOnly = new Date(`${asOfDate}T00:00:00.000Z`);
   const graceWindowStart = new Date(`${format(addMonths(parseISO(asOfDate), -1), 'yyyy-MM-dd')}T00:00:00.000Z`);
   const candidates = await prisma.sku.findMany({
     where: {
+      warehouse: activeWarehouseOf(orgId),
       ...(warehouseId ? { warehouseId } : {}),
       isHiddenFromDashboard: false,
       soldOutDetectedDate: { not: null, lte: asOfDateOnly, gte: graceWindowStart },
@@ -43,9 +49,9 @@ async function resolveSoldOutGraceSkuIds(warehouseId: string | undefined, asOfDa
  * 하나라도 있으면 그 창고는 "실데이터 모드"로 보고 mock 스냅샷을 전부 제외하고, 아직 실데이터가
  * 없는 창고(개발/데모 단계)만 mock을 그대로 허용한다.
  */
-async function resolveMockFilter(warehouseId?: string, asOfDate?: string): Promise<Prisma.InventorySnapshotWhereInput> {
+async function resolveMockFilter(orgId: string, warehouseId?: string, asOfDate?: string): Promise<Prisma.InventorySnapshotWhereInput> {
   const realWarehouses = await prisma.inventorySnapshot.findMany({
-    where: { status: 'ACTIVE', isMock: false, ...(warehouseId ? { warehouseId } : {}),
+    where: { status: 'ACTIVE', isMock: false, warehouse: { organizationId: orgId }, ...(warehouseId ? { warehouseId } : {}),
       ...(asOfDate ? { snapshotDate: { lte: new Date(`${asOfDate}T00:00:00.000Z`) } } : {}),
     },
     select: { warehouseId: true },
@@ -60,7 +66,7 @@ async function resolveMockFilter(warehouseId?: string, asOfDate?: string): Promi
  * SnapshotInbound는 특정 스냅샷 버전이 아니라 (SKU, 날짜)에 독립적으로 붙어있으므로
  * snapshot.status/isMock을 거칠 필요 없이 skuId·날짜로 바로 조회한다.
  */
-async function loadInboundsBySku(skuIds: string[], asOfDate?: string): Promise<Map<string, DatedInbound[]>> {
+export async function loadInboundsBySku(skuIds: string[], asOfDate?: string): Promise<Map<string, DatedInbound[]>> {
   if (skuIds.length === 0) return new Map();
   const entries = await prisma.snapshotInbound.findMany({
     where: {
@@ -88,14 +94,16 @@ const observationSelect = {
 
 /** 기준일의 최신 스냅샷에 존재하는 SKU와 관측 시계열. 현재 isActive는 과거 조회에 적용하지 않는다. */
 export async function loadActiveSkusWithSeries(
+  orgId: string,
   warehouseId?: string,
   asOfDate?: string,
   holidays: ReadonlySet<string> = NO_HOLIDAYS,
 ): Promise<{ descriptor: SkuDescriptor; observations: StockObservation[] }[]> {
-  const mockFilter = await resolveMockFilter(warehouseId, asOfDate);
+  const mockFilter = await resolveMockFilter(orgId, warehouseId, asOfDate);
   const latestSnapshots = await prisma.inventorySnapshot.findMany({
     where: {
       status: 'ACTIVE',
+      warehouse: activeWarehouseOf(orgId),
       ...(warehouseId ? { warehouseId } : {}),
       ...(asOfDate ? { snapshotDate: { lte: new Date(`${asOfDate}T00:00:00.000Z`) } } : {}),
       ...mockFilter,
@@ -121,11 +129,11 @@ export async function loadActiveSkusWithSeries(
   const activeSkuIds = [...new Set(latestItems.map((item) => item.skuId))];
 
   // 최신 목록엔 없어도 품절 인식 1개월 유예기간 이내인 SKU는 계속 포함한다(휘발 방지).
-  const soldOutSkuIds = asOfDate ? await resolveSoldOutGraceSkuIds(warehouseId, asOfDate) : new Set<string>();
+  const soldOutSkuIds = asOfDate ? await resolveSoldOutGraceSkuIds(orgId, warehouseId, asOfDate) : new Set<string>();
   const combinedSkuIds = [...new Set([...activeSkuIds, ...soldOutSkuIds])];
 
   const skus = await prisma.sku.findMany({
-    where: { id: { in: combinedSkuIds }, isHiddenFromDashboard: false, ...(warehouseId ? { warehouseId } : {}) },
+    where: { id: { in: combinedSkuIds }, isHiddenFromDashboard: false, warehouse: activeWarehouseOf(orgId), ...(warehouseId ? { warehouseId } : {}) },
     include: { warehouse: { select: { id: true, code: true, name: true } } },
   });
   if (skus.length === 0) return [];
@@ -214,7 +222,7 @@ export async function loadActiveSkusWithSeries(
 }
 
 /** 차트용 일자별 창고별 합계(재고수량/재고자산). ACTIVE 스냅샷만 집계하며, 숨김 처리된 SKU는 제외한다. */
-export async function loadDailyWarehouseTotals(asOfDate?: string): Promise<DailyWarehouseTotal[]> {
+export async function loadDailyWarehouseTotals(orgId: string, asOfDate?: string): Promise<DailyWarehouseTotal[]> {
   const endDate = asOfDate ? new Date(`${asOfDate}T00:00:00.000Z`) : null;
   // Match resolveInventoryCost without sending every historical item to Node:
   // each explicit cost starts a new carry-forward group; before the first explicit
@@ -222,7 +230,9 @@ export async function loadDailyWarehouseTotals(asOfDate?: string): Promise<Daily
   const totals = await prisma.$queryRaw<{
     date: Date; warehouseId: string; totalAvailableStock: bigint; totalInventoryValue: Prisma.Decimal;
   }[]>`
-    WITH real_warehouses AS (
+    WITH org_warehouses AS (
+      SELECT id FROM warehouses WHERE "organizationId" = ${orgId} AND NOT "isArchived"
+    ), real_warehouses AS (
       SELECT DISTINCT "warehouseId" FROM inventory_snapshots
       WHERE status = 'ACTIVE' AND NOT "isMock"
         AND (${endDate}::date IS NULL OR "snapshotDate" <= ${endDate}::date)
@@ -235,6 +245,7 @@ export async function loadDailyWarehouseTotals(asOfDate?: string): Promise<Daily
       FROM inventory_items i
       JOIN inventory_snapshots s ON s.id = i."snapshotId"
       JOIN skus k ON k.id = i."skuId"
+      JOIN org_warehouses ow ON ow.id = s."warehouseId"
       WHERE s.status = 'ACTIVE' AND NOT k."isHiddenFromDashboard"
         AND (${endDate}::date IS NULL OR s."snapshotDate" <= ${endDate}::date)
         AND (NOT s."isMock" OR NOT EXISTS (
@@ -262,14 +273,18 @@ export async function loadDailyWarehouseTotals(asOfDate?: string): Promise<Daily
 }
 
 export async function loadSkuWithSeries(
+  orgId: string,
   skuId: string,
   asOfDate?: string,
   holidays: ReadonlySet<string> = NO_HOLIDAYS,
 ): Promise<{ descriptor: SkuDescriptor; observations: StockObservation[] } | null> {
-  const sku = await prisma.sku.findUnique({ where: { id: skuId }, include: { warehouse: { select: { id: true, code: true, name: true } } } });
+  const sku = await prisma.sku.findFirst({
+    where: { id: skuId, warehouse: activeWarehouseOf(orgId) },
+    include: { warehouse: { select: { id: true, code: true, name: true } } },
+  });
   if (!sku || sku.isHiddenFromDashboard) return null;
 
-  const mockFilter = await resolveMockFilter(sku.warehouseId, asOfDate);
+  const mockFilter = await resolveMockFilter(orgId, sku.warehouseId, asOfDate);
   // Match the list's point-in-time membership, including SKUs now inactive.
   const latestSnapshot = await prisma.inventorySnapshot.findFirst({
     where: { warehouseId: sku.warehouseId, status: 'ACTIVE', ...mockFilter,
@@ -369,9 +384,9 @@ export interface SkuVisibilityRow {
 }
 
 /** 설정 화면의 "SKU 숨기기" 관리용 — 최신 업로드에 남아 있는 SKU만 나열한다. */
-export async function listAllSkusForVisibilityAdmin(): Promise<SkuVisibilityRow[]> {
+export async function listAllSkusForVisibilityAdmin(orgId: string): Promise<SkuVisibilityRow[]> {
   const skus = await prisma.sku.findMany({
-    where: { isActive: true },
+    where: { isActive: true, warehouse: activeWarehouseOf(orgId) },
     include: { warehouse: { select: { code: true, name: true } } },
     orderBy: [{ warehouse: { sortOrder: 'asc' } }, { productCode: 'asc' }],
   });
@@ -387,16 +402,31 @@ export async function listAllSkusForVisibilityAdmin(): Promise<SkuVisibilityRow[
   }));
 }
 
-export async function setSkuHiddenFromDashboard(skuId: string, hidden: boolean) {
+export class SkuNotFoundError extends Error {}
+
+/** 요청의 skuId가 이 조직 소속인지 확인한다. 조직 밖의 SKU는 존재하지 않는 것으로 취급한다. */
+export async function isSkuInOrg(orgId: string, skuId: string): Promise<boolean> {
+  const sku = await prisma.sku.findFirst({ where: { id: skuId, warehouse: { organizationId: orgId } }, select: { id: true } });
+  return sku !== null;
+}
+
+async function assertSkuInOrg(orgId: string, skuId: string) {
+  if (!(await isSkuInOrg(orgId, skuId))) throw new SkuNotFoundError('SKU를 찾을 수 없습니다.');
+}
+
+export async function setSkuHiddenFromDashboard(orgId: string, skuId: string, hidden: boolean) {
+  await assertSkuInOrg(orgId, skuId);
   return prisma.sku.update({ where: { id: skuId }, data: { isHiddenFromDashboard: hidden } });
 }
 
-export async function setSkuB2B(skuId: string, isB2B: boolean) {
+export async function setSkuB2B(orgId: string, skuId: string, isB2B: boolean) {
+  await assertSkuInOrg(orgId, skuId);
   return prisma.sku.update({ where: { id: skuId }, data: { isB2B } });
 }
 
 /** 위험/경고수량 직접 설정. 필드별로 null을 넘기면 그 필드만 자동계산으로 되돌린다. */
-export async function setSkuManualThresholds(skuId: string, input: { dangerQty: number | null; warningQty: number | null }) {
+export async function setSkuManualThresholds(orgId: string, skuId: string, input: { dangerQty: number | null; warningQty: number | null }) {
+  await assertSkuInOrg(orgId, skuId);
   return prisma.sku.update({ where: { id: skuId }, data: { manualDangerQty: input.dangerQty, manualWarningQty: input.warningQty } });
 }
 

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { prisma } from '@/lib/prisma';
 import { createEvent, findSimilarSchedule, listEventsForSku, listEventsForWarehouse } from '@/server/repositories/event-repository';
+import { isSkuInOrg } from '@/server/repositories/inventory-repository';
+import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 
 const createEventSchema = z.object({
   warehouseId: z.string().min(1),
@@ -21,18 +23,20 @@ const createEventSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const url = new URL(request.url);
   const skuId = url.searchParams.get('skuId');
   const warehouseId = url.searchParams.get('warehouseId');
 
   if (skuId) {
+    if (!(await isSkuInOrg(tenant.orgId, skuId))) return NextResponse.json({ error: 'SKU를 찾을 수 없습니다.' }, { status: 404 });
     const events = await listEventsForSku(skuId);
     return NextResponse.json({ events });
   }
   if (warehouseId) {
+    if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
     const events = await listEventsForWarehouse(warehouseId);
     return NextResponse.json({ events });
   }
@@ -40,8 +44,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const body = await request.json();
   const parsed = createEventSchema.safeParse(body);
@@ -49,6 +53,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '입력값이 올바르지 않습니다.', issues: parsed.error.issues }, { status: 400 });
   }
 
+  if (!(await getWarehouseInOrg(tenant.orgId, parsed.data.warehouseId))) {
+    return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
+  }
   if (parsed.data.skuId) {
     const sku = await prisma.sku.findUnique({ where: { id: parsed.data.skuId }, select: { warehouseId: true, isActive: true } });
     if (!sku || !sku.isActive || sku.warehouseId !== parsed.data.warehouseId) {
@@ -65,13 +72,14 @@ export async function POST(request: Request) {
   // 않고 확인이 필요하다고만 응답한다 — 화면에서 사용자가 예/아니오를 고르면 그 선택을 실어
   // 다시 요청한다.
   if (trimmedTitle && !parsed.data.confirmChoice) {
-    const similar = await findSimilarSchedule(parsed.data.eventType, trimmedTitle, eventDate, endDate);
+    const similar = await findSimilarSchedule(tenant.orgId, parsed.data.eventType, trimmedTitle, eventDate, endDate);
     if (similar) {
       return NextResponse.json({ needsConfirmation: true, candidate: similar });
     }
   }
 
   const event = await createEvent({
+    organizationId: tenant.orgId,
     warehouseId: parsed.data.warehouseId,
     skuId: parsed.data.skuId,
     eventType: parsed.data.eventType,
@@ -81,7 +89,7 @@ export async function POST(request: Request) {
     endDate,
     title: trimmedTitle,
     attachToScheduleId: parsed.data.confirmChoice === 'use_existing' ? parsed.data.existingScheduleId : undefined,
-    createdById: session.user.id,
+    createdById: tenant.userId,
   });
 
   return NextResponse.json({ event }, { status: 201 });

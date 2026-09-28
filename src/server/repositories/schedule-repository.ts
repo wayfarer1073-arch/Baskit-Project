@@ -10,8 +10,9 @@ export type { ScheduleRow, ScheduleEventRow } from '@/domain/events/schedule-typ
  * 정리하지 않고 그냥 결과에서만 걸러낸다 — 같은 제목·기간으로 다시 등록되면 남아있던 색상을
  * 그대로 재사용하기 위해 행 자체는 지우지 않는다.
  */
-export async function listSchedules(): Promise<ScheduleRow[]> {
+export async function listSchedules(orgId: string): Promise<ScheduleRow[]> {
   const schedules = await prisma.eventSchedule.findMany({
+    where: { organizationId: orgId },
     orderBy: { startDate: 'asc' },
     include: {
       events: {
@@ -49,9 +50,9 @@ export async function listSchedules(): Promise<ScheduleRow[]> {
 
 export type SetScheduleColorResult = { ok: true } | { ok: false; error: string };
 
-export async function setScheduleColor(id: string, color: string): Promise<SetScheduleColorResult> {
+export async function setScheduleColor(orgId: string, id: string, color: string): Promise<SetScheduleColorResult> {
   if (!isScheduleColor(color)) return { ok: false, error: '허용되지 않는 색상입니다.' };
-  const result = await prisma.eventSchedule.updateMany({ where: { id }, data: { color: color satisfies ScheduleColor } });
+  const result = await prisma.eventSchedule.updateMany({ where: { id, organizationId: orgId }, data: { color: color satisfies ScheduleColor } });
   if (result.count === 0) return { ok: false, error: '일정을 찾을 수 없습니다.' };
   return { ok: true };
 }

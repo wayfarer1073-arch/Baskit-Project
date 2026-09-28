@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
-import { deletePost, updatePost, PostPermissionError } from '@/server/repositories/post-repository';
+import { getTenant } from '@/server/tenant';
+import { deletePost, updatePost, PostNotFoundError, PostPermissionError } from '@/server/repositories/post-repository';
 
 const updatePostSchema = z.object({
   tag: z.enum(['ISSUE', 'NOTICE', 'CHAT', 'RESOLVED']),
@@ -10,8 +10,8 @@ const updatePostSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const { id } = await params;
   const body = await request.json();
@@ -21,26 +21,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    const post = await updatePost(id, { id: session.user.id, role: session.user.role }, parsed.data);
+    const post = await updatePost(tenant.orgId, id, { id: tenant.userId, role: tenant.role }, parsed.data);
     return NextResponse.json({ post });
   } catch (error) {
     if (error instanceof PostPermissionError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof PostNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
     throw error;
   }
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const { id } = await params;
   try {
-    await deletePost(id, { id: session.user.id, role: session.user.role });
+    await deletePost(tenant.orgId, id, { id: tenant.userId, role: tenant.role });
   } catch (error) {
     if (error instanceof PostPermissionError) {
       return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+    if (error instanceof PostNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
     throw error;
   }

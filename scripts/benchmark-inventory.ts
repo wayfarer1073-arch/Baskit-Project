@@ -42,11 +42,11 @@ async function main() {
       }));
     }
     const asOfDate = day(days).toISOString().slice(0, 10);
-    await loadActiveSkusWithSeries(fixture.warehouse.id, asOfDate);
-    await loadDailyWarehouseTotals();
+    await loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, asOfDate);
+    await loadDailyWarehouseTotals(fixture.org.id);
     for (let i = 0; i < repeats; i++) {
-      await measure('series_ms', () => loadActiveSkusWithSeries(fixture.warehouse.id, asOfDate));
-      await measure('daily_totals_ms', () => loadDailyWarehouseTotals());
+      await measure('series_ms', () => loadActiveSkusWithSeries(fixture.org.id, fixture.warehouse.id, asOfDate));
+      await measure('daily_totals_ms', () => loadDailyWarehouseTotals(fixture.org.id));
     }
     console.log(JSON.stringify({ skuCount, days, repeats, inventoryItems: skuCount * (days + repeats),
       measurements: Object.fromEntries(Object.entries(samples).map(([key, values]) => {

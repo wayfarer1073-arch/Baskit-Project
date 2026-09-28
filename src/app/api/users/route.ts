@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
+import { getTenant } from '@/server/tenant';
 import { createUser, listUsers } from '@/server/repositories/user-repository';
 
 const schema = z.object({
@@ -11,18 +11,18 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 조회할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 조회할 수 있습니다.' }, { status: 403 });
 
-  const users = await listUsers();
+  const users = await listUsers(tenant.orgId);
   return NextResponse.json({ users });
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: '관리자만 사용자를 추가할 수 있습니다.' }, { status: 403 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 사용자를 추가할 수 있습니다.' }, { status: 403 });
 
   const body = await request.json();
   const parsed = schema.safeParse(body);
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const user = await createUser(parsed.data);
+    const user = await createUser(tenant.orgId, parsed.data);
     return NextResponse.json({ user }, { status: 201 });
   } catch {
     return NextResponse.json({ error: '이미 존재하는 이메일입니다.' }, { status: 409 });

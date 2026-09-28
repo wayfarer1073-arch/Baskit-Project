@@ -9,8 +9,9 @@ export interface PackagingUploadStatus {
 }
 
 /** 창고별 마지막 SKU 추가 정보 업로드 시각을 화면에 보여주기 위한 현황 목록. */
-export async function listPackagingUploadStatus(): Promise<PackagingUploadStatus[]> {
+export async function listPackagingUploadStatus(orgId: string): Promise<PackagingUploadStatus[]> {
   const warehouses = await prisma.warehouse.findMany({
+    where: { organizationId: orgId, isArchived: false },
     orderBy: { sortOrder: 'asc' },
     include: { packagingUpload: { include: { uploadedBy: { select: { name: true } } } } },
   });

@@ -1,4 +1,4 @@
-import { auth } from '@/server/auth';
+import { requireTenant } from '@/server/tenant';
 import { listPosts } from '@/server/repositories/post-repository';
 import { BoardClient } from '@/components/board/board-client';
 import type { PostTag } from '@prisma/client';
@@ -18,7 +18,7 @@ function toParam(value: string | string[] | undefined): string | undefined {
 
 export default async function BoardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const session = await auth();
+  const tenant = await requireTenant();
   const page = Math.max(1, Number(params.page) || 1);
 
   const keyword = toParam(params.q);
@@ -34,7 +34,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const fromDate = fromParam && isValidCalendarDate(fromParam) ? fromParam : undefined;
   const toDate = toDateParam && isValidCalendarDate(toDateParam) ? toDateParam : undefined;
 
-  const { posts, totalCount } = await listPosts(page, PAGE_SIZE, { keyword, tags, fromDate, toDate });
+  const { posts, totalCount } = await listPosts(tenant.orgId, page, PAGE_SIZE, { keyword, tags, fromDate, toDate });
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
@@ -51,8 +51,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       page={Math.min(page, totalPages)}
       totalPages={totalPages}
       totalCount={totalCount}
-      currentUserId={session!.user.id}
-      currentUserRole={session!.user.role}
+      currentUserId={tenant.userId}
+      currentUserRole={tenant.role}
       filter={{ keyword: keyword ?? '', tags: tags ?? [], fromDate: fromDate ?? '', toDate: toDate ?? '' }}
     />
   );

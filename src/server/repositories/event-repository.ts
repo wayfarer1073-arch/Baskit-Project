@@ -7,6 +7,7 @@ import { areTitlesSimilar } from '@/domain/events/title-similarity';
 type Db = typeof prisma | Prisma.TransactionClient;
 
 export interface CreateEventInput {
+  organizationId: string;
   warehouseId: string;
   skuId: string | null;
   eventType: EventType;
@@ -47,6 +48,7 @@ export interface SimilarScheduleCandidate {
  * 위한 것.
  */
 export async function findSimilarSchedule(
+  orgId: string,
   eventType: EventType,
   title: string,
   eventDate: Date,
@@ -55,7 +57,7 @@ export async function findSimilarSchedule(
   const trimmedTitle = title.trim();
   const { startDate, endDate: endDateOnly } = rangeDateOnly(eventDate, endDate);
   const candidates = await prisma.eventSchedule.findMany({
-    where: { eventType, startDate, endDate: endDateOnly, NOT: { title: trimmedTitle } },
+    where: { organizationId: orgId, eventType, startDate, endDate: endDateOnly, NOT: { title: trimmedTitle } },
   });
   const match = candidates.find((c) => areTitlesSimilar(c.title, trimmedTitle));
   if (!match) return null;
@@ -77,20 +79,22 @@ export async function findSimilarSchedule(
  */
 async function resolveScheduleLink(
   db: Db,
-  params: { eventType: EventType; title: string | null | undefined; eventDate: Date; endDate: Date | null | undefined; attachToScheduleId?: string },
+  params: { orgId: string; eventType: EventType; title: string | null | undefined; eventDate: Date; endDate: Date | null | undefined; attachToScheduleId?: string },
 ): Promise<{ scheduleId: string | null; resolvedTitle: string | null }> {
   const trimmedTitle = params.title?.trim() || null;
 
   if (params.attachToScheduleId) {
-    const schedule = await db.eventSchedule.findUnique({ where: { id: params.attachToScheduleId } });
+    const schedule = await db.eventSchedule.findFirst({ where: { id: params.attachToScheduleId, organizationId: params.orgId } });
     if (schedule) return { scheduleId: schedule.id, resolvedTitle: schedule.title };
   }
 
   if (trimmedTitle) {
     const { startDate, endDate } = rangeDateOnly(params.eventDate, params.endDate);
     const schedule = await db.eventSchedule.upsert({
-      where: { eventType_title_startDate_endDate: { eventType: params.eventType, title: trimmedTitle, startDate, endDate } },
-      create: { eventType: params.eventType, title: trimmedTitle, startDate, endDate, color: defaultScheduleColorFor(trimmedTitle) },
+      where: {
+        organizationId_eventType_title_startDate_endDate: { organizationId: params.orgId, eventType: params.eventType, title: trimmedTitle, startDate, endDate },
+      },
+      create: { organizationId: params.orgId, eventType: params.eventType, title: trimmedTitle, startDate, endDate, color: defaultScheduleColorFor(trimmedTitle) },
       update: {},
     });
     return { scheduleId: schedule.id, resolvedTitle: trimmedTitle };
@@ -101,6 +105,7 @@ async function resolveScheduleLink(
 
 export async function createEvent(input: CreateEventInput) {
   const { scheduleId, resolvedTitle } = await resolveScheduleLink(prisma, {
+    orgId: input.organizationId,
     eventType: input.eventType,
     title: input.title,
     eventDate: input.eventDate,
@@ -133,9 +138,9 @@ export function listEventsForSku(skuId: string) {
   });
 }
 
-export function listAllEvents(limit = 2000) {
+export function listAllEvents(orgId: string, limit = 2000) {
   return prisma.inventoryEvent.findMany({
-    where: { isDeleted: false, OR: [{ skuId: null }, { sku: { is: { isActive: true } } }] },
+    where: { warehouse: { organizationId: orgId }, isDeleted: false, OR: [{ skuId: null }, { sku: { is: { isActive: true } } }] },
     orderBy: { eventDate: 'desc' },
     take: limit,
     include: {
@@ -165,8 +170,16 @@ export interface UpdateEventPatch {
   attachToScheduleId?: string;
 }
 
-export async function updateEvent(id: string, changedById: string, patch: UpdateEventPatch) {
+export class EventNotFoundError extends Error {}
+
+async function assertEventInOrg(db: Db, orgId: string, id: string) {
+  const found = await db.inventoryEvent.findFirst({ where: { id, warehouse: { organizationId: orgId } }, select: { id: true } });
+  if (!found) throw new EventNotFoundError('이벤트를 찾을 수 없습니다.');
+}
+
+export async function updateEvent(orgId: string, id: string, changedById: string, patch: UpdateEventPatch) {
   return prisma.$transaction(async (tx) => {
+    await assertEventInOrg(tx, orgId, id);
     // FOR UPDATE로 행을 잠가, 동시에 같은 이벤트를 수정하는 두 요청이 같은 "수정 전" 값으로
     // 감사이력(EventHistory)을 중복 기록하지 않도록 한다 (두 번째 요청은 첫 번째가 커밋된 뒤의
     // 최신 값을 previousData로 읽게 된다).
@@ -189,6 +202,7 @@ export async function updateEvent(id: string, changedById: string, patch: Update
     });
 
     const { scheduleId, resolvedTitle } = await resolveScheduleLink(tx, {
+      orgId,
       eventType: patch.eventType,
       title: patch.title,
       eventDate: patch.eventDate,
@@ -211,8 +225,9 @@ export async function updateEvent(id: string, changedById: string, patch: Update
   });
 }
 
-export async function softDeleteEvent(id: string, changedById: string) {
+export async function softDeleteEvent(orgId: string, id: string, changedById: string) {
   return prisma.$transaction(async (tx) => {
+    await assertEventInOrg(tx, orgId, id);
     await tx.$executeRaw`SELECT id FROM inventory_events WHERE id = ${id} FOR UPDATE`;
     const existing = await tx.inventoryEvent.findUniqueOrThrow({ where: { id } });
     await tx.eventHistory.create({

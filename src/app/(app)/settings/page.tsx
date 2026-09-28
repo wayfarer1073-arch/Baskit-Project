@@ -1,4 +1,4 @@
-import { auth } from '@/server/auth';
+import { requireTenant } from '@/server/tenant';
 import { listWarehouses } from '@/server/repositories/warehouse-repository';
 import { getSettings } from '@/server/repositories/settings-repository';
 import { listUsers } from '@/server/repositories/user-repository';
@@ -9,17 +9,17 @@ import { listPackagingUploadStatus } from '@/server/repositories/packaging-repos
 import { SettingsForm } from '@/components/settings/settings-form';
 
 export default async function SettingsPage() {
-  const session = await auth();
-  const isAdmin = session?.user.role === 'ADMIN';
+  const tenant = await requireTenant();
+  const isAdmin = tenant.isAdmin;
 
   const [warehouses, settings, users, skus, expirations, holidays, packagingStatuses] = await Promise.all([
-    listWarehouses(),
-    getSettings(),
-    isAdmin ? listUsers() : Promise.resolve([]),
-    listAllSkusForVisibilityAdmin(),
-    listExpirationLots(),
-    listHolidays(),
-    listPackagingUploadStatus(),
+    listWarehouses(tenant.orgId),
+    getSettings(tenant.orgId),
+    isAdmin ? listUsers(tenant.orgId) : Promise.resolve([]),
+    listAllSkusForVisibilityAdmin(tenant.orgId),
+    listExpirationLots(tenant.orgId),
+    listHolidays(tenant.orgId),
+    listPackagingUploadStatus(tenant.orgId),
   ]);
 
   return (
@@ -30,7 +30,7 @@ export default async function SettingsPage() {
       </div>
       <SettingsForm
         isAdmin={isAdmin}
-        currentUserId={session?.user.id ?? null}
+        currentUserId={tenant.userId}
         warehouses={warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name }))}
         settings={settings}
         users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}

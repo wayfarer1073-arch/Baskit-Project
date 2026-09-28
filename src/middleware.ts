@@ -3,7 +3,7 @@ import { auth } from '@/server/auth';
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname.startsWith('/login');
+  const isLoginPage = req.nextUrl.pathname.startsWith('/login') || req.nextUrl.pathname.startsWith('/signup');
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL('/login', req.nextUrl.origin);

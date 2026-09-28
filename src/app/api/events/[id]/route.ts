@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/server/auth';
-import { findSimilarSchedule, softDeleteEvent, updateEvent } from '@/server/repositories/event-repository';
+import { getTenant } from '@/server/tenant';
+import { EventNotFoundError, findSimilarSchedule, softDeleteEvent, updateEvent } from '@/server/repositories/event-repository';
 
 // 수정 화면은 항상 이벤트 전체 값을 다시 보내므로(부분 patch가 아니라 편집 폼의 최종 상태),
 // 생성(POST /api/events)과 같은 형태의 스키마를 쓴다 — 유사 일정 확인 흐름도 그대로 재사용한다.
@@ -17,8 +17,8 @@ const updateEventSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const { id } = await params;
   const body = await request.json();
@@ -32,31 +32,41 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const endDate = parsed.data.endDate ? new Date(parsed.data.endDate) : null;
 
   if (trimmedTitle && !parsed.data.confirmChoice) {
-    const similar = await findSimilarSchedule(parsed.data.eventType, trimmedTitle, eventDate, endDate);
+    const similar = await findSimilarSchedule(tenant.orgId, parsed.data.eventType, trimmedTitle, eventDate, endDate);
     if (similar) {
       return NextResponse.json({ needsConfirmation: true, candidate: similar });
     }
   }
 
-  await updateEvent(id, session.user.id, {
-    eventType: parsed.data.eventType,
-    quantity: parsed.data.quantity ?? null,
-    note: parsed.data.note,
-    eventDate,
-    endDate,
-    title: trimmedTitle,
-    attachToScheduleId: parsed.data.confirmChoice === 'use_existing' ? parsed.data.existingScheduleId : undefined,
-  });
+  try {
+    await updateEvent(tenant.orgId, id, tenant.userId, {
+      eventType: parsed.data.eventType,
+      quantity: parsed.data.quantity ?? null,
+      note: parsed.data.note,
+      eventDate,
+      endDate,
+      title: trimmedTitle,
+      attachToScheduleId: parsed.data.confirmChoice === 'use_existing' ? parsed.data.existingScheduleId : undefined,
+    });
+  } catch (e) {
+    if (e instanceof EventNotFoundError) return NextResponse.json({ error: e.message }, { status: 404 });
+    throw e;
+  }
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const tenant = await getTenant();
+  if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
 
   const { id } = await params;
-  await softDeleteEvent(id, session.user.id);
+  try {
+    await softDeleteEvent(tenant.orgId, id, tenant.userId);
+  } catch (e) {
+    if (e instanceof EventNotFoundError) return NextResponse.json({ error: e.message }, { status: 404 });
+    throw e;
+  }
 
   return NextResponse.json({ ok: true });
 }
