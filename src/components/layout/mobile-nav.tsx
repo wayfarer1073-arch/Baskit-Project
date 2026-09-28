@@ -14,10 +14,11 @@ interface MobileNavProps {
   userName: string;
   userRole: string;
   defaultSegment: Segment;
+  isPlatformAdmin?: boolean;
 }
 
 /** sm 미만 화면 전용 — 좁은 폭에서 가로 탭 4개+사용자 정보가 글자 단위로 줄바꿈되며 깨지는 문제를 드로어로 해결한다. */
-export function MobileNav({ userName, userRole, defaultSegment }: MobileNavProps) {
+export function MobileNav({ userName, userRole, defaultSegment, isPlatformAdmin }: MobileNavProps) {
   const segment = useActiveSegment(defaultSegment);
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -55,7 +56,7 @@ export function MobileNav({ userName, userRole, defaultSegment }: MobileNavProps
         </SheetHeader>
         <SegmentSwitcher segment={segment} variant="drawer" onNavigate={() => setOpen(false)} className="px-3 pt-3" />
         <nav className="flex flex-col gap-1 p-3">
-          <SegmentNavLinks segment={segment} variant="drawer" onNavigate={() => setOpen(false)} />
+          <SegmentNavLinks segment={segment} variant="drawer" onNavigate={() => setOpen(false)} isPlatformAdmin={isPlatformAdmin} />
         </nav>
         <div className="mt-auto flex items-center justify-between gap-3 border-t p-4">
           <div className="text-xs leading-tight">

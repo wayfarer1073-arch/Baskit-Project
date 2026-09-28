@@ -30,11 +30,15 @@ enum BusinessSegment {
 }
 
 model Organization {
-  id        String          @id @default(cuid())
-  name      String
-  segment   BusinessSegment @default(DAILY_SYNC)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id          String          @id @default(cuid())
+  name        String
+  segment     BusinessSegment @default(DAILY_SYNC)
+  // 운영자가 정지하면 소속 사용자는 로그인·이용이 막힌다(데이터는 그대로). null이면 정상.
+  suspendedAt DateTime?
+  // 운영자 콘솔에서 만든 샘플 데이터용 워크스페이스. 가입 통계에서 제외한다.
+  isDemo      Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   users      User[]
   warehouses Warehouse[]
@@ -76,18 +80,22 @@ enum PostTag {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  email          String       @unique
-  passwordHash   String
-  name           String
-  role           Role         @default(MEMBER)
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  email           String       @unique
+  passwordHash    String
+  name            String
+  role            Role         @default(MEMBER)
   // 삭제 요청 시 업로드/이벤트 등 참조 이력이 있으면 실제 행을 지울 수 없어 대신 false로
   // 바꾼다(로그인 차단 + 목록에서 제외). 참조 이력이 없으면 행 자체를 삭제한다.
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  isActive        Boolean      @default(true)
+  // 서비스 운영자(모든 워크스페이스 조회·제어). 가입 이메일로는 판단하지 않고 이 값으로만 판단하며,
+  // 앱 화면에서는 바꿀 수 없고 scripts/grant-platform-admin.ts로만 부여한다.
+  isPlatformAdmin Boolean      @default(false)
+  lastLoginAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   uploadedSnapshots InventorySnapshot[]
   events            InventoryEvent[]
@@ -96,6 +104,7 @@ model User {
   favorites         SkuFavorite[]
   packagingUploads  SkuPackagingUpload[]
   purchaseOrders    PurchaseOrder[]
+  platformActions   PlatformAuditLog[]
 
   @@index([organizationId])
   @@map("users")
@@ -475,4 +484,19 @@ model DailySales {
 
   @@unique([organizationId, date])
   @@map("daily_sales")
+}
+
+/// 운영자 콘솔에서 한 조치 기록. 워크스페이스가 삭제돼도 기록은 남도록 조직은 외래키 없이 id·이름만 복사해 둔다.
+model PlatformAuditLog {
+  id               String   @id @default(cuid())
+  actorId          String
+  actor            User     @relation(fields: [actorId], references: [id])
+  action           String
+  organizationId   String?
+  organizationName String?
+  detail           Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("platform_audit_logs")
 }

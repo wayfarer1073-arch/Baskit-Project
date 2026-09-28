@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CalendarDays, ClipboardList, LayoutDashboard, MessagesSquare, Settings } from 'lucide-react';
+import { CalendarDays, ClipboardList, LayoutDashboard, MessagesSquare, Settings, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SEGMENT_COOKIE, SEGMENT_META, SEGMENT_ORDER, isSegment, segmentForPath, type NavItem, type Segment } from '@/lib/segments';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ const NAV_ICONS: Record<NavItem['icon'], typeof LayoutDashboard> = {
   records: ClipboardList,
   board: MessagesSquare,
   settings: Settings,
+  admin: ShieldCheck,
 };
 
 function writeSegmentCookie(segment: Segment) {
@@ -87,13 +88,17 @@ interface SegmentNavLinksProps {
   segment: Segment;
   variant: 'sidebar' | 'drawer';
   onNavigate?: () => void;
+  isPlatformAdmin?: boolean;
 }
 
-export function SegmentNavLinks({ segment, variant, onNavigate }: SegmentNavLinksProps) {
+const ADMIN_ITEM: NavItem = { href: '/admin', label: '운영자 콘솔', icon: 'admin' };
+
+export function SegmentNavLinks({ segment, variant, onNavigate, isPlatformAdmin }: SegmentNavLinksProps) {
   const pathname = usePathname();
+  const items = isPlatformAdmin ? [...SEGMENT_META[segment].nav, ADMIN_ITEM] : SEGMENT_META[segment].nav;
   return (
     <>
-      {SEGMENT_META[segment].nav.map((item) => {
+      {items.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const Icon = NAV_ICONS[item.icon];
         return (

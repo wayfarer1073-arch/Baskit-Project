@@ -19,11 +19,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = typeof credentials?.password === 'string' ? credentials.password : undefined;
         if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({ where: { email }, include: { organization: { select: { suspendedAt: true } } } });
         if (!user || !user.isActive) return null;
+        // 정지된 워크스페이스는 로그인할 수 없다(운영자 본인은 예외 — 콘솔에서 해제해야 하므로).
+        if (user.organization.suspendedAt && !user.isPlatformAdmin) return null;
 
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
+
+        await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
         return { id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId };
       },

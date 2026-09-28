@@ -19,10 +19,11 @@ interface AppSidebarProps {
   workspaceName: string;
   defaultSegment: Segment;
   recentPosts?: SidebarRecentPost[];
+  isPlatformAdmin?: boolean;
   className?: string;
 }
 
-export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, recentPosts, className }: AppSidebarProps) {
+export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, recentPosts, isPlatformAdmin, className }: AppSidebarProps) {
   const segment = useActiveSegment(defaultSegment);
 
   return (
@@ -47,7 +48,7 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
 
       <nav className="flex flex-col gap-1 px-3 py-2">
         <p className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">메뉴</p>
-        <SegmentNavLinks segment={segment} variant="sidebar" />
+        <SegmentNavLinks segment={segment} variant="sidebar" isPlatformAdmin={isPlatformAdmin} />
       </nav>
 
       {recentPosts && recentPosts.length > 0 && (

@@ -6,7 +6,7 @@ export type SegmentSlug = 'daily' | 'periodic' | 'store';
 export interface NavItem {
   href: string;
   label: string;
-  icon: 'dashboard' | 'calendar' | 'records' | 'board' | 'settings';
+  icon: 'dashboard' | 'calendar' | 'records' | 'board' | 'settings' | 'admin';
 }
 
 export interface SegmentMeta {
