@@ -10,4 +10,9 @@ export const storeItemSchema = z.object({
 export const supplierSchema = z.object({
   name: z.string().trim().min(1, '발주처 이름을 입력하세요.').max(50),
   leadTimeDays: z.number().int('리드타임은 일 단위 정수로 입력하세요.').min(0).max(60),
+  // 일일 재고 연동의 권장 발주 기준(비우면 워크스페이스 기본값).
+  safetyDays: z.number().int().min(0).max(365).nullable().optional(),
+  targetDays: z.number().int().min(1).max(365).nullable().optional(),
+  minOrderQty: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  orderMultiple: z.number().int().min(1).max(100_000).nullable().optional(),
 });

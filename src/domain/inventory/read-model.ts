@@ -28,6 +28,10 @@ export interface SkuDescriptor {
   eaPerBox: number | null;
   eaPerPallet: number | null;
   packagingBarcode: string | null;
+  /** 발주 거래처(없으면 null)와 품목 발주 기준 예외. */
+  supplierId?: string | null;
+  supplierName?: string | null;
+  reorderOverrides?: import('@/domain/reorder/reorder').PolicyLayer;
 }
 
 export interface DailyWarehouseTotal {
@@ -42,4 +46,8 @@ export interface InventoryRow {
   analysis: SkuAnalysis;
   valueBreakdown: InventoryValueBreakdown;
   periodComparison: PeriodComparison | null;
+  /** 권장 발주일·발주량(소진 속도를 추정할 수 없으면 null). */
+  reorder?: import('@/domain/reorder/reorder').ReorderSuggestion | null;
+  /** 최근 30일 회전율 = 30일 소진량 ÷ 평균 재고. */
+  turnover30?: { ratio: number | null; depletion: number; averageStock: number } | null;
 }

@@ -21,6 +21,8 @@ import { formatKstDate } from '@/lib/date';
 import { riskBadgeVariant, analysisStatusLabel, dataReliabilityClassName, dataReliabilityLabel, dataReliabilityLevel, humanizeTag, isB2BTag, isBasisWindowTag, isEstimateCaveatTag, isObservedDateTag, isSoldOutTag, isStaleDepletionTag } from '@/lib/status';
 import { eventTypeLabel } from '@/lib/event-types';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
+import type { ReorderSuggestion } from '@/domain/reorder/reorder';
+import { ReorderPanel, type Turnover30 } from './reorder-panel';
 
 interface SkuDetailResponse {
   descriptor: SkuDescriptor;
@@ -28,6 +30,8 @@ interface SkuDetailResponse {
   valueBreakdown: InventoryValueBreakdown;
   observations: StockObservation[];
   expirationLots: { lot: string; expirationDate: string }[];
+  reorder?: ReorderSuggestion | null;
+  turnover30?: Turnover30 | null;
 }
 
 interface EventItem {
@@ -346,6 +350,19 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   value={detail.analysis.forecast.expectedStockoutDate ? formatKstDate(detail.analysis.forecast.expectedStockoutDate) : detail.analysis.operating?.reason ?? '산정 불가'}
                 />
               </section>
+
+              {!detail.descriptor.isSoldOut && (
+                <ReorderPanel
+                  key={detail.descriptor.skuId}
+                  skuId={detail.descriptor.skuId}
+                  reorder={detail.reorder}
+                  turnover30={detail.turnover30}
+                  supplierId={detail.descriptor.supplierId}
+                  overrides={detail.descriptor.reorderOverrides}
+                  canEdit={isAdmin}
+                  onSaved={reload}
+                />
+              )}
 
               <section className="rounded-xl border bg-muted/30 p-3">
                 <div className="mb-2 flex items-center justify-between">

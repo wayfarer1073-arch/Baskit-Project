@@ -163,7 +163,9 @@ function rethrowSupplierName(e: unknown): never {
   throw e;
 }
 
-export async function createSupplier(orgId: string, input: { name: string; leadTimeDays: number }) {
+type SupplierPolicyInput = { safetyDays?: number | null; targetDays?: number | null; minOrderQty?: number | null; orderMultiple?: number | null };
+
+export async function createSupplier(orgId: string, input: { name: string; leadTimeDays: number } & SupplierPolicyInput) {
   try {
     return await prisma.supplier.create({ data: { organizationId: orgId, ...input } });
   } catch (e) {
@@ -171,7 +173,7 @@ export async function createSupplier(orgId: string, input: { name: string; leadT
   }
 }
 
-export async function updateSupplier(orgId: string, id: string, input: { name?: string; leadTimeDays?: number }) {
+export async function updateSupplier(orgId: string, id: string, input: { name?: string; leadTimeDays?: number } & SupplierPolicyInput) {
   try {
     const result = await prisma.supplier.updateMany({ where: { id, organizationId: orgId }, data: input });
     return result.count > 0;

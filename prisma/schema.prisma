@@ -184,9 +184,17 @@ model Sku {
   // 상품 추가 정보(포장 단위·바코드) — 자주 바뀌지 않는 참고 정보라 화면에서 하나씩 편집하지
   // 않고, 설정 화면에서 창고별 Excel 업로드로만 갱신한다(SkuPackagingUpload가 그 최근 업로드
   // 이력을 기록). 값이 없는 셀로 업로드해도 기존 값을 지우지 않고 그대로 둔다.
-  eaPerBox         Int?
-  eaPerPallet      Int?
-  packagingBarcode String?
+  eaPerBox            Int?
+  eaPerPallet         Int?
+  packagingBarcode    String?
+  // 발주 기준 예외 — 비어 있으면 거래처 → 워크스페이스 기본값 순으로 쓴다.
+  supplierId          String?
+  supplier            Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  reorderLeadTimeDays Int?
+  reorderSafetyDays   Int?
+  reorderTargetDays   Int?
+  reorderMinQty       Int?
+  reorderMultiple     Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -439,6 +447,10 @@ model Settings {
   storeCheckRemainingPct    Int          @default(20)
   // 일일 재고 연동: 켜면 주말·등록 휴무일에도 업로드를 받는다. 꺼도 이미 올라온 휴무일 자료는 계산에 반영된다.
   allowNonWorkingDayUploads Boolean      @default(false)
+  // 일일 재고 연동 발주 기준 기본값(거래처·품목에서 덮어쓸 수 있다)
+  reorderLeadTimeDays       Int          @default(3)
+  reorderSafetyDays         Int          @default(3)
+  reorderTargetDays         Int          @default(14)
   updatedAt                 DateTime     @updatedAt
 
   @@map("settings")
@@ -528,7 +540,14 @@ model Supplier {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // 일일 재고 연동 발주 기준 — 비어 있으면 워크스페이스 기본값. 리드타임은 매장 발주 예측과 함께 쓴다.
+  safetyDays    Int?
+  targetDays    Int?
+  minOrderQty   Int?
+  orderMultiple Int?
+
   items StoreItem[]
+  skus  Sku[]
 
   @@unique([organizationId, name])
   @@index([organizationId])

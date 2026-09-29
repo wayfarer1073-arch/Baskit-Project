@@ -114,6 +114,31 @@ const observationSelect = {
 
 type ObservationItem = Prisma.InventoryItemGetPayload<{ select: typeof observationSelect }>;
 
+type SkuWithSupplier = {
+  supplierId: string | null;
+  supplier: { id: string; name: string } | null;
+  reorderLeadTimeDays: number | null;
+  reorderSafetyDays: number | null;
+  reorderTargetDays: number | null;
+  reorderMinQty: number | null;
+  reorderMultiple: number | null;
+};
+
+/** 발주 기준 — 품목 예외만 담는다(거래처 값은 서비스에서 거래처 목록으로 합친다). */
+function supplierFields(sku: SkuWithSupplier) {
+  return {
+    supplierId: sku.supplier?.id ?? null,
+    supplierName: sku.supplier?.name ?? null,
+    reorderOverrides: {
+      leadTimeDays: sku.reorderLeadTimeDays,
+      safetyDays: sku.reorderSafetyDays,
+      targetDays: sku.reorderTargetDays,
+      minOrderQty: sku.reorderMinQty,
+      orderMultiple: sku.reorderMultiple,
+    },
+  };
+}
+
 /** 직접 입력한 실사 줄은 extra.manual = true로 저장된다(count-repository). */
 function isManualCount(extra: unknown) {
   return !!extra && typeof extra === 'object' && (extra as { manual?: unknown }).manual === true;
@@ -127,7 +152,12 @@ function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedI
   let latestKnownUnitCost: number | null = null;
   const entries: LedgerEntry[] = items.map((item) => {
     const resolved = resolveInventoryCost(
-      { unitCost: Number(item.unitCost), unitCostProvided: item.unitCostProvided, totalCost: item.totalCost === null ? null : Number(item.totalCost), normalStock: item.normalStock },
+      {
+        unitCost: Number(item.unitCost),
+        unitCostProvided: item.unitCostProvided,
+        totalCost: item.totalCost === null ? null : Number(item.totalCost),
+        normalStock: item.normalStock,
+      },
       latestKnownUnitCost,
     );
     latestKnownUnitCost = resolved.latestKnownUnitCost;
@@ -196,7 +226,10 @@ export async function loadActiveSkusWithSeries(
 
   const skus = await prisma.sku.findMany({
     where: { id: { in: combinedSkuIds }, isHiddenFromDashboard: false, warehouse: activeWarehouseOf(orgId), ...(warehouseId ? { warehouseId } : {}) },
-    include: { warehouse: { select: { id: true, code: true, name: true } } },
+    include: {
+      warehouse: { select: { id: true, code: true, name: true } },
+      supplier: { select: { id: true, name: true, leadTimeDays: true, safetyDays: true, targetDays: true, minOrderQty: true, orderMultiple: true } },
+    },
   });
   if (skus.length === 0) return [];
 
@@ -251,6 +284,8 @@ export async function loadActiveSkusWithSeries(
         eaPerBox: sku.eaPerBox,
         eaPerPallet: sku.eaPerPallet,
         packagingBarcode: sku.packagingBarcode,
+        ...supplierFields(sku),
+        ...supplierFields(sku),
       },
       observations: observationsFromLedger(ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? []), calendarOf(holidays, sku.warehouseId)),
     };
@@ -324,7 +359,10 @@ export async function loadSkuWithSeries(
 ): Promise<{ descriptor: SkuDescriptor; observations: StockObservation[] } | null> {
   const sku = await prisma.sku.findFirst({
     where: { id: skuId, warehouse: activeWarehouseOf(orgId) },
-    include: { warehouse: { select: { id: true, code: true, name: true } } },
+    include: {
+      warehouse: { select: { id: true, code: true, name: true } },
+      supplier: { select: { id: true, name: true, leadTimeDays: true, safetyDays: true, targetDays: true, minOrderQty: true, orderMultiple: true } },
+    },
   });
   if (!sku || sku.isHiddenFromDashboard) return null;
 
@@ -390,6 +428,7 @@ export async function loadSkuWithSeries(
       eaPerBox: sku.eaPerBox,
       eaPerPallet: sku.eaPerPallet,
       packagingBarcode: sku.packagingBarcode,
+      ...supplierFields(sku),
     },
     observations,
   };

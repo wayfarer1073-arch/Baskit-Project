@@ -6,6 +6,8 @@ import { UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ActionCenter } from '@/components/dashboard/action-center';
+import { TodayActions } from '@/components/dashboard/today-actions';
+import { buildTodayActions } from '@/domain/inventory/today-actions';
 import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { OperatingSummary } from '@/components/dashboard/operating-summary';
 import { WarehouseSummaryCards } from '@/components/dashboard/warehouse-summary-cards';
@@ -53,6 +55,7 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
   const kpis = useMemo(() => calculateCompanyKpis(rows, settings.stagnantDays, fromDate, holidaySet), [rows, settings.stagnantDays, fromDate, holidaySet]);
   const warehouseSummaries = useMemo(() => calculateWarehouseSummaries(rows, settings.stagnantDays, holidaySet), [rows, settings.stagnantDays, holidaySet]);
   const actionCenterCards = useMemo(() => buildActionCenterCards(rows, settings.stagnantDays), [rows, settings.stagnantDays]);
+  const todayActions = useMemo(() => buildTodayActions(rows, asOfDate, settings.stagnantDays), [rows, asOfDate, settings.stagnantDays]);
   const favoriteRows = useMemo(() => rows.filter((r) => favorites.has(r.descriptor.skuId)), [rows, favorites]);
   // 즐겨찾기한 SKU는 위쪽 즐겨찾기 섹션에서 보이므로, 아래 전체 재고 표에서는 중복 노출하지 않는다.
   const tableRows = useMemo(() => rows.filter((r) => !favorites.has(r.descriptor.skuId)), [rows, favorites]);
@@ -97,18 +100,18 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
         </div>
         <div className="flex items-center justify-center py-12">
           <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-dashed bg-card p-10 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-            <UploadCloud className="size-6 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">아직 업로드된 재고 데이터가 없습니다</h2>
-            <p className="mt-1 text-sm text-muted-foreground">창고별 Excel을 업로드하면 대시보드가 자동으로 채워집니다.</p>
-          </div>
-          <Button asChild>
-            <Link href="/upload">
-              <UploadCloud className="size-4" /> 업로드 하러 가기
-            </Link>
-          </Button>
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <UploadCloud className="size-6 text-muted-foreground" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">아직 업로드된 재고 데이터가 없습니다</h2>
+              <p className="mt-1 text-sm text-muted-foreground">창고별 Excel을 업로드하면 대시보드가 자동으로 채워집니다.</p>
+            </div>
+            <Button asChild>
+              <Link href="/upload">
+                <UploadCloud className="size-4" /> 업로드 하러 가기
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -126,6 +129,7 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
         </div>
         <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
       </div>
+      <TodayActions actions={todayActions} onSelect={setSelectedSkuId} />
       <KpiCards kpis={kpis} fromDate={fromDate} asOfDate={asOfDate} onOpenSoldOutList={() => setSoldOutPanelOpen(true)} />
       <OperatingSummary rows={rows} />
       <ActionCenter cards={actionCenterCards} onSelect={handleActionCenterSelect} />

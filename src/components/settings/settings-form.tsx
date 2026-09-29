@@ -20,6 +20,8 @@ import { WarehouseManagement } from '@/components/settings/warehouse-management'
 import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
 import { ImportTemplateManagement, type ImportTemplateView } from '@/components/settings/import-template-management';
 import { CodeAliasManagement, type CodeAliasView } from '@/components/settings/code-alias-management';
+import { ReorderSettings, type ReorderDefaults } from '@/components/settings/reorder-settings';
+import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 
 interface SkuVisibilityRow {
@@ -88,10 +90,25 @@ interface DailySettingsProps {
   allowNonWorkingDayUploads: boolean;
   importTemplates: ImportTemplateView[];
   codeAliases: CodeAliasView[];
+  reorderDefaults: ReorderDefaults;
+  supplierPolicies: SupplierPolicyRow[];
 }
 
 /** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
-export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses, allowNonWorkingDayUploads, importTemplates, codeAliases }: DailySettingsProps) {
+export function DailySettings({
+  isAdmin,
+  warehouses,
+  settings,
+  skus,
+  expirations,
+  holidays,
+  packagingStatuses,
+  allowNonWorkingDayUploads,
+  importTemplates,
+  codeAliases,
+  reorderDefaults,
+  supplierPolicies,
+}: DailySettingsProps) {
   const [thresholds, setThresholds] = useState(settings);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
@@ -158,6 +175,8 @@ export function DailySettings({ isAdmin, warehouses, settings, skus, expirations
           </CardContent>
         )}
       </Card>
+
+      <ReorderSettings isAdmin={isAdmin} defaults={reorderDefaults} suppliers={supplierPolicies} />
 
       <SkuVisibilityManagement isAdmin={isAdmin} initialSkus={skus} />
 
