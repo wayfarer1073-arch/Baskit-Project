@@ -181,6 +181,10 @@ model Sku {
   // 업로드에 없어도 대시보드에 마지막 관측 데이터 그대로 노출된다(휘발 방지).
   soldOutDetectedDate DateTime? @db.Date
 
+  // 재고 0을 '관리 품목에서 제외'로 처리하는 양식으로 올라와 제외된 날짜. 이 날짜 전으로 조회하면 평소처럼 보이고,
+  // 이후로는 대시보드에 보이지 않는다(품절 목록에도 없음). 다시 재고가 생기면 null로 돌아간다.
+  removedDate DateTime? @db.Date
+
   // true면 대시보드(KPI/차트/재고 테이블/Action Center/리포트)에서 이 SKU를 완전히 제외한다.
   // 데이터 자체는 계속 쌓이며 설정 화면에서 언제든 다시 노출로 되돌릴 수 있다.
   isHiddenFromDashboard Boolean @default(false)
@@ -570,20 +574,24 @@ model Supplier {
 /// 재고 파일 양식 템플릿 — 업체마다 다른 엑셀 양식을 한 번 확인해 두면 다음 업로드부터 자동 적용된다.
 /// 헤더 행의 지문(열 이름 집합)으로 같은 양식인지 알아본다.
 model ImportTemplate {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  fingerprint    String
-  sheetName      String?
-  headerRowIndex Int
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  name               String
+  fingerprint        String
+  sheetName          String?
+  headerRowIndex     Int
   /// 필드별 헤더 이름 { productCode: "품번", ... }
-  columns        Json
+  columns            Json
   /// 같은 상품코드 여러 행: sum(합산) | skip(첫 행만)
-  duplicateMode  String       @default("sum")
-  lastUsedAt     DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  duplicateMode      String       @default("sum")
+  /// 재고수량 단위(EA|BOX|PLT). null이면 낱개.
+  stockUnit          String?
+  /// 재고 0인 행을 품절로 볼지(true: 품절 — 1개월간 품절 목록 노출 / false: 관리 품목에서 제외 — 대시보드에 안 보임). null이면 true.
+  zeroStockAsSoldOut Boolean?
+  lastUsedAt         DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@unique([organizationId, fingerprint])
   @@index([organizationId])

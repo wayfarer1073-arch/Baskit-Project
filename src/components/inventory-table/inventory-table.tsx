@@ -593,7 +593,7 @@ export function InventoryTableRow({
                 품절
               </Badge>
               <InfoTooltip>
-                최근 자료에 이 상품이 더 이상 나오지 않아서 품절로 판단했어요. {r.descriptor.soldOutDetectedDate}부터 한 달 동안은 참고용으로 계속
+                최근 자료에서 빠졌거나 재고 0으로 올라와 품절로 판단했어요. {r.descriptor.soldOutDetectedDate}부터 한 달 동안은 참고용으로 계속
                 보여드리고, 현재 재고 합계에는 넣지 않습니다.
               </InfoTooltip>
             </>

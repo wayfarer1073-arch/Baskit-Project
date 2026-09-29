@@ -23,6 +23,20 @@ function soldOutGraceEndDate(soldOutDetectedDateStr: string): string {
   return format(addMonths(parseISO(soldOutDetectedDateStr), 1), 'yyyy-MM-dd');
 }
 
+/** 저장된 재고 행의 재고 0 상태(양식 설정에 따라 품절/관리 제외). 없으면 평소 품목. */
+function stockStatusOf(extra: Prisma.JsonValue | null): 'soldOut' | 'removed' | null {
+  if (!extra || typeof extra !== 'object' || Array.isArray(extra)) return null;
+  const status = (extra as Prisma.JsonObject).stockStatus;
+  return status === 'soldOut' || status === 'removed' ? status : null;
+}
+
+/** 날짜순 관측의 끝에서부터 '재고 0 → 품절'이 이어진 첫 날짜 = 그 기준일로 본 품절 인식일. */
+function trailingSoldOutStart(items: { extra: Prisma.JsonValue | null; snapshot: { snapshotDate: Date } }[]): string | null {
+  let start: string | null = null;
+  for (let i = items.length - 1; i >= 0 && stockStatusOf(items[i].extra) === 'soldOut'; i--) start = dateOnlyToString(items[i].snapshot.snapshotDate);
+  return start;
+}
+
 /**
  * 최신 업로드 목록에서 빠져 품절로 인식됐지만(soldOutDetectedDate), asOfDate 기준 아직 1개월
  * 유예기간 이내인 SKU의 id를 돌려준다. 마지막 관측 데이터가 그대로 노출되도록(휘발 방지) 하는 게
@@ -216,12 +230,18 @@ export async function loadActiveSkusWithSeries(
 
   const latestItems = await prisma.inventoryItem.findMany({
     where: { snapshotId: { in: latestSnapshotIds } },
-    select: { skuId: true },
+    select: { skuId: true, extra: true },
   });
-  const activeSkuIds = [...new Set(latestItems.map((item) => item.skuId))];
+  // 그날(asOfDate) 기준 최신 목록에서의 상태로 판단한다 — 나중에 품절·제외돼도 그 전 날짜로 보면 평소 품목이다.
+  const inLatest = new Set(latestItems.map((item) => item.skuId));
+  const activeSkuIds = latestItems.filter((item) => stockStatusOf(item.extra) === null).map((item) => item.skuId);
+  const zeroSoldOutSkuIds = new Set(latestItems.filter((item) => stockStatusOf(item.extra) === 'soldOut').map((item) => item.skuId));
 
   // 최신 목록엔 없어도 품절 인식 1개월 유예기간 이내인 SKU는 계속 포함한다(휘발 방지).
-  const soldOutSkuIds = asOfDate ? await resolveSoldOutGraceSkuIds(orgId, warehouseId, asOfDate) : new Set<string>();
+  // 최신 목록에 있는 품목은 위에서 그 행의 상태로 이미 판단했으므로 제외한다(관리 제외된 재고 0 행 포함).
+  const missingSoldOutSkuIds = asOfDate ? await resolveSoldOutGraceSkuIds(orgId, warehouseId, asOfDate) : new Set<string>();
+  for (const id of inLatest) missingSoldOutSkuIds.delete(id);
+  const soldOutSkuIds = new Set([...missingSoldOutSkuIds, ...zeroSoldOutSkuIds]);
   const combinedSkuIds = [...new Set([...activeSkuIds, ...soldOutSkuIds])];
 
   const skus = await prisma.sku.findMany({
@@ -260,7 +280,17 @@ export async function loadActiveSkusWithSeries(
     latestAttrsBySku.set(item.skuId, { productName: item.productName, option: item.option, barcode: item.barcode, location: item.location });
   }
 
-  return skus.map((sku) => {
+  // 재고 0으로 품절된 품목은 그날 기준으로 재고 0이 시작된 날부터 1개월 동안만 품절 목록에 보인다.
+  const zeroSoldOutSince = new Map<string, string>();
+  const expired = new Set<string>();
+  for (const id of zeroSoldOutSkuIds) {
+    const start = trailingSoldOutStart(itemsBySku.get(id) ?? []);
+    if (!start) continue;
+    if (asOfDate && asOfDate >= soldOutGraceEndDate(start)) expired.add(id);
+    else zeroSoldOutSince.set(id, start);
+  }
+
+  return skus.filter((sku) => !expired.has(sku.id)).map((sku) => {
     const attrs = latestAttrsBySku.get(sku.id);
     return {
       descriptor: {
@@ -280,7 +310,7 @@ export async function loadActiveSkusWithSeries(
         isB2B: sku.isB2B,
         firstSeenDate: dateOnlyToString(sku.firstSeenDate),
         isSoldOut: soldOutSkuIds.has(sku.id),
-        soldOutDetectedDate: sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null,
+        soldOutDetectedDate: zeroSoldOutSince.get(sku.id) ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
         eaPerBox: sku.eaPerBox,
         eaPerPallet: sku.eaPerPallet,
         packagingBarcode: sku.packagingBarcode,
@@ -373,14 +403,15 @@ export async function loadSkuWithSeries(
     orderBy: { snapshotDate: 'desc' },
     select: { id: true },
   });
-  const isInLatestSnapshot =
-    !!latestSnapshot &&
-    !!(await prisma.inventoryItem.findUnique({
-      where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } },
-      select: { id: true },
-    }));
+  const latestRow = latestSnapshot
+    ? await prisma.inventoryItem.findUnique({ where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } }, select: { id: true, extra: true } })
+    : null;
+  const isInLatestSnapshot = !!latestRow;
+  const latestStatus = latestRow ? stockStatusOf(latestRow.extra) : null;
+  // 재고 0을 '관리 제외'로 올린 품목은 그날부터 보이지 않는다(그 전 날짜로 보면 평소대로 보인다).
+  if (latestStatus === 'removed') return null;
   // 최신 목록에는 없어도 품절 인식 1개월 유예기간 이내면(휘발 방지) 목록과 동일하게 계속 보여준다.
-  let isSoldOut = false;
+  let isSoldOut = latestStatus === 'soldOut';
   if (!isInLatestSnapshot) {
     if (!asOfDate || !sku.soldOutDetectedDate) return null;
     const detectedStr = dateOnlyToString(sku.soldOutDetectedDate);
@@ -399,6 +430,9 @@ export async function loadSkuWithSeries(
     select: observationSelect,
     orderBy: { snapshot: { snapshotDate: 'asc' } },
   });
+  // 재고 0으로 품절된 품목: 그날 기준 재고 0이 시작된 날부터 1개월까지만 보여준다(목록과 같은 규칙).
+  const zeroSoldOutSince = latestStatus === 'soldOut' ? trailingSoldOutStart(items) : null;
+  if (zeroSoldOutSince && asOfDate && asOfDate >= soldOutGraceEndDate(zeroSoldOutSince)) return null;
   const inboundsBySku = await loadInboundsBySku([skuId], asOfDate);
 
   const observations = observationsFromLedger(ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? []), calendarOf(holidays, sku.warehouseId));
@@ -424,7 +458,7 @@ export async function loadSkuWithSeries(
       isB2B: sku.isB2B,
       firstSeenDate: dateOnlyToString(sku.firstSeenDate),
       isSoldOut,
-      soldOutDetectedDate: sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null,
+      soldOutDetectedDate: zeroSoldOutSince ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
       eaPerBox: sku.eaPerBox,
       eaPerPallet: sku.eaPerPallet,
       packagingBarcode: sku.packagingBarcode,

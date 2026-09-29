@@ -158,7 +158,7 @@ export async function loadCountedSkus(orgId: string, asOfDate: string, skuId?: s
       warehouse: { organizationId: orgId, isArchived: false },
       isHiddenFromDashboard: false,
       firstSeenDate: { lte: asOf },
-      ...(skuId ? { id: skuId } : { OR: [{ isActive: true }, { soldOutDetectedDate: { gt: asOf } }] }),
+      ...(skuId ? { id: skuId } : { OR: [{ isActive: true }, { soldOutDetectedDate: { gt: asOf } }, { removedDate: { gt: asOf } }] }),
     },
     include: {
       warehouse: { select: { id: true, code: true, name: true } },

@@ -105,7 +105,7 @@ export function autoLayout(sheets: SheetData[], sheetName?: string | null): Impo
   const headerRowIndex = sheet ? detectHeaderRow(sheet.aoa) : 0;
   const headers = sheet?.aoa[headerRowIndex] ?? [];
   const { columns } = suggestColumns(headers, sheet?.aoa.slice(headerRowIndex + 1, headerRowIndex + 21) ?? []);
-  return { sheetName: sheet?.name ?? null, headerRowIndex, columns, duplicateMode: 'sum' };
+  return { sheetName: sheet?.name ?? null, headerRowIndex, columns, duplicateMode: 'sum', zeroStockAsSoldOut: true };
 }
 
 /**

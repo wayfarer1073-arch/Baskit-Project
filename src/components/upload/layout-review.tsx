@@ -238,6 +238,28 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
         </div>
       )}
 
+      {showEditor && (
+        <fieldset className="space-y-1.5 rounded-md border border-border p-2.5">
+          <legend className="px-1 text-xs font-medium">{t.zeroStock}</legend>
+          {([true, false] as const).map((yes) => (
+            <label key={String(yes)} className="flex items-start gap-2 text-xs">
+              <input
+                type="radio"
+                name="zero-stock-mode"
+                className="mt-0.5 accent-[var(--brand-accent)]"
+                checked={(layout.zeroStockAsSoldOut ?? true) === yes}
+                onChange={() => set({ zeroStockAsSoldOut: yes })}
+              />
+              <span>
+                <span className="font-medium">{yes ? t.zeroStockYes : t.zeroStockNo}</span>
+                <span className="block text-[11px] text-muted-foreground">{yes ? t.zeroStockYesHint : t.zeroStockNoHint}</span>
+              </span>
+            </label>
+          ))}
+          <p className="text-[11px] text-muted-foreground">{t.zeroStockPast}</p>
+        </fieldset>
+      )}
+
       {errors.length > 0 ? (
         <div role="alert" className="rounded-md bg-status-danger-bg p-2.5 text-xs text-status-danger">
           <p className="mb-1 flex items-center gap-1.5 font-medium">

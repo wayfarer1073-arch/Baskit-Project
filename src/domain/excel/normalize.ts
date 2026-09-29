@@ -39,6 +39,15 @@ function mergeRowExtras(target: ParsedInventoryRow, row: ParsedInventoryRow) {
   if (target.eaPerPallet == null && row.eaPerPallet != null) target.eaPerPallet = row.eaPerPallet;
 }
 
+/**
+ * 재고 0인 행에 양식 설정대로 상태를 붙인다 — 품절(기본) 또는 관리 제외. 박스 환산 뒤의 낱개 재고로 판단한다.
+ * 저장되는 재고 행에도 extra.stockStatus로 남겨, 날짜를 바꿔 조회해도 그날 기준으로 판단할 수 있게 한다.
+ */
+export function markZeroStock(rows: ParsedInventoryRow[], zeroStockAsSoldOut: boolean | undefined): ParsedInventoryRow[] {
+  const status = zeroStockAsSoldOut === false ? 'removed' : 'soldOut';
+  return rows.map((row) => (row.normalStock === 0 ? { ...row, zeroStockStatus: status, extra: { ...row.extra, stockStatus: status } } : row));
+}
+
 const AUTO_CODE_PATTERN = new RegExp(`^${AUTO_CODE_PREFIX}(\\d{${AUTO_CODE_DIGITS},})$`);
 
 /**

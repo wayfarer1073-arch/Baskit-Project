@@ -10,6 +10,7 @@ export const importLayoutSchema = z.object({
   columns: z.object(Object.fromEntries(LAYOUT_FIELDS.map((f) => [f, header])) as Record<LayoutField, typeof header>),
   duplicateMode: z.enum(['sum', 'skip']),
   stockUnit: z.enum(['EA', 'BOX', 'PLT']).optional(),
+  zeroStockAsSoldOut: z.boolean().optional(),
 });
 
 export const codeAliasSchema = z.object({

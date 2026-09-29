@@ -272,7 +272,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       품절
                     </Badge>
                     <InfoTooltip>
-                      최근 자료에 이 상품이 더 이상 나오지 않아서 품절로 판단했어요. 아래 수량·금액은 품절 전 마지막으로 확인된 값이며, 현재
+                      최근 자료에서 빠졌거나 재고 0으로 올라와 품절로 판단했어요. 아래 수량·금액은 품절 전 마지막으로 확인된 값이며, 현재
                       재고 합계에는 넣지 않습니다.
                     </InfoTooltip>
                   </>

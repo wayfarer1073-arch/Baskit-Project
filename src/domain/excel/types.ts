@@ -60,6 +60,8 @@ export interface ParsedInventoryRow {
   autoCode?: boolean;
   /** 재고 파일에 함께 적힌 소비기한(여러 행이 합쳐지면 모든 날짜). */
   expirationDates?: string[];
+  /** 재고 0인 행을 양식 설정에 따라 품절/관리 제외로 본 결과. 없으면 평소 품목. */
+  zeroStockStatus?: import('./layout-types').ZeroStockStatus;
   /** 재고 파일에 함께 적힌 입수량. */
   eaPerBox?: number | null;
   eaPerPallet?: number | null;

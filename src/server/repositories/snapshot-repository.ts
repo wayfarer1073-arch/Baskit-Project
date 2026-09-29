@@ -105,7 +105,10 @@ export async function createSnapshot(input: CreateSnapshotInput) {
             currentDangerQty: row.dangerQty,
             firstSeenDate: input.snapshotDate,
             lastSeenDate: input.snapshotDate,
-            isActive: isLatestSnapshot,
+            // 재고 0으로 품절·관리 제외된 행은 처음부터 관리 목록 밖에 둔다.
+            isActive: isLatestSnapshot && !row.zeroStockStatus,
+            soldOutDetectedDate: isLatestSnapshot && row.zeroStockStatus === 'soldOut' ? input.snapshotDate : null,
+            removedDate: isLatestSnapshot && row.zeroStockStatus === 'removed' ? input.snapshotDate : null,
         })) });
 
         const payload = JSON.stringify(batch);
@@ -122,12 +125,14 @@ export async function createSnapshot(input: CreateSnapshotInput) {
             "unitCostUpdatedAt" = CASE WHEN ${isLatestSnapshot} AND NOT r."costMissing" THEN NOW() ELSE s."unitCostUpdatedAt" END,
             "currentWarningQty" = CASE WHEN ${isLatestSnapshot} THEN r."warningQty" ELSE s."currentWarningQty" END,
             "currentDangerQty" = CASE WHEN ${isLatestSnapshot} THEN r."dangerQty" ELSE s."currentDangerQty" END,
-            "isActive" = CASE WHEN ${isLatestSnapshot} THEN true ELSE s."isActive" END,
-            "soldOutDetectedDate" = CASE WHEN ${isLatestSnapshot} THEN NULL ELSE s."soldOutDetectedDate" END,
+            "isActive" = CASE WHEN ${isLatestSnapshot} THEN r."zeroStockStatus" IS NULL ELSE s."isActive" END,
+            -- 재고 0이 이어지는 동안은 처음 품절·제외된 날짜를 유지한다(1개월 노출 기간의 시작점).
+            "soldOutDetectedDate" = CASE WHEN ${isLatestSnapshot} THEN (CASE WHEN r."zeroStockStatus" = 'soldOut' THEN COALESCE(s."soldOutDetectedDate", ${input.snapshotDate}::date) ELSE NULL END) ELSE s."soldOutDetectedDate" END,
+            "removedDate" = CASE WHEN ${isLatestSnapshot} THEN (CASE WHEN r."zeroStockStatus" = 'removed' THEN COALESCE(s."removedDate", ${input.snapshotDate}::date) ELSE NULL END) ELSE s."removedDate" END,
             "updatedAt" = NOW()
           FROM jsonb_to_recordset(${payload}::jsonb) AS r(
             "productCode" text, "productName" text, option text, barcode text, location text,
-            "costMissing" boolean, "unitCost" numeric, "warningQty" integer, "dangerQty" integer
+            "costMissing" boolean, "unitCost" numeric, "warningQty" integer, "dangerQty" integer, "zeroStockStatus" text
           )
           WHERE s."warehouseId" = ${input.warehouseId} AND s."productCode" = r."productCode"
         `;
@@ -212,15 +217,16 @@ export async function resetUploadForDate(warehouseId: string, snapshotDate: Date
             "unitCostSource" = CASE WHEN ii."unitCostProvided" THEN (CASE WHEN ii.extra ? 'manualCost' THEN 'MANUAL' ELSE 'FILE' END)::"CostSource" ELSE s."unitCostSource" END,
             "currentWarningQty" = ii."warningQty",
             "currentDangerQty" = ii."dangerQty",
-            "isActive" = true,
-            "soldOutDetectedDate" = NULL,
+            "isActive" = NOT COALESCE(ii.extra ? 'stockStatus', false),
+            "soldOutDetectedDate" = CASE WHEN ii.extra->>'stockStatus' = 'soldOut' THEN COALESCE(s."soldOutDetectedDate", ${newLatest.snapshotDate}) ELSE NULL END,
+            "removedDate" = CASE WHEN ii.extra->>'stockStatus' = 'removed' THEN COALESCE(s."removedDate", ${newLatest.snapshotDate}) ELSE NULL END,
             "updatedAt" = NOW()
           FROM inventory_items ii
           WHERE ii."snapshotId" = ${newLatest.id} AND s.id = ii."skuId"
         `;
         await tx.$executeRaw`
           UPDATE skus SET "isActive" = false, "soldOutDetectedDate" = ${newLatest.snapshotDate}, "updatedAt" = NOW()
-          WHERE "warehouseId" = ${warehouseId}
+          WHERE "warehouseId" = ${warehouseId} AND "removedDate" IS NULL
             AND id NOT IN (SELECT "skuId" FROM inventory_items WHERE "snapshotId" = ${newLatest.id})
         `;
       } else {

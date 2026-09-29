@@ -86,6 +86,8 @@ export function ImportTemplateManagement({ templates }: { templates: ImportTempl
                         <dd>{[tpl.layout.sheetName, format(m.layout.rowLabel, { n: tpl.layout.headerRowIndex + 1 })].filter(Boolean).join(' · ')}</dd>
                         <dt className="text-muted-foreground">{m.layout.stockUnit}</dt>
                         <dd>{tpl.layout.stockUnit === 'BOX' ? m.layout.unitBOX : tpl.layout.stockUnit === 'PLT' ? m.layout.unitPLT : m.layout.unitEA}</dd>
+                        <dt className="text-muted-foreground">{m.layout.zeroStock}</dt>
+                        <dd>{tpl.layout.zeroStockAsSoldOut === false ? m.layout.zeroStockNo : m.layout.zeroStockYes}</dd>
                         <dt className="text-muted-foreground">{m.layout.duplicateMode}</dt>
                         <dd>{tpl.layout.duplicateMode === 'skip' ? m.layout.duplicateSkip : m.layout.duplicateSum}</dd>
                       </dl>

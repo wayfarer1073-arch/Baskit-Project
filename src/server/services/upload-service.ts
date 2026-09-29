@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { autoLayout, parseSheets } from '@/domain/excel/parser';
 import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField } from '@/domain/excel/layout';
-import { applyCodeAliases, assignAutoCodes, convertStockUnit } from '@/domain/excel/normalize';
+import { applyCodeAliases, assignAutoCodes, convertStockUnit, markZeroStock } from '@/domain/excel/normalize';
 import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-alias-repository';
 import { findMatchingTemplate, layoutFingerprint, saveImportTemplate, touchImportTemplate } from '@/server/repositories/import-template-repository';
 import { validateAgainstPreviousSnapshot } from '@/domain/excel/validator';
@@ -56,6 +56,7 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
       totalCost: r.totalCost,
       normalStock: r.normalStock,
       // 부가 정보는 있을 때만 넣는다 — 부가 열이 없는 파일의 서명은 예전과 같게 유지된다.
+      zs: r.zeroStockStatus,
       ext: r.barcode || r.eaPerBox != null || r.eaPerPallet != null || r.expirationDates?.length ? [r.barcode, r.eaPerBox, r.eaPerPallet, r.expirationDates] : undefined,
     }))
     .sort((a, b) => a.productCode.localeCompare(b.productCode));
@@ -67,7 +68,7 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
  * 처음 보는 상품코드도 함께 돌려준다(업로드 뒤 '새 상품' 안내용).
  */
 async function normalizeForWarehouse(warehouseId: string | undefined, rows: ParsedInventoryRow[], layout: ImportLayout) {
-  if (!warehouseId) return { rows: assignAutoCodes(rows, new Map(), new Set()).rows, issues: [] as ValidationIssue[], newCodes: [] as string[] };
+  if (!warehouseId) return { rows: markZeroStock(assignAutoCodes(rows, new Map(), new Set()).rows, layout.zeroStockAsSoldOut), issues: [] as ValidationIssue[], newCodes: [] as string[] };
   const [aliasMap, info] = await Promise.all([loadAliasMap(warehouseId), loadWarehouseSkuInfo(warehouseId)]);
   const coded = assignAutoCodes(rows, info.codeByName, info.knownCodes);
   const aliased = applyCodeAliases(coded.rows, aliasMap);
@@ -77,7 +78,7 @@ async function normalizeForWarehouse(warehouseId: string | undefined, rows: Pars
   if (aliased.aliased > 0) issues.push({ level: 'WARNING', code: 'CODE_ALIAS_APPLIED', message: `연결된 상품코드 ${aliased.aliased}개를 기존 상품으로 바꿔 저장합니다.` });
   // 창고에 첫 업로드면 전부 새 상품이라 알릴 필요가 없다.
   const newCodes = info.knownCodes.size === 0 ? [] : converted.rows.filter((r) => !info.knownCodes.has(r.productCode)).map((r) => r.productCode);
-  return { rows: converted.rows, issues, newCodes };
+  return { rows: markZeroStock(converted.rows, layout.zeroStockAsSoldOut), issues, newCodes };
 }
 
 export interface UploadPreview {

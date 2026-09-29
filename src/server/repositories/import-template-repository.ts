@@ -16,7 +16,15 @@ function toLayout(t: TemplateRecord): ImportLayout {
   const raw = (t.columns ?? {}) as Record<string, unknown>;
   const columns: ImportLayout['columns'] = {};
   for (const field of LAYOUT_FIELDS) if (typeof raw[field] === 'string') columns[field] = raw[field] as string;
-  return { sheetName: t.sheetName, headerRowIndex: t.headerRowIndex, columns, duplicateMode: (t.duplicateMode === 'skip' ? 'skip' : 'sum') as DuplicateMode };
+  const stockUnit = t.stockUnit === 'BOX' || t.stockUnit === 'PLT' ? t.stockUnit : undefined;
+  return {
+    sheetName: t.sheetName,
+    headerRowIndex: t.headerRowIndex,
+    columns,
+    duplicateMode: (t.duplicateMode === 'skip' ? 'skip' : 'sum') as DuplicateMode,
+    ...(stockUnit ? { stockUnit } : {}),
+    zeroStockAsSoldOut: t.zeroStockAsSoldOut ?? true,
+  };
 }
 
 function toRow(t: TemplateRecord): ImportTemplateRow {
@@ -52,6 +60,8 @@ export async function saveImportTemplate(orgId: string, name: string, fingerprin
     headerRowIndex: layout.headerRowIndex,
     columns: layout.columns as Prisma.InputJsonValue,
     duplicateMode: layout.duplicateMode,
+    stockUnit: layout.stockUnit && layout.stockUnit !== 'EA' ? layout.stockUnit : null,
+    zeroStockAsSoldOut: layout.zeroStockAsSoldOut ?? true,
     lastUsedAt: new Date(),
   };
   return prisma.importTemplate.upsert({
