@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CONFIDENCE_LABEL, STATUS_BADGE } from '@/components/segment-dashboards/periodic-parts';
+import { STATUS_VARIANT, recountReasonText } from '@/components/segment-dashboards/periodic-parts';
 import type { PeriodicSkuDetail } from '@/domain/segments/read-model';
-import { formatCurrency, formatNumber } from '@/lib/format';
+import { formatMoney, formatNumber } from '@/lib/format';
 import { ReliabilityInfo } from '@/components/ui/reliability-info';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 function Row({ label, value, hint, info }: { label: string; value: React.ReactNode; hint?: string; info?: React.ReactNode }) {
   return (
@@ -27,10 +29,11 @@ function Row({ label, value, hint, info }: { label: string; value: React.ReactNo
 
 /** 실사 수량 추이 — 막대 높이만으로 늘고 준 흐름을 보여주는 작은 막대(최근 12회). */
 function CountBars({ counts }: { counts: PeriodicSkuDetail['counts'] }) {
+  const t = useI18n().m.periodic.sheet;
   const recent = [...counts].slice(0, 12).reverse();
   const max = Math.max(1, ...recent.map((c) => c.quantity));
   return (
-    <div className="flex h-20 items-end gap-1" role="img" aria-label={`최근 실사 ${recent.length}회 수량: ${recent.map((c) => `${c.date} ${c.quantity}`).join(', ')}`}>
+    <div className="flex h-20 items-end gap-1" role="img" aria-label={format(t.barsAria, { count: recent.length, list: recent.map((c) => `${c.date} ${c.quantity}`).join(', ') })}>
       {recent.map((c) => (
         <div key={c.date} className="group relative flex flex-1 flex-col items-center justify-end" title={`${c.date} · ${formatNumber(c.quantity)}`}>
           <div
@@ -44,6 +47,8 @@ function CountBars({ counts }: { counts: PeriodicSkuDetail['counts'] }) {
 }
 
 export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: string | null; asOfDate: string; onOpenChange: (open: boolean) => void }) {
+  const { m, locale } = useI18n();
+  const t = m.periodic.sheet;
   const [detail, setDetail] = useState<PeriodicSkuDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -79,58 +84,58 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
             <SheetHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <SheetTitle>{d.productName}</SheetTitle>
-                <Badge variant={STATUS_BADGE[e.status].variant}>{STATUS_BADGE[e.status].label}</Badge>
+                <Badge variant={STATUS_VARIANT[e.status]}>{m.periodic.status[e.status]}</Badge>
               </div>
               <SheetDescription>
-                {d.productCode} · {d.warehouseName} · 기준일 {asOfDate}
+                {format(t.subtitle, { code: d.productCode, warehouse: d.warehouseName, date: asOfDate })}
               </SheetDescription>
             </SheetHeader>
 
             <div className="space-y-6 px-4 pb-8">
-              <section aria-label="추정 재고" className="rounded-lg border border-border px-4 py-3">
+              <section aria-label={t.estimateAria} className="rounded-lg border border-border px-4 py-3">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">지금 추정 재고</span>
+                  <span className="text-xs text-muted-foreground">{t.estimateNow}</span>
                   <span className="text-2xl font-semibold tabular-nums">{e.estimatedStock === null ? '—' : formatNumber(Math.round(e.estimatedStock))}</span>
                 </div>
                 <div className="mt-2 divide-y divide-border">
                   <Row
-                    label="마지막 실사"
+                    label={t.lastCount}
                     value={`${e.lastCountDate} · ${formatNumber(e.lastCountQuantity)}`}
-                    hint={e.daysSinceCount === 0 ? '오늘 셈' : `${e.daysSinceCount}일 전`}
+                    hint={e.daysSinceCount === 0 ? t.countedToday : format(t.daysAgo, { days: e.daysSinceCount })}
                   />
-                  <Row label="이후 입고" value={e.inboundSinceCount ? `+${formatNumber(e.inboundSinceCount)}` : '—'} />
+                  <Row label={t.inbound} value={e.inboundSinceCount ? `+${formatNumber(e.inboundSinceCount)}` : '—'} />
                   <Row
-                    label="하루 평균 소진"
+                    label={t.dailyUsage}
                     value={e.dailyUsage === null ? '—' : e.dailyUsage.toFixed(1)}
-                    hint={e.dailyUsage === null ? '같은 상품을 한 번 더 세면 계산돼요' : `실사 구간 ${e.usableIntervals}개로 계산`}
+                    hint={e.dailyUsage === null ? t.usageUnknown : format(t.usageBasis, { count: e.usableIntervals })}
                   />
-                  <Row label="예상 품절일" value={e.estimatedStockoutDate ?? '—'} hint={e.status === 'soon' ? `${d.stockoutSoonDays}일 안 — 발주를 검토하세요` : undefined} />
+                  <Row label={t.stockout} value={e.estimatedStockoutDate ?? '—'} hint={e.status === 'soon' ? format(t.stockoutSoon, { days: d.stockoutSoonDays }) : undefined} />
                   <Row
-                    label="추정 신뢰도"
-                    value={e.reliability ? `${CONFIDENCE_LABEL[e.confidence]} · ${e.reliability.score}점` : CONFIDENCE_LABEL[e.confidence]}
-                    hint={`실사 권장 주기 ${d.recountDays}일 기준`}
+                    label={t.confidence}
+                    value={e.reliability ? `${m.periodic.confidence[e.confidence]} · ${format(t.score, { score: e.reliability.score })}` : m.periodic.confidence[e.confidence]}
+                    hint={format(t.confidenceBasis, { days: d.recountDays })}
                     info={<ReliabilityInfo reliability={e.reliability} />}
                   />
                   {d.unitCost !== null && e.estimatedStock !== null && (
-                    <Row label="추정 재고 금액" value={formatCurrency(Math.round(e.estimatedStock * d.unitCost))} hint={`단위원가 ${formatCurrency(d.unitCost)}`} />
+                    <Row label={t.value} value={formatMoney(Math.round(e.estimatedStock * d.unitCost), locale)} hint={format(t.unitCost, { cost: formatMoney(d.unitCost, locale) })} />
                   )}
                 </div>
                 {e.recountReasons.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     {e.recountReasons.map((reason) => (
                       <span key={reason} className="rounded-md bg-status-warning-bg px-2 py-0.5 text-[11px] text-status-warning">
-                        {reason}
+                        {recountReasonText(reason, m.periodic.reasons)}
                       </span>
                     ))}
                     <Link href="/count" className="ml-auto text-xs font-medium underline underline-offset-4">
-                      지금 세기
+                      {t.countNow}
                     </Link>
                   </div>
                 )}
               </section>
 
-              <section aria-label="실사 이력">
-                <h3 className="text-sm font-semibold">실사 이력</h3>
+              <section aria-label={t.history}>
+                <h3 className="text-sm font-semibold">{t.history}</h3>
                 {d.counts.length > 1 && (
                   <div className="mt-3">
                     <CountBars counts={d.counts} />
@@ -141,7 +146,7 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
                     <li key={c.date} className="px-3 py-2 text-sm">
                       <div className="flex items-center gap-3">
                         <span className="tabular-nums text-muted-foreground">{c.date}</span>
-                        <span className="text-[11px] text-muted-foreground">{c.manual ? '직접 입력' : '엑셀'}</span>
+                        <span className="text-[11px] text-muted-foreground">{c.manual ? t.manual : t.excel}</span>
                         <span className="ml-auto font-medium tabular-nums">{formatNumber(c.quantity)}</span>
                       </div>
                       {c.lots.length > 0 && (
@@ -159,8 +164,8 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
               </section>
 
               {d.inbounds.length > 0 && (
-                <section aria-label="입고 기록">
-                  <h3 className="text-sm font-semibold">입고 기록</h3>
+                <section aria-label={t.inbounds}>
+                  <h3 className="text-sm font-semibold">{t.inbounds}</h3>
                   <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
                     {d.inbounds.slice(0, 20).map((i, idx) => (
                       <li key={`${i.date}-${idx}`} className="flex justify-between px-3 py-2 text-sm">

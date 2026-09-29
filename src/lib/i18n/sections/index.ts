@@ -7,6 +7,7 @@ import * as domain from './domain';
 import * as inventory from './inventory';
 import * as work from './work';
 import * as settingsScreens from './settings-screens';
+import * as periodic from './periodic';
 
 export const ko = {
   dashboard: dashboard.ko,
@@ -14,6 +15,7 @@ export const ko = {
   inventory: inventory.ko,
   work: work.ko,
   settingsScreens: settingsScreens.ko,
+  periodic: periodic.ko,
 };
 
 export const en = {
@@ -22,4 +24,5 @@ export const en = {
   inventory: inventory.en,
   work: work.en,
   settingsScreens: settingsScreens.en,
+  periodic: periodic.en,
 };
