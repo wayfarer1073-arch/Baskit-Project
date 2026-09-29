@@ -16,8 +16,10 @@ import { AuditLogPanel, dataSummary, WorkspaceBadges } from '@/components/platfo
 import { adminRequest, enterWorkspace } from '@/components/platform/workspace-actions';
 import { timeAgo } from '@/components/platform/format';
 import type { AuditLogRow, WorkspaceSummary, WorkspaceUserRow, WorkspaceWarehouseRow } from '@/domain/platform/read-model';
-import { SEGMENT_META, SEGMENT_ORDER, isSegment } from '@/lib/segments';
+import { SEGMENT_ORDER, isSegment } from '@/lib/segments';
 import { formatKstDateTime } from '@/lib/date';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface WorkspaceDetailProps {
   summary: WorkspaceSummary;
@@ -28,6 +30,8 @@ interface WorkspaceDetailProps {
 }
 
 export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, homeOrgId }: WorkspaceDetailProps) {
+  const { m } = useI18n();
+  const t = m.platform.detail;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(w.name);
@@ -42,7 +46,7 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
       toast.success(success);
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '요청에 실패했습니다.');
+      toast.error(e instanceof Error ? e.message : t.requestFailed);
     } finally {
       setBusy(false);
     }
@@ -54,23 +58,23 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
     setBusy(true);
     try {
       await adminRequest(`/api/admin/workspaces/${w.id}`, 'DELETE', { confirmName });
-      toast.success('워크스페이스를 삭제했어요.');
+      toast.success(t.deleted);
       router.push('/admin');
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '삭제하지 못했습니다.');
+      toast.error(e instanceof Error ? e.message : t.deleteFailed);
       setBusy(false);
     }
   }
 
   async function resetPassword(user: WorkspaceUserRow) {
-    if (!confirm(`${user.email}의 비밀번호를 임시 비밀번호로 바꿀까요? 기존 비밀번호는 더 이상 쓸 수 없어요.`)) return;
+    if (!confirm(format(t.resetConfirm, { email: user.email }))) return;
     setBusy(true);
     try {
       const { tempPassword: password } = await adminRequest<{ tempPassword: string }>(`/api/admin/users/${user.id}/reset-password`, 'POST');
       setTempPassword({ email: user.email, password });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '발급하지 못했습니다.');
+      toast.error(e instanceof Error ? e.message : t.resetFailed);
     } finally {
       setBusy(false);
     }
@@ -82,105 +86,112 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
         <div className="min-w-0">
           <Link href="/admin" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-3.5" aria-hidden="true" />
-            운영자 콘솔
+            {t.back}
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <h1 className="text-lg font-semibold tracking-tight">{w.name}</h1>
             <WorkspaceBadges w={w} homeOrgId={homeOrgId} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            가입 {formatKstDateTime(w.createdAt)} · {w.ownerEmail ?? '사용자 없음'}
+            {format(t.created, { date: formatKstDateTime(w.createdAt), owner: w.ownerEmail ?? m.platform.console.noUsers })}
           </p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => enterWorkspace(w.id, router).catch((e) => toast.error(e.message))} disabled={busy}>
             <LogIn className="size-4" />
-            들어가기
+            {m.platform.console.enter}
           </Button>
           {!protectedOrg &&
             (w.suspendedAt ? (
-              <Button variant="outline" disabled={busy} onClick={() => patch({ suspended: false }, '정지를 해제했어요.')}>
-                정지 해제
+              <Button variant="outline" disabled={busy} onClick={() => patch({ suspended: false }, t.unsuspended)}>
+                {t.unsuspend}
               </Button>
             ) : (
               <Button
                 variant="outline"
                 disabled={busy}
-                onClick={() => confirm('이 워크스페이스를 정지할까요? 소속 사용자는 로그인하지 못하고, 데이터는 그대로 남아요.') && patch({ suspended: true }, '워크스페이스를 정지했어요.')}
+                onClick={() => confirm(t.suspendConfirm) && patch({ suspended: true }, t.suspendedToast)}
               >
-                정지
+                {t.suspend}
               </Button>
             ))}
         </div>
       </div>
 
-      <SummaryPanel title="현황">
-        <SummaryMetric label="사용자" value={`${w.userCount}명`} detail={`마지막 로그인 ${timeAgo(w.lastLoginAt)}`} />
-        <SummaryMetric label="마지막 활동" value={timeAgo(w.lastActivityAt)} detail="업로드·발주·매출·이벤트·로그인" />
-        <SummaryMetric label="창고" value={`${w.warehouseCount}개`} detail={dataSummary(w)} />
+      <SummaryPanel title={t.summaryTitle}>
+        <SummaryMetric label={t.users} value={format(t.usersValue, { count: w.userCount })} detail={format(t.lastLogin, { time: timeAgo(w.lastLoginAt, m.platform.time) })} />
+        <SummaryMetric label={t.lastActivity} value={timeAgo(w.lastActivityAt, m.platform.time)} detail={t.activitySources} />
+        <SummaryMetric label={t.warehouses} value={format(m.platform.console.count, { count: w.warehouseCount })} detail={dataSummary(w, m.platform.data)} />
         <SummaryMetric
-          label="최근 30일 사용량"
-          value={`업로드 ${w.uploads30d}회`}
-          detail={`로그인 사용자 ${w.activeUsers30d}명 · 저장된 재고 행 ${w.storedRows.toLocaleString()}개${w.pendingInvites ? ` · 대기 초대 ${w.pendingInvites}건` : ''}`}
+          label={t.usage}
+          value={format(t.uploads, { count: w.uploads30d })}
+          detail={format(t.usageDetail, { users: w.activeUsers30d, rows: w.storedRows.toLocaleString() }) + (w.pendingInvites ? format(t.pendingInvites, { count: w.pendingInvites }) : '')}
         />
-        <SummaryMetric label="상태" value={w.suspendedAt ? '정지됨' : '사용 중'} emphasis={w.suspendedAt ? 'danger' : 'normal'} detail={w.suspendedAt ? `${formatKstDateTime(w.suspendedAt)} 정지` : undefined} />
+        <SummaryMetric
+          label={t.status}
+          value={w.suspendedAt ? t.statusSuspended : t.statusActive}
+          emphasis={w.suspendedAt ? 'danger' : 'normal'}
+          detail={w.suspendedAt ? format(t.suspendedAt, { date: formatKstDateTime(w.suspendedAt) }) : undefined}
+        />
       </SummaryPanel>
 
-      <SectionPanel title="워크스페이스 정보">
+      <SectionPanel title={t.infoTitle}>
         <div className="grid gap-4 px-5 py-4 sm:grid-cols-2">
           <form
             className="space-y-1.5"
             onSubmit={(e) => {
               e.preventDefault();
-              patch({ name }, '이름을 바꿨어요.');
+              patch({ name }, t.renamed);
             }}
           >
-            <Label htmlFor="ws-name">이름</Label>
+            <Label htmlFor="ws-name">{t.name}</Label>
             <div className="flex gap-2">
               <Input id="ws-name" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
               <Button type="submit" variant="outline" disabled={busy || name.trim() === '' || name === w.name}>
-                저장
+                {t.save}
               </Button>
             </div>
           </form>
           <div className="space-y-1.5">
-            <Label htmlFor="ws-segment">기본 관리 방식</Label>
-            <Select value={w.segment} onValueChange={(v) => isSegment(v) && patch({ segment: v }, '기본 관리 방식을 바꿨어요.')}>
+            <Label htmlFor="ws-segment">{t.segment}</Label>
+            <Select value={w.segment} onValueChange={(v) => isSegment(v) && patch({ segment: v }, t.segmentChanged)}>
               <SelectTrigger id="ws-segment" className="w-full" disabled={busy}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {SEGMENT_ORDER.map((v) => (
                   <SelectItem key={v} value={v}>
-                    {SEGMENT_META[v].label}
+                    {m.segments[v].label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">사용자가 처음 들어왔을 때 열리는 대시보드예요.</p>
+            <p className="text-xs text-muted-foreground">{t.segmentHelp}</p>
           </div>
         </div>
       </SectionPanel>
 
-      <SectionPanel title="사용자" description={`${users.length}명`}>
+      <SectionPanel title={t.users} description={format(t.usersValue, { count: users.length })}>
         {tempPassword && (
           <div role="status" className="border-b border-border bg-status-warning-bg px-5 py-3 text-sm">
             <p>
-              <strong>{tempPassword.email}</strong>의 임시 비밀번호: <code className="rounded bg-background px-1.5 py-0.5 font-mono">{tempPassword.password}</code>
+              <strong>{tempPassword.email}</strong>
+              {t.tempPassword}
+              <code className="rounded bg-background px-1.5 py-0.5 font-mono">{tempPassword.password}</code>
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">이 화면을 벗어나면 다시 볼 수 없어요. 사용자에게 전달하고 로그인 후 바꾸도록 안내하세요.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t.tempPasswordHelp}</p>
           </div>
         )}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>사용자</TableHead>
-                <TableHead>권한</TableHead>
-                <TableHead>가입</TableHead>
-                <TableHead>마지막 로그인</TableHead>
-                <TableHead>상태</TableHead>
-                <TableHead className="text-right">작업</TableHead>
+                <TableHead>{t.cols.user}</TableHead>
+                <TableHead>{t.cols.role}</TableHead>
+                <TableHead>{t.cols.created}</TableHead>
+                <TableHead>{t.cols.lastLogin}</TableHead>
+                <TableHead>{t.cols.status}</TableHead>
+                <TableHead className="text-right">{t.cols.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -191,30 +202,30 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
                     <p className="text-xs text-muted-foreground">{u.email}</p>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {u.role === 'ADMIN' ? '관리자' : u.role === 'VIEWER' ? '조회 전용' : '멤버'}
+                    {u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}
                     {u.isPlatformAdmin && (
                       <Badge variant="notice" className="ml-1.5">
-                        운영자
+                        {t.operator}
                       </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-sm whitespace-nowrap">{formatKstDateTime(u.createdAt).slice(0, 10)}</TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">{timeAgo(u.lastLoginAt)}</TableCell>
-                  <TableCell>{u.isActive ? <Badge variant="normal">활성</Badge> : <Badge variant="stagnant">비활성</Badge>}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{timeAgo(u.lastLoginAt, m.platform.time)}</TableCell>
+                  <TableCell>{u.isActive ? <Badge variant="normal">{t.active}</Badge> : <Badge variant="stagnant">{t.inactive}</Badge>}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {!u.isPlatformAdmin && (
                       <>
                         <Button size="sm" variant="ghost" disabled={busy} onClick={() => resetPassword(u)}>
                           <KeyRound className="size-3.5" />
-                          임시 비밀번호
+                          {t.issueTemp}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          onClick={() => run(() => adminRequest(`/api/admin/users/${u.id}`, 'PATCH', { isActive: !u.isActive }), u.isActive ? '비활성화했어요.' : '다시 활성화했어요.')}
+                          onClick={() => run(() => adminRequest(`/api/admin/users/${u.id}`, 'PATCH', { isActive: !u.isActive }), u.isActive ? t.deactivated : t.activated)}
                         >
-                          {u.isActive ? '비활성화' : '활성화'}
+                          {u.isActive ? t.deactivate : t.activate}
                         </Button>
                       </>
                     )}
@@ -223,20 +234,20 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
               ))}
             </TableBody>
           </Table>
-          {users.length === 0 && <p className="px-5 py-6 text-center text-sm text-muted-foreground">사용자가 없는 워크스페이스예요(데모). 들어가기로 확인하세요.</p>}
+          {users.length === 0 && <p className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noUsers}</p>}
         </div>
       </SectionPanel>
 
       {warehouses.length > 0 && (
-        <SectionPanel title="창고" description={`${warehouses.length}개 (보관 포함)`}>
+        <SectionPanel title={t.warehouses} description={format(t.warehouseCount, { count: warehouses.length })}>
           <ul className="divide-y divide-border">
             {warehouses.map((wh) => (
               <li key={wh.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
                 <span className="w-8 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">{wh.code}</span>
                 <span className="min-w-0 flex-1 truncate">{wh.name}</span>
-                {wh.isArchived && <Badge variant="stagnant">보관</Badge>}
+                {wh.isArchived && <Badge variant="stagnant">{t.archived}</Badge>}
                 <span className="text-xs text-muted-foreground">
-                  SKU {wh.skuCount} · 마지막 업로드 {wh.lastSnapshotDate ?? '없음'}
+                  {format(t.warehouseLine, { skus: wh.skuCount, date: wh.lastSnapshotDate ?? t.none })}
                 </span>
               </li>
             ))}
@@ -244,20 +255,20 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
         </SectionPanel>
       )}
 
-      <AuditLogPanel logs={auditLogs} title="이 워크스페이스의 운영 기록" />
+      <AuditLogPanel logs={auditLogs} title={t.auditTitle} />
 
-      <section className="rounded-xl border border-status-danger/40" aria-label="워크스페이스 삭제">
+      <section className="rounded-xl border border-status-danger/40" aria-label={t.deleteTitle}>
         <div className="border-b border-status-danger/30 px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-status-danger">워크스페이스 삭제</h2>
+          <h2 className="text-sm font-semibold text-status-danger">{t.deleteTitle}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {protectedOrg ? '운영자가 속한 워크스페이스는 삭제할 수 없어요.' : '사용자·재고·발주·매출 등 모든 데이터가 지워지며 되돌릴 수 없어요. 확인을 위해 워크스페이스 이름을 그대로 입력하세요.'}
+            {protectedOrg ? t.deleteProtected : t.deleteWarning}
           </p>
         </div>
         {!protectedOrg && (
           <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-            <Input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={w.name} className="max-w-xs" aria-label="삭제 확인용 워크스페이스 이름" />
+            <Input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={w.name} className="max-w-xs" aria-label={t.deleteConfirmAria} />
             <Button variant="destructive" disabled={busy || confirmName !== w.name} onClick={remove}>
-              영구 삭제
+              {t.deleteForever}
             </Button>
           </div>
         )}

@@ -9,6 +9,7 @@ import * as work from './work';
 import * as settingsScreens from './settings-screens';
 import * as periodic from './periodic';
 import * as store from './store';
+import * as platform from './platform';
 
 export const ko = {
   dashboard: dashboard.ko,
@@ -18,6 +19,7 @@ export const ko = {
   settingsScreens: settingsScreens.ko,
   periodic: periodic.ko,
   store: store.ko,
+  platform: platform.ko,
 };
 
 export const en = {
@@ -28,4 +30,5 @@ export const en = {
   settingsScreens: settingsScreens.en,
   periodic: periodic.en,
   store: store.en,
+  platform: platform.en,
 };

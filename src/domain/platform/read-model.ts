@@ -69,15 +69,3 @@ export interface AuditLogRow {
   createdAt: string;
 }
 
-/** 감사 로그 action 코드 → 화면 표시명. */
-export const AUDIT_ACTION_LABEL: Record<string, string> = {
-  'workspace.enter': '워크스페이스 들어가기',
-  'workspace.suspend': '워크스페이스 정지',
-  'workspace.unsuspend': '워크스페이스 정지 해제',
-  'workspace.update': '워크스페이스 정보 변경',
-  'workspace.delete': '워크스페이스 삭제',
-  'demo.create': '데모 워크스페이스 생성',
-  'user.deactivate': '사용자 비활성화',
-  'user.activate': '사용자 활성화',
-  'user.reset_password': '임시 비밀번호 발급',
-};
