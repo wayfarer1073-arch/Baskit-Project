@@ -16,10 +16,13 @@ import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { EventFormDialog, type EditingEvent } from '@/components/events/event-form-dialog';
 import { buildDailyDeltas, calculatePeriodComparison, sortObservations } from '@/domain/inventory/calculations';
 import type { InventoryValueBreakdown, SkuAnalysis, StockObservation } from '@/domain/inventory/types';
-import { formatCurrency, formatNumber, formatSigned } from '@/lib/format';
+import { formatMoney, formatNumber, formatSigned } from '@/lib/format';
 import { formatKstDate } from '@/lib/date';
-import { riskBadgeVariant, analysisStatusLabel, dataReliabilityClassName, dataReliabilityLabel, dataReliabilityLevel, humanizeTag, isB2BTag, isBasisWindowTag, isEstimateCaveatTag, isObservedDateTag, isSoldOutTag, isStaleDepletionTag } from '@/lib/status';
-import { eventTypeLabel } from '@/lib/event-types';
+import { riskBadgeVariant, analysisStatusText, dataReliabilityClassName, dataReliabilityLevel, dataReliabilityText, humanizeTagText, localizeReason, isB2BTag, isBasisWindowTag, isEstimateCaveatTag, isObservedDateTag, isSoldOutTag, isStaleDepletionTag } from '@/lib/status';
+import { eventTypeText } from '@/lib/event-types';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
+import type { Messages } from '@/lib/i18n/messages';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import type { ReorderSuggestion } from '@/domain/reorder/reorder';
 import { ReorderPanel, type Turnover30 } from './reorder-panel';
@@ -58,6 +61,9 @@ interface SkuDetailSheetProps {
 }
 
 export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited, onToggleFavorite, onOpenChange }: SkuDetailSheetProps) {
+  const { m, locale } = useI18n();
+  const t = m.inventory.detail;
+  const qty = (n: number) => format(t.qty, { count: formatNumber(n) });
   const [detail, setDetail] = useState<SkuDetailResponse | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -143,10 +149,10 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
         body: JSON.stringify({ isB2B: checked }),
       });
       if (!res.ok) throw new Error();
-      toast.success(checked ? 'B2B 상품으로 표시했습니다.' : 'B2B 표시를 해제했습니다.');
+      toast.success(checked ? t.b2bOn : t.b2bOff);
       reload();
     } catch {
-      toast.error('변경에 실패했습니다.');
+      toast.error(t.changeFailed);
     } finally {
       setTogglingB2B(false);
     }
@@ -175,7 +181,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
     const dangerQty = Number(dangerInput);
     const warningQty = Number(warningInput);
     if (!Number.isInteger(dangerQty) || dangerQty < 0 || !Number.isInteger(warningQty) || warningQty < 0) {
-      toast.error('0 이상의 정수만 입력할 수 있습니다.');
+      toast.error(t.integerOnly);
       return;
     }
     setSavingThresholds(true);
@@ -186,11 +192,11 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
         body: JSON.stringify({ manualDangerQty: dangerQty, manualWarningQty: warningQty }),
       });
       if (!res.ok) throw new Error();
-      toast.success('위험/경고수량을 저장했습니다.');
+      toast.success(t.thresholdsSaved);
       setEditingThresholds(false);
       reload();
     } catch {
-      toast.error('저장에 실패했습니다.');
+      toast.error(t.saveFailed);
     } finally {
       setSavingThresholds(false);
     }
@@ -206,24 +212,24 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
         body: JSON.stringify({ manualDangerQty: null, manualWarningQty: null }),
       });
       if (!res.ok) throw new Error();
-      toast.success('자동계산으로 되돌렸습니다.');
+      toast.success(t.revertedAuto);
       setEditingThresholds(false);
       reload();
     } catch {
-      toast.error('되돌리기에 실패했습니다.');
+      toast.error(t.revertFailed);
     } finally {
       setSavingThresholds(false);
     }
   }
 
   async function handleDeleteEvent(id: string) {
-    if (!confirm('이 이벤트를 삭제할까요? (이력은 보존됩니다)')) return;
+    if (!confirm(t.deleteEventConfirm)) return;
     const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
     if (res.ok) {
-      toast.success('삭제되었습니다.');
+      toast.success(t.deleted);
       reload();
     } else {
-      toast.error('삭제에 실패했습니다.');
+      toast.error(t.deleteFailed);
     }
   }
 
@@ -259,7 +265,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   type="button"
                   onClick={() => skuId && onToggleFavorite(skuId, !isFavorited)}
                   className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={isFavorited ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                  aria-label={isFavorited ? t.favoriteRemove : t.favoriteAdd}
                   aria-pressed={isFavorited}
                 >
                   <Star className={isFavorited ? 'size-4 fill-amber-400 text-amber-400' : 'size-4'} aria-hidden="true" />
@@ -269,16 +275,15 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   <>
                     <Badge variant="soldout" className="gap-1">
                       <PackageX className="size-3" aria-hidden="true" />
-                      품절
+                      {m.inventory.row.soldOut}
                     </Badge>
                     <InfoTooltip>
-                      최근 자료에서 빠졌거나 재고 0으로 올라와 품절로 판단했어요. 아래 수량·금액은 품절 전 마지막으로 확인된 값이며, 현재
-                      재고 합계에는 넣지 않습니다.
+                      {t.soldOutTip}
                     </InfoTooltip>
                   </>
                 )}
                 {!detail.descriptor.isSoldOut && !detail.descriptor.isB2B && (
-                  <Badge variant={riskBadgeVariant(detail.analysis.thresholdRisk.level)}>{analysisStatusLabel(detail.analysis)}</Badge>
+                  <Badge variant={riskBadgeVariant(detail.analysis.thresholdRisk.level)}>{analysisStatusText(detail.analysis, m.domain)}</Badge>
                 )}
                 {detail.descriptor.isB2B && (
                   <>
@@ -287,8 +292,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       B2B
                     </Badge>
                     <InfoTooltip>
-                      한 번에 많은 양을 주문받아 통째로 내보내는 상품이에요. 아래 예상 소진일·재고 부족 예측은 매일 조금씩 팔리는 상품을 기준으로
-                      계산해서 이 상품에는 잘 안 맞을 수 있어요.
+                      {t.b2bTip}
                     </InfoTooltip>
                   </>
                 )}
@@ -296,11 +300,11 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
               <SheetDescription>
                 {detail.descriptor.productCode} · {detail.descriptor.warehouseName}
                 {detail.descriptor.option ? ` · ${detail.descriptor.option}` : ''}
-                {' · 최초 인식 '}
+                {t.firstSeen}
                 {formatKstDate(detail.descriptor.firstSeenDate)}
                 {' '}
                 <span className={`rounded-md bg-muted px-2 py-0.5 text-xs font-medium ${dataReliabilityClassName(dataReliabilityLevel(detail.analysis))}`}>
-                  신뢰도 {dataReliabilityLabel(dataReliabilityLevel(detail.analysis))}
+                  {dataReliabilityText(dataReliabilityLevel(detail.analysis), m.domain)}
                 </span>
                 <ReliabilityInfo reliability={detail.analysis.reliability} className="ml-1 align-middle" />
               </SheetDescription>
@@ -310,22 +314,22 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
               {(detail.analysis.tags.length > 0 || isInitialObservation) && (
                 <div className="flex flex-wrap gap-1.5">
                   {isInitialObservation && (
-                    <span className="rounded-md bg-status-increase-bg px-2 py-0.5 text-xs text-status-increase">[초기재고]</span>
+                    <span className="rounded-md bg-status-increase-bg px-2 py-0.5 text-xs text-status-increase">{t.initialStock}</span>
                   )}
-                  {detail.analysis.tags.filter((t) => !isObservedDateTag(t) && !isEstimateCaveatTag(t) && !isBasisWindowTag(t) && !isSoldOutTag(t) && !isStaleDepletionTag(t) && !isB2BTag(t)).map((t) => (
-                    <span key={t} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{humanizeTag(t)}</span>
+                  {detail.analysis.tags.filter((tag) => !isObservedDateTag(tag) && !isEstimateCaveatTag(tag) && !isBasisWindowTag(tag) && !isSoldOutTag(tag) && !isStaleDepletionTag(tag) && !isB2BTag(tag)).map((tag) => (
+                    <span key={tag} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{humanizeTagText(tag, m.domain)}</span>
                   ))}
                 </div>
               )}
 
               <section className="rounded-xl border bg-muted/30 p-3">
-                <h3 className="mb-2 text-xs font-semibold">상품 추가 정보</h3>
+                <h3 className="mb-2 text-xs font-semibold">{t.extraInfo}</h3>
                 <div className="space-y-2">
                   <div>
-                    <div className="text-xs text-muted-foreground">로트별 소비기한</div>
+                    <div className="text-xs text-muted-foreground">{t.lots}</div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {detail.expirationLots.length === 0 ? (
-                        <span className="text-sm text-muted-foreground">등록된 로트 없음</span>
+                        <span className="text-sm text-muted-foreground">{t.noLots}</span>
                       ) : (
                         detail.expirationLots.map((lot) => (
                           <span key={lot.lot} className="rounded-md bg-card px-2 py-0.5 text-xs">
@@ -336,20 +340,20 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-sm">
-                    <Field label="EA/BOX" value={detail.descriptor.eaPerBox !== null ? `${formatNumber(detail.descriptor.eaPerBox)}개` : '미등록'} />
-                    <Field label="EA/PLT" value={detail.descriptor.eaPerPallet !== null ? `${formatNumber(detail.descriptor.eaPerPallet)}개` : '미등록'} />
-                    <Field label="상품바코드" value={detail.descriptor.packagingBarcode ?? '미등록'} />
+                    <Field label="EA/BOX" value={detail.descriptor.eaPerBox !== null ? qty(detail.descriptor.eaPerBox) : t.notRegistered} />
+                    <Field label="EA/PLT" value={detail.descriptor.eaPerPallet !== null ? qty(detail.descriptor.eaPerPallet) : t.notRegistered} />
+                    <Field label={t.barcode} value={detail.descriptor.packagingBarcode ?? t.notRegistered} />
                   </div>
                 </div>
               </section>
 
               <section className="grid grid-cols-2 gap-2">
-                <MetricCard label={detail.descriptor.isSoldOut ? '마지막 관측 재고' : '관측 재고'} value={`${formatNumber(detail.analysis.latest.availableStock)}개`} />
-                <MetricCard label={detail.descriptor.isSoldOut ? '마지막 관측 금액' : '관측 재고금액'} value={detail.analysis.latest.valuationKnown === false ? '원가 미상' : formatCurrency(detail.valueBreakdown.normalStockValue)} />
-                <MetricCard label="Coverage (출고일)" value={detail.analysis.coverage.coverageDays === null ? '산정 불가' : `${formatNumber(detail.analysis.coverage.coverageDays)}출고일`} />
+                <MetricCard label={detail.descriptor.isSoldOut ? t.lastObservedStock : t.observedStock} value={qty(detail.analysis.latest.availableStock)} />
+                <MetricCard label={detail.descriptor.isSoldOut ? t.lastObservedValue : t.observedValue} value={detail.analysis.latest.valuationKnown === false ? t.unknownCost : formatMoney(detail.valueBreakdown.normalStockValue, locale)} />
+                <MetricCard label={t.coverage} value={detail.analysis.coverage.coverageDays === null ? t.notComputable : format(t.shippingDays, { days: formatNumber(detail.analysis.coverage.coverageDays) })} />
                 <MetricCard
-                  label="예상 소진일"
-                  value={detail.analysis.forecast.expectedStockoutDate ? formatKstDate(detail.analysis.forecast.expectedStockoutDate) : detail.analysis.operating?.reason ?? '산정 불가'}
+                  label={t.stockoutDate}
+                  value={detail.analysis.forecast.expectedStockoutDate ? formatKstDate(detail.analysis.forecast.expectedStockoutDate) : (detail.analysis.operating?.reason ? localizeReason(detail.analysis.operating.reason, m.domain) : t.notComputable)}
                 />
               </section>
 
@@ -368,89 +372,88 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
 
               <section className="rounded-xl border bg-muted/30 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-xs font-semibold">위험/경고수량 기준</h3>
+                  <h3 className="text-xs font-semibold">{t.thresholds}</h3>
                   {isAdmin && !editingThresholds && (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={startEditingThresholds}>
-                      <Pencil className="size-3" /> 수정
+                      <Pencil className="size-3" /> {t.edit}
                     </Button>
                   )}
                 </div>
                 {editingThresholds ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs">
-                      <label htmlFor="danger-qty-input" className="w-16 text-muted-foreground">위험수량</label>
+                      <label htmlFor="danger-qty-input" className="w-16 text-muted-foreground">{t.dangerQty}</label>
                       <Input id="danger-qty-input" value={dangerInput} onChange={(e) => setDangerInput(e.target.value)} inputMode="numeric" className="h-8 text-xs" />
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <label htmlFor="warning-qty-input" className="w-16 text-muted-foreground">경고수량</label>
+                      <label htmlFor="warning-qty-input" className="w-16 text-muted-foreground">{t.warningQty}</label>
                       <Input id="warning-qty-input" value={warningInput} onChange={(e) => setWarningInput(e.target.value)} inputMode="numeric" className="h-8 text-xs" />
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <Button size="sm" className="h-7 text-xs" onClick={saveThresholds} disabled={savingThresholds}>
-                        저장
+                        {t.save}
                       </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={resetThresholds} disabled={savingThresholds}>
-                        <RotateCcw className="size-3" /> 자동으로 되돌리기
+                        <RotateCcw className="size-3" /> {t.revertAuto}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingThresholds(false)} disabled={savingThresholds}>
-                        취소
+                        {t.cancel}
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                    <Field label="위험수량" value={`${formatNumber(detail.analysis.riskThresholds.dangerQty)}개`} />
-                    <Field label="경고수량" value={`${formatNumber(detail.analysis.riskThresholds.warningQty)}개`} />
+                    <Field label={t.dangerQty} value={qty(detail.analysis.riskThresholds.dangerQty)} />
+                    <Field label={t.warningQty} value={qty(detail.analysis.riskThresholds.warningQty)} />
                   </div>
                 )}
-                {!editingThresholds && <p className="mt-2 text-[11px] text-muted-foreground">{thresholdSourceLabel(detail.analysis.riskThresholds.source)}</p>}
+                {!editingThresholds && <p className="mt-2 text-[11px] text-muted-foreground">{thresholdSourceLabel(detail.analysis.riskThresholds.source, t)}</p>}
               </section>
 
               {isAdmin && (
                 <section className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
                   <div className="flex items-center gap-1.5">
                     <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-xs font-semibold">B2B 상품</span>
+                    <span className="text-xs font-semibold">{t.b2bTitle}</span>
                     <InfoTooltip>
-                      켜두면 한 번에 많은 양을 주문받아 통째로 내보내는 상품으로 표시돼요. 매일 조금씩 팔리는 걸 가정한 예상 소진일·재고 부족
-                      예측 계산에서 빠지게 됩니다.
+                      {t.b2bSwitchTip}
                     </InfoTooltip>
                   </div>
-                  <Switch checked={detail.descriptor.isB2B} onCheckedChange={toggleB2B} disabled={togglingB2B} aria-label="B2B 상품 표시" />
+                  <Switch checked={detail.descriptor.isB2B} onCheckedChange={toggleB2B} disabled={togglingB2B} aria-label={t.b2bSwitch} />
                 </section>
               )}
 
               {fromDate && (
                 <section className="rounded-xl border bg-muted/30 p-3">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-xs font-semibold">선택 기간 변화</h3>
+                    <h3 className="text-xs font-semibold">{t.period}</h3>
                     <span className="text-[11px] text-muted-foreground">
-                      {periodMetrics ? `${periodMetrics.actualStartDate.slice(5)} — ${periodMetrics.actualEndDate.slice(5)} 관측 기준` : `${fromDate.slice(5)} — ${asOfDate.slice(5)}`}
+                      {periodMetrics ? format(t.periodObserved, { from: periodMetrics.actualStartDate.slice(5), to: periodMetrics.actualEndDate.slice(5) }) : `${fromDate.slice(5)} — ${asOfDate.slice(5)}`}
                     </span>
                   </div>
                   {periodMetrics ? (
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                      <Field label="순 변화" value={`${formatSigned(periodMetrics.netChange)}개`} />
-                      <Field label="입고 보정 추정 소진" value={`${formatNumber(periodMetrics.totalDepletion)}개`} />
-                      <Field label="입고 미설명 증가" value={`${formatNumber(periodMetrics.totalIncrease)}개`} />
-                      <Field label="입고 반영" value={`${formatNumber(periodMetrics.totalInboundQuantity ?? 0)}개`} />
-                      <Field label="기간 달력일평균 소진" value={fmtRate(periodMetrics.averageDailyDepletion, '달력일')} />
+                      <Field label={t.netChange} value={format(t.qty, { count: formatSigned(periodMetrics.netChange) })} />
+                      <Field label={t.periodDepletion} value={qty(periodMetrics.totalDepletion)} />
+                      <Field label={t.periodIncrease} value={qty(periodMetrics.totalIncrease)} />
+                      <Field label={t.periodInbound} value={qty(periodMetrics.totalInboundQuantity ?? 0)} />
+                      <Field label={t.periodAvg} value={fmtRate(periodMetrics.averageDailyDepletion, t, t.unitCalendar)} />
                     </div>
-                  ) : <p className="text-xs text-muted-foreground">두 날짜를 비교할 관측 데이터가 부족합니다.</p>}
+                  ) : <p className="text-xs text-muted-foreground">{t.periodShort}</p>}
                 </section>
               )}
 
               <Separator />
 
               <section>
-                <h3 className="mb-2 text-sm font-semibold">추세 · 출고 영업일 기준</h3><p className="mb-3 text-xs text-muted-foreground">{detail.analysis.operating?.reason ?? "관측 추세 참고"} · 최근 {detail.analysis.operating?.basisWindowDays ?? "—"}일 중 {detail.analysis.operating?.observedShippingDays ?? 0}출고일 · 마지막 관측 {detail.analysis.latest.date}. 반품·조정은 분리되지 않으며 B2B는 커버리지 예측 대상에서 제외합니다.</p>
+                <h3 className="mb-2 text-sm font-semibold">{t.trendTitle}</h3><p className="mb-3 text-xs text-muted-foreground">{format(t.trendNote, { reason: detail.analysis.operating?.reason ? localizeReason(detail.analysis.operating.reason, m.domain) : t.trendReference, window: detail.analysis.operating?.basisWindowDays ?? '—', observed: detail.analysis.operating?.observedShippingDays ?? 0, date: detail.analysis.latest.date })}</p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <Field label="최근 7일 평균 일일 소진량" value={fmtRate(detail.analysis.window7.averageDailyDepletion)} />
-                  <Field label="최근 7일 입고량" value={`${formatNumber(detail.analysis.window7.totalInboundQuantity ?? 0)}개`} />
-                  <Field label="최근 14일 평균 일일 소진량" value={fmtRate(detail.analysis.window14.averageDailyDepletion)} />
-                  <Field label="최근 30일 평균 일일 소진량" value={fmtRate(detail.analysis.window30.averageDailyDepletion)} />
-                  <Field label="소진 가속/둔화" value={accelerationText(detail.analysis)} />
-                  <Field label="관측 근거 수준" value={confidenceLabel(detail.analysis.forecast.confidence)} />
+                  <Field label={t.avg7} value={fmtRate(detail.analysis.window7.averageDailyDepletion, t)} />
+                  <Field label={t.inbound7} value={qty(detail.analysis.window7.totalInboundQuantity ?? 0)} />
+                  <Field label={t.avg14} value={fmtRate(detail.analysis.window14.averageDailyDepletion, t)} />
+                  <Field label={t.avg30} value={fmtRate(detail.analysis.window30.averageDailyDepletion, t)} />
+                  <Field label={t.accel} value={accelerationText(detail.analysis, t)} />
+                  <Field label={t.confidence} value={confidenceLabel(detail.analysis.forecast.confidence, t)} />
                 </div>
               </section>
 
@@ -458,18 +461,18 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
 
               <section>
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">가용재고 추이</h3>
+                  <h3 className="text-sm font-semibold">{t.stockTrend}</h3>
                   {!fromDate && <Tabs value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v) as 30 | 60 | 90)}>
                     <TabsList>
-                      <TabsTrigger value="30">30일</TabsTrigger>
-                      <TabsTrigger value="60">60일</TabsTrigger>
-                      <TabsTrigger value="90">90일</TabsTrigger>
+                      <TabsTrigger value="30">{format(t.days, { days: 30 })}</TabsTrigger>
+                      <TabsTrigger value="60">{format(t.days, { days: 60 })}</TabsTrigger>
+                      <TabsTrigger value="90">{format(t.days, { days: 90 })}</TabsTrigger>
                     </TabsList>
                   </Tabs>}
                 </div>
                 <div className="h-48">
                   {chartData.length < 2 ? (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">데이터 축적 중</div>
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t.accumulating}</div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
@@ -482,7 +485,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                         <CartesianGrid stroke="var(--color-border)" vertical={false} />
                         <XAxis dataKey="date" tickFormatter={(d: string) => formatKstDate(d).slice(5)} fontSize={11} stroke="var(--color-muted-foreground)" tickLine={false} axisLine={false} />
                         <YAxis width={44} fontSize={11} stroke="var(--color-muted-foreground)" tickLine={false} axisLine={false} />
-                        <Tooltip labelFormatter={(d) => formatKstDate(String(d))} formatter={(v) => [`${Number(v).toLocaleString('ko-KR')}개`, '가용재고']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        <Tooltip labelFormatter={(d) => formatKstDate(String(d))} formatter={(v) => [qty(Number(v)), t.availableStock]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                         <Area type="monotone" dataKey="availableStock" stroke="var(--color-chart-1)" fill="url(#stockGradient)" strokeWidth={2} />
                         {eventMarkers.map((m, i) => (
                           <ReferenceDot key={i} x={m.date} y={m.availableStock} r={4} fill="var(--color-chart-4)" stroke="var(--color-background)" />
@@ -495,11 +498,11 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
 
               {unclassifiedIncreases.length > 0 && (
                 <div className="space-y-2 rounded-md border border-status-increase/30 bg-status-increase-bg p-3">
-                  <div className="text-xs font-medium text-status-increase">재고 증가 감지 · 아직 분류되지 않았습니다</div>
+                  <div className="text-xs font-medium text-status-increase">{t.increaseDetected}</div>
                   {unclassifiedIncreases.map((d, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
                       <span>
-                        {formatKstDate(d.toDate)} 기준 {formatSigned(d.increase)}개 증가
+                        {format(t.increaseOn, { date: formatKstDate(d.toDate), qty: formatNumber(d.increase) })}
                       </span>
                       <Button
                         size="sm"
@@ -511,7 +514,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                           setFormOpen(true);
                         }}
                       >
-                        분류하기
+                        {t.classify}
                       </Button>
                     </div>
                   ))}
@@ -522,7 +525,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
 
               <section>
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">메모 / 이벤트</h3>
+                  <h3 className="text-sm font-semibold">{t.events}</h3>
                   <Button
                     size="sm"
                     variant="outline"
@@ -532,11 +535,11 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       setFormOpen(true);
                     }}
                   >
-                    <Plus className="size-3.5" /> 추가
+                    <Plus className="size-3.5" /> {t.add}
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  {events.length === 0 && <p className="text-sm text-muted-foreground">등록된 이벤트가 없습니다.</p>}
+                  {events.length === 0 && <p className="text-sm text-muted-foreground">{t.noEvents}</p>}
                   {events.map((e) => {
                     const startLabel = formatKstDate(e.eventDate);
                     const endLabel = e.endDate ? formatKstDate(e.endDate) : null;
@@ -545,9 +548,9 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       <div key={e.id} className="rounded-md border p-2.5 text-sm">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-2">
-                            <Badge variant="outline" className="shrink-0">{eventTypeLabel(e.eventType)}</Badge>
+                            <Badge variant="outline" className="shrink-0">{eventTypeText(e.eventType, m.domain.eventTypes)}</Badge>
                             {e.title && <span className="truncate text-sm font-semibold">{e.title}</span>}
-                            {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{formatSigned(e.quantity)}개</span>}
+                            {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.qty, { count: formatSigned(e.quantity) })}</span>}
                           </div>
                           <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                             {dateLabel}
@@ -565,21 +568,21 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                                 setFormOpen(true);
                               }}
                               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="수정"
+                              aria-label={t.edit}
                             >
                               <Pencil className="size-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteEvent(e.id)}
                               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="삭제"
+                              aria-label={t.delete}
                             >
                               <Trash2 className="size-3.5" />
                             </button>
                           </div>
                         </div>
                         <p className="mt-1 text-sm">{e.note}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">작성자: {e.createdBy.name}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{format(t.author, { name: e.createdBy.name })}</p>
                       </div>
                     );
                   })}
@@ -626,29 +629,26 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function fmtRate(value: number | null, unit = '출고일'): string {
-  return value === null ? '산정 불가' : `${formatNumber(value)}개/${unit}`;
+type DetailText = Messages['inventory']['detail'];
+
+function fmtRate(value: number | null, t: DetailText, unit = t.unitShipping): string {
+  return value === null ? t.notComputable : format(t.rate, { value: formatNumber(value), unit });
 }
 
-function accelerationText(analysis: SkuAnalysis): string {
+function accelerationText(analysis: SkuAnalysis, t: DetailText): string {
   const { trend, accelerationRatePercent } = analysis.acceleration;
-  if (trend === null) return '데이터 축적 중';
-  if (trend === 'NEW_DEPLETION') return '신규 소진 발생';
-  if (trend === 'ACCELERATING') return `🔥 소진 가속 (+${Math.round(accelerationRatePercent ?? 0)}%)`;
-  if (trend === 'DECELERATING') return `↓ 소진 둔화 (${Math.round(accelerationRatePercent ?? 0)}%)`;
-  return '안정적';
+  if (trend === null) return t.accumulating;
+  if (trend === 'NEW_DEPLETION') return t.newDepletion;
+  if (trend === 'ACCELERATING') return format(t.accelerating, { percent: Math.round(accelerationRatePercent ?? 0) });
+  if (trend === 'DECELERATING') return format(t.decelerating, { percent: Math.round(accelerationRatePercent ?? 0) });
+  return t.stable;
 }
 
-function confidenceLabel(confidence: SkuAnalysis['forecast']['confidence']): string {
-  if (confidence === 'HIGH') return '높음';
-  if (confidence === 'MEDIUM') return '보통';
-  if (confidence === 'LOW') return '낮음';
-  return '-';
+function confidenceLabel(confidence: SkuAnalysis['forecast']['confidence'], t: DetailText): string {
+  return confidence === 'HIGH' || confidence === 'MEDIUM' || confidence === 'LOW' ? t.confidenceLevels[confidence] : '-';
 }
 
-function thresholdSourceLabel(source: SkuAnalysis['riskThresholds']['source']): string {
-  if (source === 'manual') return '관리자가 직접 설정한 값입니다.';
-  if (source === 'legacy') return '업로드 파일이 제공한 값입니다.';
-  if (source === 'auto') return '최소 7일이 관측된 구간의 추정 소진 속도로 자동 계산된 값입니다.';
-  return '소진 이력이 부족해 위험 판정을 할 수 없습니다(데이터 축적 중).';
+function thresholdSourceLabel(source: SkuAnalysis['riskThresholds']['source'], t: DetailText): string {
+  if (source === 'manual' || source === 'legacy' || source === 'auto') return t.thresholdSource[source];
+  return t.thresholdSource.none;
 }

@@ -4,6 +4,8 @@ import type { Dictionary } from '../dictionary';
 export const ko = {
   risk: { DANGER: '위험', WARNING: '주의', UNKNOWN: '개별 확인', NORMAL: '기준 내' },
   reliability: { HIGH: '상', MEDIUM: '중', LOW: '하', label: '신뢰도 {level}' },
+  defaultWarehouse: '기본 창고',
+  eventTypes: { INBOUND: '입고', RETURN: '반품', ADJUSTMENT: '재고조정', PROMOTION: '프로모션', SOLD_OUT: '품절', OTHER: '기타' },
   reasons: {
     soldOut: '품절',
     b2b: 'B2B 개별 판단',
@@ -41,6 +43,8 @@ export const ko = {
 export const en: Dictionary<typeof ko> = {
   risk: { DANGER: 'Danger', WARNING: 'Watch', UNKNOWN: 'Check', NORMAL: 'OK' },
   reliability: { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low', label: 'Reliability {level}' },
+  defaultWarehouse: 'Main warehouse',
+  eventTypes: { INBOUND: 'Inbound', RETURN: 'Return', ADJUSTMENT: 'Adjustment', PROMOTION: 'Promotion', SOLD_OUT: 'Sold out', OTHER: 'Other' },
   reasons: {
     soldOut: 'Sold out',
     b2b: 'B2B — judge individually',

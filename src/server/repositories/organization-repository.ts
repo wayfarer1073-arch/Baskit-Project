@@ -11,6 +11,8 @@ export interface CreateWorkspaceInput {
   adminName: string;
   email: string;
   password: string;
+  /** 기본 창고 이름 — 가입 화면 언어로. 없으면 한국어. */
+  defaultWarehouseName?: string;
 }
 
 /** 가입 = 새 워크스페이스 + 첫 관리자 + 기본 창고 하나 + 기본 설정을 한 트랜잭션으로 만든다. */
@@ -24,7 +26,7 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
         data: { organizationId: organization.id, email, name: input.adminName, passwordHash, role: 'ADMIN', termsAcceptedAt: new Date() },
         select: { id: true, email: true, name: true },
       });
-      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: '기본 창고', sortOrder: 1 } });
+      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: input.defaultWarehouseName ?? '기본 창고', sortOrder: 1 } });
       await tx.settings.create({ data: { organizationId: organization.id, ...DEFAULT_RISK_SETTINGS } });
       return { organization, user };
     });

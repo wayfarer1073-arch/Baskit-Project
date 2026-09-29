@@ -4,13 +4,16 @@
  */
 import * as dashboard from './dashboard';
 import * as domain from './domain';
+import * as inventory from './inventory';
 
 export const ko = {
   dashboard: dashboard.ko,
   domain: domain.ko,
+  inventory: inventory.ko,
 };
 
 export const en = {
   dashboard: dashboard.en,
   domain: domain.en,
+  inventory: inventory.en,
 };

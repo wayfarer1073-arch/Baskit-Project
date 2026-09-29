@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   let created;
   try {
-    created = await createWorkspace(parsed.data);
+    created = await createWorkspace({ ...parsed.data, defaultWarehouseName: (await getMessages()).domain.defaultWarehouse });
   } catch (e) {
     if (e instanceof EmailTakenError) return NextResponse.json({ error: e.message }, { status: 409 });
     throw e;
