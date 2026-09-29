@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatKstDateTime } from '@/lib/date';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface PackagingUploadStatus {
   warehouseId: string;
@@ -25,6 +27,7 @@ interface SkuPackagingManagementProps {
 }
 
 export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }: SkuPackagingManagementProps) {
+  const t = useI18n().m.settingsScreens;
   const [statuses, setStatuses] = useState(initialStatuses);
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '');
   const [file, setFile] = useState<File | null>(null);
@@ -40,7 +43,7 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
 
   async function handleUpload() {
     if (!warehouseId || !file) {
-      toast.error('창고와 Excel 파일을 선택하세요.');
+      toast.error(t.common.pickWarehouseAndFile);
       return;
     }
     setUploading(true);
@@ -51,15 +54,15 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
       const res = await fetch('/api/packaging', { method: 'POST', body: formData });
       const body = await res.json();
       if (!res.ok) {
-        toast.error(body.error ?? body.issues?.[0]?.message ?? '업로드에 실패했습니다.');
+        toast.error(body.error ?? body.issues?.[0]?.message ?? t.common.uploadFailed);
         return;
       }
-      const unmatchedText = body.unmatchedProductCodes.length > 0 ? ` · 인식되지 않은 상품코드 ${body.unmatchedProductCodes.length}건` : '';
-      toast.success(`${body.updatedCount}건 반영${unmatchedText}`);
+      const unmatchedText = body.unmatchedProductCodes.length > 0 ? format(t.common.unmatchedCodes, { count: body.unmatchedProductCodes.length }) : '';
+      toast.success(format(t.common.uploadResult, { count: body.updatedCount }) + unmatchedText);
       await refreshStatuses();
       setFile(null);
     } catch {
-      toast.error('네트워크 오류로 업로드에 실패했습니다.');
+      toast.error(t.common.uploadNetworkFailed);
     } finally {
       setUploading(false);
     }
@@ -69,9 +72,9 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
     <Card>
       <CardHeader>
         <div className="flex items-center gap-1.5">
-          <CardTitle>SKU 추가 정보 관리</CardTitle>
+          <CardTitle>{t.packaging.title}</CardTitle>
           <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-            SKU별 EA/BOX·EA/PLT·상품바코드를 관리합니다.
+            {t.packaging.description}
           </InfoTooltip>
         </div>
       </CardHeader>
@@ -79,7 +82,7 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
         {isAdmin && (
           <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/20 p-3">
             <div className="space-y-1.5">
-              <Label htmlFor="packaging-warehouse">창고</Label>
+              <Label htmlFor="packaging-warehouse">{t.common.warehouse}</Label>
               <Select value={warehouseId} onValueChange={setWarehouseId}>
                 <SelectTrigger id="packaging-warehouse" className="w-32">
                   <SelectValue />
@@ -94,17 +97,17 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="packaging-file">SKU 추가 정보 Excel (.xls, .xlsx)</Label>
+              <Label htmlFor="packaging-file">{t.packaging.file}</Label>
               <Input id="packaging-file" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
             </div>
             <Button onClick={handleUpload} disabled={uploading || !file}>
               <UploadCloud className="size-4" />
-              {uploading ? '업로드 중...' : '업로드'}
+              {uploading ? t.common.uploading : t.common.upload}
             </Button>
             <Button variant="outline" size="sm" className="text-foreground hover:text-brand-accent" asChild>
               <a href="/api/templates/packaging">
                 <Download className="size-3.5" />
-                샘플파일 다운로드
+                {t.common.sample}
               </a>
             </Button>
           </div>
@@ -119,10 +122,10 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
               </div>
               {s.lastUpload ? (
                 <span className="text-xs text-muted-foreground">
-                  마지막 업데이트 {formatKstDateTime(s.lastUpload.uploadedAt)} · {s.lastUpload.uploadedByName} · {s.lastUpload.sourceFileName} ({s.lastUpload.rowCount}건)
+                  {format(t.packaging.lastUpdate, { date: formatKstDateTime(s.lastUpload.uploadedAt), user: s.lastUpload.uploadedByName, file: s.lastUpload.sourceFileName, count: s.lastUpload.rowCount })}
                 </span>
               ) : (
-                <span className="text-xs text-muted-foreground">업데이트 이력 없음</span>
+                <span className="text-xs text-muted-foreground">{t.packaging.noHistory}</span>
               )}
             </div>
           ))}

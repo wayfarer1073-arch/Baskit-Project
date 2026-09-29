@@ -22,10 +22,12 @@ import { SettingsTabs } from '@/components/settings/settings-tabs';
 import { isSettingsTab, SEGMENT_TAB } from '@/lib/settings-tabs';
 import { SEGMENT_COOKIE, isSegment } from '@/lib/segments';
 import { todayKstDateString } from '@/lib/date';
+import { getMessages } from '@/server/i18n';
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const tenant = await requireTenant();
   const isAdmin = tenant.isAdmin;
+  const t = (await getMessages()).settingsScreens.page;
   const params = await searchParams;
 
   const [
@@ -77,8 +79,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">설정</h1>
-        <p className="mt-1 text-sm text-muted-foreground">대시보드마다 필요한 설정을 나눠 두었어요.{isAdmin ? '' : ' 판단 기준 변경은 관리자만 할 수 있어요.'}</p>
+        <h1 className="text-lg font-semibold">{t.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t.intro}
+          {isAdmin ? '' : t.adminOnly}</p>
       </div>
       <SettingsTabs
         initialTab={initialTab}

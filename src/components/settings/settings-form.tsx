@@ -27,6 +27,8 @@ import { MergeLinkManagement, type MergeLinkView } from '@/components/settings/m
 import { ReorderSettings, type ReorderDefaults } from '@/components/settings/reorder-settings';
 import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface SkuVisibilityRow {
   skuId: string;
@@ -126,6 +128,8 @@ export function DailySettings({
   reorderDefaults,
   supplierPolicies,
 }: DailySettingsProps) {
+  const { m } = useI18n();
+  const t = m.settingsScreens;
   const [thresholds, setThresholds] = useState(settings);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
@@ -138,9 +142,9 @@ export function DailySettings({
         body: JSON.stringify(thresholds),
       });
       if (!res.ok) throw new Error();
-      toast.success('설정이 저장되었습니다.');
+      toast.success(t.thresholds.saved);
     } catch {
-      toast.error('저장에 실패했습니다.');
+      toast.error(t.common.saveFailed);
     } finally {
       setSavingThresholds(false);
     }
@@ -151,34 +155,33 @@ export function DailySettings({
       <Card>
         <CardHeader>
           <div className="flex items-center gap-1.5">
-            <CardTitle>위험 / 정체 판단 기준</CardTitle>
+            <CardTitle>{t.thresholds.title}</CardTitle>
             <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-              상품마다 위험/경고 수량을 직접 정할 수 있어요. 따로 정하지 않으면, 아래 &quot;품절 임박 기준&quot;·&quot;관리 필요 경계&quot;에 입력한 일수를 그 상품의 최근 판매
-              속도에 맞춰 자동으로 계산합니다. 이 기준은 재고가 앞으로 며칠 버틸 수 있는지, 오래 안 팔린 상품인지, 너무 많이 쌓인 상품인지를 판단할 때도 똑같이 쓰여요.
+              {t.thresholds.description}
             </InfoTooltip>
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ThresholdField
-            label="품절 임박 기준 (Coverage ≤ N출고일)"
+            label={t.thresholds.stockoutSoon}
             value={thresholds.stockoutSoonDays}
             onChange={(v) => setThresholds((p) => ({ ...p, stockoutSoonDays: v }))}
             disabled={!isAdmin}
           />
           <ThresholdField
-            label="관리 필요 / 정상 경계 (Coverage ≤ N출고일)"
+            label={t.thresholds.manageMax}
             value={thresholds.manageMaxDays}
             onChange={(v) => setThresholds((p) => ({ ...p, manageMaxDays: v }))}
             disabled={!isAdmin}
           />
           <ThresholdField
-            label="과잉재고 후보 기준 (Coverage ≥ N출고일)"
+            label={t.thresholds.overstock}
             value={thresholds.overstockCoverageDays}
             onChange={(v) => setThresholds((p) => ({ ...p, overstockCoverageDays: v }))}
             disabled={!isAdmin}
           />
           <ThresholdField
-            label="장기 정체 기준일 (추정 소진 미관측 ≥ N출고일)"
+            label={t.thresholds.stagnant}
             value={thresholds.stagnantDays}
             onChange={(v) => setThresholds((p) => ({ ...p, stagnantDays: v }))}
             disabled={!isAdmin}
@@ -187,7 +190,7 @@ export function DailySettings({
         {isAdmin && (
           <CardContent className="pt-0">
             <Button onClick={saveThresholds} disabled={savingThresholds}>
-              {savingThresholds ? '저장 중...' : '설정 저장'}
+              {savingThresholds ? t.common.saving : t.thresholds.submit}
             </Button>
           </CardContent>
         )}
@@ -220,6 +223,8 @@ function ThresholdField({ label, value, onChange, disabled }: { label: string; v
 const HIDDEN_SKU_PAGE_SIZE = 7;
 
 function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; initialSkus: SkuVisibilityRow[] }) {
+  const { m } = useI18n();
+  const t = m.settingsScreens;
   const [skus, setSkus] = useState(initialSkus);
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -271,13 +276,13 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
       });
       if (!res.ok) throw new Error();
       setSkus((prev) => prev.map((s) => (s.skuId === skuId ? { ...s, isHiddenFromDashboard: hidden } : s)));
-      toast.success(hidden ? '대시보드에서 숨겼습니다.' : '대시보드에 다시 표시합니다.');
+      toast.success(hidden ? t.visibility.hidden : t.visibility.shown);
       if (selected?.skuId === skuId) {
         setSelected(null);
         setQuery('');
       }
     } catch {
-      toast.error('변경에 실패했습니다.');
+      toast.error(t.common.changeFailed);
     } finally {
       setUpdatingSkuId(null);
     }
@@ -287,17 +292,19 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
     <Card>
       <CardHeader>
         <div className="flex items-center gap-1.5">
-          <CardTitle>SKU 대시보드 노출 관리</CardTitle>
+          <CardTitle>{t.visibility.title}</CardTitle>
           <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-            특정 상품을 화면(요약 숫자·그래프·재고 표·알림·다운로드 파일)에서 안 보이게 숨길 수 있어요. 업로드한 자료는 그대로 남아 있고, 언제든 다시 보이게 되돌릴 수 있습니다.
+            {t.visibility.description}
           </InfoTooltip>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>숨김 처리된 SKU {hiddenSkus.length > 0 && `(${hiddenSkus.length})`}</Label>
+          <Label>
+            {t.visibility.hiddenList} {hiddenSkus.length > 0 && `(${hiddenSkus.length})`}
+          </Label>
           {hiddenSkus.length === 0 ? (
-            <p className="text-xs text-muted-foreground">숨김 처리된 SKU가 없습니다.</p>
+            <p className="text-xs text-muted-foreground">{t.visibility.noneHidden}</p>
           ) : (
             <>
               <div className="space-y-1.5">
@@ -308,13 +315,13 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
               {hiddenTotalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 text-sm">
                   <Button variant="outline" size="sm" disabled={hiddenCurrentPage <= 1} onClick={() => setHiddenPage(hiddenCurrentPage - 1)}>
-                    이전
+                    {t.common.prev}
                   </Button>
                   <span className="text-xs text-muted-foreground">
                     {hiddenCurrentPage} / {hiddenTotalPages}
                   </span>
                   <Button variant="outline" size="sm" disabled={hiddenCurrentPage >= hiddenTotalPages} onClick={() => setHiddenPage(hiddenCurrentPage + 1)}>
-                    다음
+                    {t.common.next}
                   </Button>
                 </div>
               )}
@@ -326,12 +333,12 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
           <>
             <Separator />
             <div className="space-y-2">
-              <Label htmlFor="sku-visibility-search">상품코드 또는 상품명으로 검색해서 숨기기</Label>
+              <Label htmlFor="sku-visibility-search">{t.visibility.searchLabel}</Label>
               <div className="flex max-w-sm items-start gap-2">
                 <div ref={searchWrapperRef} className="min-w-0 flex-1">
                   <Input
                     id="sku-visibility-search"
-                    placeholder="예: 00001 또는 상품명 일부"
+                    placeholder={t.visibility.searchPlaceholder}
                     value={selected ? `${selected.warehouseCode} · ${selected.productName} (${selected.productCode})` : query}
                     onChange={(e) => {
                       setSelected(null);
@@ -350,7 +357,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
                         style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width }}
                       >
                         {searchResults.length === 0 ? (
-                          <p className="p-2 text-xs text-muted-foreground">일치하는 SKU가 없습니다.</p>
+                          <p className="p-2 text-xs text-muted-foreground">{t.visibility.noMatch}</p>
                         ) : (
                           searchResults.map((sku) => (
                             <button
@@ -379,7 +386,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
                   disabled={!selected || updatingSkuId === selected?.skuId}
                   onClick={() => selected && setHidden(selected.skuId, true)}
                 >
-                  숨기기
+                  {t.visibility.hide}
                 </Button>
               </div>
             </div>
@@ -391,6 +398,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
 }
 
 function SkuVisibilityItem({ sku, isAdmin, updating, onToggle }: { sku: SkuVisibilityRow; isAdmin: boolean; updating: boolean; onToggle: (hidden: boolean) => void }) {
+  const t = useI18n().m.settingsScreens;
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
       <div className="min-w-0">
@@ -402,12 +410,12 @@ function SkuVisibilityItem({ sku, isAdmin, updating, onToggle }: { sku: SkuVisib
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           {sku.productCode}
-          {!sku.isActive && ' · 최신 스냅샷에 없음'}
+          {!sku.isActive && t.visibility.notInLatest}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <span className="text-xs text-muted-foreground">{sku.isHiddenFromDashboard ? '숨김' : '표시 중'}</span>
-        <Switch checked={sku.isHiddenFromDashboard} onCheckedChange={onToggle} disabled={!isAdmin || updating} aria-label={`${sku.productName} 대시보드 숨김`} />
+        <span className="text-xs text-muted-foreground">{sku.isHiddenFromDashboard ? t.visibility.stateHidden : t.visibility.stateShown}</span>
+        <Switch checked={sku.isHiddenFromDashboard} onCheckedChange={onToggle} disabled={!isAdmin || updating} aria-label={format(t.visibility.toggleAria, { name: sku.productName })} />
       </div>
     </div>
   );
@@ -422,6 +430,8 @@ function UserManagement({
   onUsersChange: (users: { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string }[]) => void;
   currentUserId: string | null;
 }) {
+  const { m } = useI18n();
+  const t = m.settingsScreens;
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -439,10 +449,10 @@ function UserManagement({
       });
       const body = await res.json();
       if (!res.ok) {
-        toast.error(body.error ?? '추가에 실패했습니다.');
+        toast.error(body.error ?? t.common.addFailed);
         return;
       }
-      toast.success('사용자가 추가되었습니다.');
+      toast.success(t.users.added);
       onUsersChange([...users, body.user]);
       setEmail('');
       setName('');
@@ -454,19 +464,19 @@ function UserManagement({
   }
 
   async function removeUser(user: { id: string; name: string }) {
-    if (!confirm(`${user.name} 계정을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!confirm(format(t.users.deleteConfirm, { name: user.name }))) return;
     setDeletingUserId(user.id);
     try {
       const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body.error ?? '삭제에 실패했습니다.');
+        toast.error(body.error ?? t.common.deleteFailed);
         return;
       }
       onUsersChange(users.filter((u) => u.id !== user.id));
-      toast.success('계정을 삭제했습니다.');
+      toast.success(t.users.deleted);
     } catch {
-      toast.error('네트워크 오류로 삭제에 실패했습니다.');
+      toast.error(t.common.deleteNetworkFailed);
     } finally {
       setDeletingUserId(null);
     }
@@ -475,8 +485,8 @@ function UserManagement({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>사용자 관리</CardTitle>
-        <CardDescription>조회 전용·멤버·관리자 계정을 직접 만들거나 삭제할 수 있어요. 본인이 비밀번호를 정하게 하려면 아래 &apos;팀 초대&apos;를 쓰세요.</CardDescription>
+        <CardTitle>{t.users.title}</CardTitle>
+        <CardDescription>{t.users.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
@@ -484,21 +494,21 @@ function UserManagement({
             const isSelf = u.id === currentUserId;
             // 워크스페이스에 관리자가 한 명만 남으면 그 계정은 지울 수 없다(서버도 같은 규칙으로 막는다).
             const isProtected = u.role === 'ADMIN' && users.filter((x) => x.role === 'ADMIN').length <= 1;
-            const disabledReason = isProtected ? '마지막 관리자 계정은 삭제할 수 없습니다.' : isSelf ? '본인 계정은 삭제할 수 없습니다.' : undefined;
+            const disabledReason = isProtected ? t.users.lastAdmin : isSelf ? t.users.self : undefined;
             return (
               <div key={u.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
                 <div>
                   <span className="font-medium">{u.name}</span> <span className="text-muted-foreground">{u.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{u.role === 'ADMIN' ? '관리자' : u.role === 'VIEWER' ? '조회 전용' : '멤버'}</Badge>
+                  <Badge variant="outline">{u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}</Badge>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:text-muted-foreground"
                     disabled={isSelf || isProtected || deletingUserId === u.id}
                     onClick={() => removeUser(u)}
-                    aria-label={`${u.name} 계정 삭제`}
+                    aria-label={format(t.users.deleteAria, { name: u.name })}
                     title={disabledReason}
                   >
                     <Trash2 className="size-3.5" />
@@ -511,33 +521,33 @@ function UserManagement({
         <Separator />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="new-user-email">이메일</Label>
+            <Label htmlFor="new-user-email">{t.users.email}</Label>
             <Input id="new-user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="new-user-name">이름</Label>
+            <Label htmlFor="new-user-name">{t.users.name}</Label>
             <Input id="new-user-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="new-user-password">임시 비밀번호 (8자 이상)</Label>
+            <Label htmlFor="new-user-password">{t.users.password}</Label>
             <Input id="new-user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="new-user-role">권한</Label>
+            <Label htmlFor="new-user-role">{t.users.role}</Label>
             <Select value={role} onValueChange={(v) => setRole(v as 'VIEWER' | 'MEMBER' | 'ADMIN')}>
               <SelectTrigger id="new-user-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="VIEWER">조회 전용</SelectItem>
-                <SelectItem value="MEMBER">멤버</SelectItem>
-                <SelectItem value="ADMIN">관리자</SelectItem>
+                <SelectItem value="VIEWER">{m.nav.roles.viewer}</SelectItem>
+                <SelectItem value="MEMBER">{m.nav.roles.member}</SelectItem>
+                <SelectItem value="ADMIN">{m.nav.roles.admin}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
         <Button onClick={addUser} disabled={submitting || !email || !name || password.length < 8}>
-          사용자 추가
+          {t.users.submit}
         </Button>
       </CardContent>
     </Card>

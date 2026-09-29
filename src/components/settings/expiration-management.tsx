@@ -15,6 +15,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination } from '@/components/ui/pagination';
 import { formatKstDate, todayKstDateString } from '@/lib/date';
 import { DEFAULT_EXPIRATION_RISK_DAYS } from '@/domain/inventory/types';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 const PAGE_SIZE = 7;
 
@@ -50,14 +52,17 @@ function daysUntil(dateStr: string): number {
   return Math.round(diffMs / 86_400_000);
 }
 
-function expirationBadge(days: number): { label: string; className: string } {
-  if (days < 0) return { label: `만료 ${Math.abs(days)}일 경과`, className: 'bg-status-danger-bg text-status-danger' };
+function expirationBadge(days: number, expiredLabel: string): { label: string; className: string } {
+  if (days < 0) return { label: format(expiredLabel, { days: Math.abs(days) }), className: 'bg-status-danger-bg text-status-danger' };
   if (days <= 7) return { label: `D-${days}`, className: 'bg-status-danger-bg text-status-danger' };
   if (days <= 30) return { label: `D-${days}`, className: 'bg-status-warning-bg text-status-warning' };
   return { label: `D-${days}`, className: 'bg-muted text-muted-foreground' };
 }
 
 export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: ExpirationManagementProps) {
+  const { m } = useI18n();
+  const c = m.settingsScreens.common;
+  const tx = m.settingsScreens.expiration;
   const [entries, setEntries] = useState(initialEntries);
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '');
   const [file, setFile] = useState<File | null>(null);
@@ -156,7 +161,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
 
   async function handleUpload() {
     if (!warehouseId || !file) {
-      toast.error('창고와 Excel 파일을 선택하세요.');
+      toast.error(c.pickWarehouseAndFile);
       return;
     }
     setUploading(true);
@@ -167,15 +172,15 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
       const res = await fetch('/api/expiration', { method: 'POST', body: formData });
       const body = await res.json();
       if (!res.ok) {
-        toast.error(body.error ?? body.issues?.[0]?.message ?? '업로드에 실패했습니다.');
+        toast.error(body.error ?? body.issues?.[0]?.message ?? c.uploadFailed);
         return;
       }
-      const unmatchedText = body.unmatchedProductCodes.length > 0 ? ` · 인식되지 않은 상품코드 ${body.unmatchedProductCodes.length}건` : '';
-      toast.success(`${body.updatedCount}건 반영${unmatchedText}`);
+      const unmatchedText = body.unmatchedProductCodes.length > 0 ? format(c.unmatchedCodes, { count: body.unmatchedProductCodes.length }) : '';
+      toast.success(format(c.uploadResult, { count: body.updatedCount }) + unmatchedText);
       await refreshEntries();
       setFile(null);
     } catch {
-      toast.error('네트워크 오류로 업로드에 실패했습니다.');
+      toast.error(c.uploadNetworkFailed);
     } finally {
       setUploading(false);
     }
@@ -190,12 +195,12 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
 
   async function saveEdit(entry: ExpirationLotRow) {
     if (!editingDateValue) {
-      toast.error('날짜를 입력하세요.');
+      toast.error(tx.dateRequired);
       return;
     }
     const riskDays = Number(editingRiskDaysValue);
     if (!Number.isInteger(riskDays) || riskDays < 0) {
-      toast.error('위험 판정 일수는 0 이상의 정수여야 합니다.');
+      toast.error(tx.riskDaysInvalid);
       return;
     }
     setSaving(true);
@@ -207,7 +212,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
       });
       const lotBody = await lotRes.json().catch(() => ({}));
       if (!lotRes.ok) {
-        toast.error(lotBody.error ?? '수정에 실패했습니다.');
+        toast.error(lotBody.error ?? c.updateFailed);
         return;
       }
       const riskRes = await fetch(`/api/expiration/${entry.skuId}`, {
@@ -216,11 +221,11 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
         body: JSON.stringify({ expirationRiskDays: riskDays }),
       });
       if (!riskRes.ok) throw new Error();
-      toast.success('소비기한을 수정했습니다.');
+      toast.success(tx.updated);
       setEditingLotId(null);
       await refreshEntries();
     } catch {
-      toast.error('네트워크 오류로 수정에 실패했습니다.');
+      toast.error(c.updateNetworkFailed);
     } finally {
       setSaving(false);
     }
@@ -229,7 +234,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
   async function applyBulkRiskDays() {
     const riskDays = Number(bulkRiskDaysInput);
     if (!Number.isInteger(riskDays) || riskDays < 0) {
-      toast.error('위험 판정 일수는 0 이상의 정수여야 합니다.');
+      toast.error(tx.riskDaysInvalid);
       return;
     }
     setBulkApplying(true);
@@ -241,36 +246,36 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body.error ?? '일괄 적용에 실패했습니다.');
+        toast.error(body.error ?? tx.bulkFailed);
         return;
       }
       setEntries((prev) => prev.map((e) => (selectedSkuIds.has(e.skuId) ? { ...e, expirationRiskDays: riskDays } : e)));
-      toast.success(`${body.updatedCount}건에 위험 판정 일수를 적용했습니다.`);
+      toast.success(format(tx.bulkApplied, { count: body.updatedCount }));
       setSelectedSkuIds(new Set());
       setBulkRiskDaysInput('');
     } catch {
-      toast.error('네트워크 오류로 일괄 적용에 실패했습니다.');
+      toast.error(tx.bulkNetworkFailed);
     } finally {
       setBulkApplying(false);
     }
   }
 
   async function deleteLot(entry: ExpirationLotRow) {
-    if (!confirm(`${entry.productName} (로트 ${entry.lot})의 소비기한 항목을 삭제할까요?`)) return;
+    if (!confirm(format(tx.deleteConfirm, { name: entry.productName, lot: entry.lot }))) return;
 
     setDeletingLotId(entry.lotId);
     try {
       const res = await fetch(`/api/expiration/lots/${entry.lotId}`, { method: 'DELETE' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body.error ?? '삭제에 실패했습니다.');
+        toast.error(body.error ?? c.deleteFailed);
         return;
       }
       if (editingLotId === entry.lotId) setEditingLotId(null);
-      toast.success('소비기한 항목을 삭제했습니다.');
+      toast.success(tx.deleted);
       await refreshEntries();
     } catch {
-      toast.error('네트워크 오류로 삭제에 실패했습니다.');
+      toast.error(c.deleteNetworkFailed);
     } finally {
       setDeletingLotId(null);
     }
@@ -284,11 +289,11 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
 
   async function submitAddLot() {
     if (!addSelected) {
-      toast.error('상품을 선택하세요.');
+      toast.error(tx.pickProduct);
       return;
     }
     if (!addDateValue) {
-      toast.error('소비기한을 입력하세요.');
+      toast.error(tx.expiryRequired);
       return;
     }
     setAddSubmitting(true);
@@ -300,17 +305,17 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body.error ?? '추가에 실패했습니다.');
+        toast.error(body.error ?? c.addFailed);
         return;
       }
-      toast.success('로트를 추가했습니다.');
+      toast.success(tx.lotAdded);
       setAddSelected(null);
       setAddQuery('');
       setAddLotValue('');
       setAddDateValue('');
       await refreshEntries();
     } catch {
-      toast.error('네트워크 오류로 추가에 실패했습니다.');
+      toast.error(c.addNetworkFailed);
     } finally {
       setAddSubmitting(false);
     }
@@ -320,16 +325,12 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
     <Card>
       <CardHeader>
         <div className="flex items-center gap-1.5">
-          <CardTitle>소비기한 관리</CardTitle>
+          <CardTitle>{tx.title}</CardTitle>
           <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-            엑셀 파일(상품코드·상품명·로트·소비기한)을 올리면 그 창고에 등록된 상품에 소비기한을 자동으로 반영해요. 로트 번호를 비워두면 소비기한이
-            빠른 순서대로 A, B, C…가 자동으로 붙습니다. 목록에 없는 상품코드는 그냥 건너뜁니다. 엑셀 없이 아래에서 하나씩 직접 추가·수정·삭제할
-            수도 있어요.
+            {tx.description}
             <br />
             <br />
-            &quot;위험 판정 일수&quot;는 소비기한이 며칠 안 남았을 때 &quot;임박&quot;으로 알려줄지 정하는 기준이에요. 상품마다 다르게 정하거나,
-            여러 개를 한 번에 골라 같은 값으로 바꿀 수 있습니다. 대시보드에 보이는 소비기한은 그 상품이 가진 여러 로트 중 가장 빠른 날짜예요.
-            로트별 수량까지는 관리하지 않아 임박한 재고량이나 폐기 예상 금액은 계산하지 않습니다. 이미 출고돼 없어진 로트는 직접 지워 주세요.
+            {tx.riskHelp}
           </InfoTooltip>
         </div>
       </CardHeader>
@@ -337,7 +338,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
         {isAdmin && (
           <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/20 p-3">
             <div className="space-y-1.5">
-              <Label htmlFor="expiration-warehouse">창고</Label>
+              <Label htmlFor="expiration-warehouse">{c.warehouse}</Label>
               <Select value={warehouseId} onValueChange={setWarehouseId}>
                 <SelectTrigger id="expiration-warehouse" className="w-32">
                   <SelectValue />
@@ -352,17 +353,17 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="expiration-file">소비기한 Excel (.xls, .xlsx)</Label>
+              <Label htmlFor="expiration-file">{tx.file}</Label>
               <Input id="expiration-file" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
             </div>
             <Button onClick={handleUpload} disabled={uploading || !file}>
               <UploadCloud className="size-4" />
-              {uploading ? '업로드 중...' : '업로드'}
+              {uploading ? c.uploading : c.upload}
             </Button>
             <Button variant="outline" size="sm" className="text-foreground hover:text-brand-accent" asChild>
               <a href="/api/templates/expiration">
                 <Download className="size-3.5" />
-                샘플파일 다운로드
+                {c.sample}
               </a>
             </Button>
           </div>
@@ -370,10 +371,10 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
 
         {isAdmin && (
           <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-            <Label>로트 직접 추가</Label>
+            <Label>{tx.addLot}</Label>
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1.5">
-                <Label htmlFor="add-lot-warehouse" className="text-[11px] text-muted-foreground">창고</Label>
+                <Label htmlFor="add-lot-warehouse" className="text-[11px] text-muted-foreground">{c.warehouse}</Label>
                 <Select
                   value={addWarehouseId}
                   onValueChange={(v) => {
@@ -395,7 +396,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                 </Select>
               </div>
               <div className="relative space-y-1.5">
-                <Label htmlFor="add-lot-search" className="text-[11px] text-muted-foreground">상품코드 / 상품명</Label>
+                <Label htmlFor="add-lot-search" className="text-[11px] text-muted-foreground">{tx.product}</Label>
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                   <Input
@@ -405,16 +406,16 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                       setAddQuery(e.target.value);
                       setAddSelected(null);
                     }}
-                    placeholder="검색해서 선택"
+                    placeholder={tx.searchToPick}
                     className="h-8 w-56 pl-7 text-xs"
                   />
                 </div>
                 {!addSelected && addQuery.trim() !== '' && (
                   <div className="absolute top-full left-0 z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
                     {addSearching ? (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">검색 중...</div>
+                      <div className="px-3 py-2 text-xs text-muted-foreground">{c.searching}</div>
                     ) : addResults.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">일치하는 상품이 없습니다.</div>
+                      <div className="px-3 py-2 text-xs text-muted-foreground">{c.noMatch}</div>
                     ) : (
                       addResults.map((r) => (
                         <button
@@ -431,35 +432,35 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="add-lot-label" className="text-[11px] text-muted-foreground">로트 (비우면 자동)</Label>
+                <Label htmlFor="add-lot-label" className="text-[11px] text-muted-foreground">{tx.lotLabel}</Label>
                 <Input
                   id="add-lot-label"
                   value={addLotValue}
                   onChange={(e) => setAddLotValue(e.target.value)}
-                  placeholder="예: A"
+                  placeholder={tx.lotPlaceholder}
                   className="h-8 w-24 text-xs"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="add-lot-date" className="text-[11px] text-muted-foreground">소비기한</Label>
+                <Label htmlFor="add-lot-date" className="text-[11px] text-muted-foreground">{tx.expiry}</Label>
                 <Input id="add-lot-date" type="date" value={addDateValue} onChange={(e) => setAddDateValue(e.target.value)} className="h-8 w-36 text-xs" />
               </div>
               <Button size="sm" className="h-8 text-xs" onClick={submitAddLot} disabled={addSubmitting || !addSelected || !addDateValue}>
                 <Plus className="size-3.5" />
-                추가
+                {c.add}
               </Button>
             </div>
           </div>
         )}
 
         {entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground">등록된 소비기한이 없습니다.</p>
+          <p className="text-xs text-muted-foreground">{tx.empty}</p>
         ) : (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Tabs value={warehouseFilter} onValueChange={changeWarehouseFilter}>
                 <TabsList>
-                  <TabsTrigger value="ALL">전체</TabsTrigger>
+                  <TabsTrigger value="ALL">{c.all}</TabsTrigger>
                   {warehouses.map((w) => (
                     <TabsTrigger key={w.id} value={w.id}>
                       {w.name}
@@ -472,8 +473,8 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                 <Input
                   value={search}
                   onChange={(e) => changeSearch(e.target.value)}
-                  placeholder="상품명/상품코드 검색"
-                  aria-label="소비기한 목록 검색"
+                  placeholder={tx.searchPlaceholder}
+                  aria-label={tx.searchAria}
                   className="h-8 w-52 pl-7 text-xs"
                 />
               </div>
@@ -482,24 +483,24 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
             {isAdmin && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-2.5">
                 <label className="flex items-center gap-2 text-xs font-medium">
-                  <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleSelectAll(checked === true)} aria-label="전체 선택" />
-                  전체 선택
+                  <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleSelectAll(checked === true)} aria-label={tx.selectAll} />
+                  {tx.selectAll}
                 </label>
                 {selectedSkuIds.size > 0 && (
                   <>
-                    <span className="text-xs text-muted-foreground">{selectedSkuIds.size}개 선택됨</span>
+                    <span className="text-xs text-muted-foreground">{format(tx.selected, { count: selectedSkuIds.size })}</span>
                     <Input
                       value={bulkRiskDaysInput}
                       onChange={(e) => setBulkRiskDaysInput(e.target.value)}
-                      placeholder="위험 판정 일수"
+                      placeholder={tx.riskDaysPlaceholder}
                       inputMode="numeric"
                       className="h-8 w-32 text-xs"
                     />
                     <Button size="sm" className="h-8 text-xs" onClick={applyBulkRiskDays} disabled={bulkApplying || !bulkRiskDaysInput}>
-                      선택 항목 일괄 적용
+                      {tx.applySelected}
                     </Button>
                     <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelectedSkuIds(new Set())} disabled={bulkApplying}>
-                      선택 해제
+                      {tx.clearSelection}
                     </Button>
                   </>
                 )}
@@ -508,14 +509,14 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
 
             {filteredEntries.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                {search.trim() ? '검색 결과가 없습니다.' : '이 창고에는 등록된 소비기한이 없습니다.'}
+                {search.trim() ? tx.noResults : tx.emptyWarehouse}
               </p>
             )}
 
             {pageRows.map((entry) => {
               const isEditing = editingLotId === entry.lotId;
-              const badge = expirationBadge(daysUntil(entry.expirationDate));
-              const riskDaysLabel = `위험판정 D-${entry.expirationRiskDays ?? DEFAULT_EXPIRATION_RISK_DAYS}`;
+              const badge = expirationBadge(daysUntil(entry.expirationDate), tx.expired);
+              const riskDaysLabel = format(tx.riskDays, { days: entry.expirationRiskDays ?? DEFAULT_EXPIRATION_RISK_DAYS });
               return (
                 <div key={entry.lotId} className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -523,7 +524,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                       <Checkbox
                         checked={selectedSkuIds.has(entry.skuId)}
                         onCheckedChange={(checked) => toggleSelect(entry.skuId, checked === true)}
-                        aria-label={`${entry.productName} 선택`}
+                        aria-label={format(tx.selectAria, { name: entry.productName })}
                         className="shrink-0"
                       />
                     )}
@@ -534,9 +535,9 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                         </Badge>
                         <span className="truncate font-medium">{entry.productName}</span>
                         <Badge variant="secondary" className="shrink-0 text-[11px]">
-                          로트 {entry.lot}
+                          {format(tx.lot, { lot: entry.lot })}
                         </Badge>
-                        {entry.isAutoLot && <span className="shrink-0 text-[10px] text-muted-foreground">자동</span>}
+                        {entry.isAutoLot && <span className="shrink-0 text-[10px] text-muted-foreground">{tx.auto}</span>}
                       </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{entry.productCode}</div>
                     </div>
@@ -547,23 +548,23 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                         <Input
                           value={editingLotValue}
                           onChange={(e) => setEditingLotValue(e.target.value)}
-                          placeholder="로트(자동)"
+                          placeholder={tx.lotAutoPlaceholder}
                           className="h-8 w-20 text-xs"
-                          aria-label="로트명"
+                          aria-label={tx.lotAria}
                         />
                         <Input type="date" value={editingDateValue} onChange={(e) => setEditingDateValue(e.target.value)} className="h-8 w-36 text-xs" />
                         <Input
                           value={editingRiskDaysValue}
                           onChange={(e) => setEditingRiskDaysValue(e.target.value)}
-                          placeholder="위험판정 일수"
+                          placeholder={tx.riskDaysShort}
                           inputMode="numeric"
                           className="h-8 w-20 text-xs"
-                          aria-label="소비기한 위험 판정 일수"
+                          aria-label={tx.riskDaysAria}
                         />
-                        <Button size="icon" variant="ghost" className="size-7" disabled={saving} onClick={() => saveEdit(entry)} aria-label="저장">
+                        <Button size="icon" variant="ghost" className="size-7" disabled={saving} onClick={() => saveEdit(entry)} aria-label={c.save}>
                           <Check className="size-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="size-7" disabled={saving} onClick={() => setEditingLotId(null)} aria-label="취소">
+                        <Button size="icon" variant="ghost" className="size-7" disabled={saving} onClick={() => setEditingLotId(null)} aria-label={c.cancel}>
                           <X className="size-4" />
                         </Button>
                       </>
@@ -580,7 +581,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                               className="size-7"
                               disabled={deletingLotId === entry.lotId}
                               onClick={() => startEdit(entry)}
-                              aria-label={`${entry.productName} 로트 ${entry.lot} 수정`}
+                              aria-label={format(tx.editAria, { name: entry.productName, lot: entry.lot })}
                             >
                               <Pencil className="size-3.5" />
                             </Button>
@@ -590,7 +591,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
                               className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
                               disabled={deletingLotId === entry.lotId}
                               onClick={() => deleteLot(entry)}
-                              aria-label={`${entry.productName} 로트 ${entry.lot} 삭제`}
+                              aria-label={format(tx.deleteAria, { name: entry.productName, lot: entry.lot })}
                             >
                               <Trash2 className="size-3.5" />
                             </Button>

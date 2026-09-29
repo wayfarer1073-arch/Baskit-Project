@@ -6,12 +6,14 @@ import * as dashboard from './dashboard';
 import * as domain from './domain';
 import * as inventory from './inventory';
 import * as work from './work';
+import * as settingsScreens from './settings-screens';
 
 export const ko = {
   dashboard: dashboard.ko,
   domain: domain.ko,
   inventory: inventory.ko,
   work: work.ko,
+  settingsScreens: settingsScreens.ko,
 };
 
 export const en = {
@@ -19,4 +21,5 @@ export const en = {
   domain: domain.en,
   inventory: inventory.en,
   work: work.en,
+  settingsScreens: settingsScreens.en,
 };
