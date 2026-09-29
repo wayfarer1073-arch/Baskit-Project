@@ -17,7 +17,7 @@ import { ExpirationManagement } from '@/components/settings/expiration-managemen
 import { SkuPackagingManagement } from '@/components/settings/sku-packaging-management';
 import { HolidayManagement } from '@/components/settings/holiday-management';
 import { WarehouseManagement } from '@/components/settings/warehouse-management';
-import { PROTECTED_ADMIN_EMAIL } from '@/lib/constants';
+import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 
 interface SkuVisibilityRow {
@@ -83,10 +83,11 @@ interface DailySettingsProps {
   expirations: ExpirationLotRow[];
   holidays: { id: string; date: string; name: string }[];
   packagingStatuses: PackagingUploadStatus[];
+  allowNonWorkingDayUploads: boolean;
 }
 
 /** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
-export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses }: DailySettingsProps) {
+export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses, allowNonWorkingDayUploads }: DailySettingsProps) {
   const [thresholds, setThresholds] = useState(settings);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
@@ -159,6 +160,8 @@ export function DailySettings({ isAdmin, warehouses, settings, skus, expirations
       <ExpirationManagement isAdmin={isAdmin} warehouses={warehouses} initialEntries={expirations} />
 
       <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={packagingStatuses} />
+
+      <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
 
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
     </div>
@@ -440,8 +443,9 @@ function UserManagement({
         <div className="space-y-2">
           {users.map((u) => {
             const isSelf = u.id === currentUserId;
-            const isProtected = u.email.trim().toLowerCase() === PROTECTED_ADMIN_EMAIL;
-            const disabledReason = isProtected ? '최초 관리자 계정은 삭제할 수 없습니다.' : isSelf ? '본인 계정은 삭제할 수 없습니다.' : undefined;
+            // 워크스페이스에 관리자가 한 명만 남으면 그 계정은 지울 수 없다(서버도 같은 규칙으로 막는다).
+            const isProtected = u.role === 'ADMIN' && users.filter((x) => x.role === 'ADMIN').length <= 1;
+            const disabledReason = isProtected ? '마지막 관리자 계정은 삭제할 수 없습니다.' : isSelf ? '본인 계정은 삭제할 수 없습니다.' : undefined;
             return (
               <div key={u.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
                 <div>

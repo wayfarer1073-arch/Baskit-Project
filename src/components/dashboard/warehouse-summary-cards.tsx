@@ -22,8 +22,8 @@ interface WarehouseSummaryCardsProps {
 
 const ROWS: { label: string; format: (s: WarehouseSummary) => string }[] = [
   { label: '관리 SKU', format: (s) => `${formatNumber(s.skuCount)}개` },
-  { label: '평가 가능한 재고금액', format: (s) => s.snapshot.knownInventoryValue === null ? '평가 불가' : formatCurrency(s.snapshot.knownInventoryValue) },
-  { label: '평가 가능한 SKU 비율', format: (s) => s.snapshot.valuationCoverageRatio === null ? '산정 불가' : formatPercent(s.snapshot.valuationCoverageRatio) },
+  { label: '평가 가능한 재고금액', format: (s) => (s.snapshot.knownInventoryValue === null ? '평가 불가' : formatCurrency(s.snapshot.knownInventoryValue)) },
+  { label: '평가 가능한 SKU 비율', format: (s) => (s.snapshot.valuationCoverageRatio === null ? '산정 불가' : formatPercent(s.snapshot.valuationCoverageRatio)) },
   { label: '품절 SKU', format: (s) => `${s.snapshot.soldOutSkuCount}개` },
   { label: '위험 SKU', format: (s) => `${formatNumber(s.dangerSkuCount)}개 (${formatPercent(s.dangerRatio)})` },
   { label: '설정 기간 내 소진 추정', format: (s) => formatPercent(s.stockoutSoon30dRatio) },
@@ -37,7 +37,9 @@ export function WarehouseSummaryCards({ summaries: summariesInput, activeWarehou
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex flex-wrap items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <h2 className="text-base font-semibold">창고별 요약</h2>
-        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">창고 A/B/C는 서로 다른 상품을 관리하는 별개의 공간이에요. 어느 창고가 더 잘하고 있는지 비교하는 표가 아닙니다.</InfoTooltip>
+        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          창고마다 서로 다른 상품을 관리하는 별개의 공간이에요. 어느 창고가 더 잘하고 있는지 비교하는 표가 아닙니다.
+        </InfoTooltip>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth: 560 }}>

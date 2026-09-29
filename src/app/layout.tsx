@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Geist_Mono, Noto_Sans_KR } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { I18nProvider } from '@/components/i18n/i18n-provider';
+import { getLocale, getMessages } from '@/server/i18n';
 import './globals.css';
 
 // 본문 텍스트 대부분이 한글이므로 라틴 전용 폰트 대신 한글 전용 웨이트를 갖춘 서체를 기본으로 쓴다.
@@ -16,22 +18,26 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
-  title: 'Limenote',
-  description: '창고별 재고 Snapshot 기반 재고관리 대시보드',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const m = await getMessages();
+  return { title: m.common.appName, description: m.common.metaDescription };
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
+  const m = await getMessages();
   return (
-    <html lang="ko" className={`${notoSansKr.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang={locale} className={`${notoSansKr.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
         >
-          본문으로 건너뛰기
+          {m.common.skipToContent}
         </a>
-        <TooltipProvider>{children}</TooltipProvider>
+        <I18nProvider locale={locale}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </I18nProvider>
         <Toaster position="top-center" richColors />
       </body>
     </html>

@@ -63,6 +63,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             expirations={expirations}
             holidays={holidays}
             packagingStatuses={packagingStatuses}
+            allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
           />
         }
         periodic={<PeriodicSettings isAdmin={isAdmin} recountDays={segmentSettings.periodicRecountDays} stockoutSoonDays={settings.stockoutSoonDays} />}

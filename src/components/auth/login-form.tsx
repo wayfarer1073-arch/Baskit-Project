@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 export function LoginForm() {
+  const { m } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -29,7 +31,7 @@ export function LoginForm() {
     });
     setLoading(false);
     if (result?.error) {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      setError(m.auth.loginFailed);
       return;
     }
     router.push(callbackUrl);
@@ -41,11 +43,11 @@ export function LoginForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email">이메일</Label>
+            <Label htmlFor="email">{m.auth.email}</Label>
             <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">비밀번호</Label>
+            <Label htmlFor="password">{m.auth.password}</Label>
             <Input id="password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           {error && (
@@ -54,7 +56,7 @@ export function LoginForm() {
             </p>
           )}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '로그인 중...' : '로그인'}
+            {loading ? m.auth.loggingIn : m.auth.loginButton}
           </Button>
         </form>
       </CardContent>

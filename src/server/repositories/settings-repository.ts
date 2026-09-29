@@ -40,11 +40,13 @@ export interface SegmentSettings {
   periodicRecountDays: number;
   /** 매장 발주 예측: 남은 매출 여유가 충족 매출의 이 퍼센트 이하면 '발주 확인 필요'. */
   storeCheckRemainingPct: number;
+  /** 일일 재고 연동: 주말·등록 휴무일에도 업로드를 받을지. */
+  allowNonWorkingDayUploads: boolean;
 }
 
 export async function getSegmentSettings(orgId: string): Promise<SegmentSettings> {
   const row = await ensureSettingsRow(orgId);
-  return { periodicRecountDays: row.periodicRecountDays, storeCheckRemainingPct: row.storeCheckRemainingPct };
+  return { periodicRecountDays: row.periodicRecountDays, storeCheckRemainingPct: row.storeCheckRemainingPct, allowNonWorkingDayUploads: row.allowNonWorkingDayUploads };
 }
 
 export async function updateSegmentSettings(orgId: string, input: Partial<SegmentSettings>) {

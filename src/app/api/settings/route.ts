@@ -12,6 +12,7 @@ const schema = z
     stagnantDays: z.number().int().min(1).max(365),
     periodicRecountDays: z.number().int().min(1).max(365),
     storeCheckRemainingPct: z.number().int().min(5).max(80),
+    allowNonWorkingDayUploads: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0);
@@ -25,13 +26,9 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: '입력값이 올바르지 않습니다.' }, { status: 400 });
 
-  const { periodicRecountDays, storeCheckRemainingPct, ...risk } = parsed.data;
+  const { periodicRecountDays, storeCheckRemainingPct, allowNonWorkingDayUploads, ...risk } = parsed.data;
   if (Object.keys(risk).length > 0) await updateSettings(tenant.orgId, risk);
-  if (periodicRecountDays !== undefined || storeCheckRemainingPct !== undefined) {
-    await updateSegmentSettings(tenant.orgId, {
-      ...(periodicRecountDays !== undefined ? { periodicRecountDays } : {}),
-      ...(storeCheckRemainingPct !== undefined ? { storeCheckRemainingPct } : {}),
-    });
-  }
+  const segment = Object.fromEntries(Object.entries({ periodicRecountDays, storeCheckRemainingPct, allowNonWorkingDayUploads }).filter(([, v]) => v !== undefined));
+  if (Object.keys(segment).length > 0) await updateSegmentSettings(tenant.orgId, segment);
   return NextResponse.json({ ok: true });
 }

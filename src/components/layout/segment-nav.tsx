@@ -7,6 +7,7 @@ import { CalendarDays, ClipboardList, LayoutDashboard, MessagesSquare, Settings,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SEGMENT_COOKIE, SEGMENT_META, SEGMENT_ORDER, isSegment, segmentForPath, type NavItem, type Segment } from '@/lib/segments';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 const NAV_ICONS: Record<NavItem['icon'], typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
@@ -45,6 +46,7 @@ interface SegmentSwitcherProps {
 export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, className }: SegmentSwitcherProps) {
   const labelId = `segment-switcher-label-${variant}`;
   const router = useRouter();
+  const { m } = useI18n();
 
   function change(value: string) {
     if (!isSegment(value)) return;
@@ -57,24 +59,21 @@ export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, clas
   return (
     <div className={cn('space-y-1.5', className)}>
       <p className={cn('px-3 text-[11px] font-medium tracking-wide', variant === 'sidebar' ? 'text-sidebar-muted-foreground' : 'text-muted-foreground')} id={labelId}>
-        대시보드 유형
+        {m.nav.dashboardType}
       </p>
       <Select value={segment} onValueChange={change}>
         <SelectTrigger
           aria-labelledby={labelId}
-          className={cn(
-            'h-auto w-full px-3 py-2 text-left text-sm font-medium',
-            variant === 'sidebar' && 'border-sidebar-border bg-sidebar-hover-bg text-sidebar-foreground',
-          )}
+          className={cn('h-auto w-full px-3 py-2 text-left text-sm font-medium', variant === 'sidebar' && 'border-sidebar-border bg-sidebar-hover-bg text-sidebar-foreground')}
         >
-          <SelectValue>{SEGMENT_META[segment].label}</SelectValue>
+          <SelectValue>{m.segments[segment].label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {SEGMENT_ORDER.map((value) => (
             <SelectItem key={value} value={value} className="py-2">
               <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{SEGMENT_META[value].label}</span>
-                <span className="text-xs text-muted-foreground">{SEGMENT_META[value].audience}</span>
+                <span className="text-sm font-medium">{m.segments[value].label}</span>
+                <span className="text-xs text-muted-foreground">{m.segments[value].audience}</span>
               </span>
             </SelectItem>
           ))}
@@ -91,10 +90,11 @@ interface SegmentNavLinksProps {
   isPlatformAdmin?: boolean;
 }
 
-const ADMIN_ITEM: NavItem = { href: '/admin', label: '운영자 콘솔', icon: 'admin' };
+const ADMIN_ITEM: NavItem = { href: '/admin', key: 'admin', label: '운영자 콘솔', icon: 'admin' };
 
 export function SegmentNavLinks({ segment, variant, onNavigate, isPlatformAdmin }: SegmentNavLinksProps) {
   const pathname = usePathname();
+  const { m } = useI18n();
   const items = isPlatformAdmin ? [...SEGMENT_META[segment].nav, ADMIN_ITEM] : SEGMENT_META[segment].nav;
   return (
     <>
@@ -116,7 +116,7 @@ export function SegmentNavLinks({ segment, variant, onNavigate, isPlatformAdmin 
             )}
           >
             <Icon className="size-[18px]" aria-hidden="true" />
-            {item.label}
+            {m.nav.items[item.key]}
           </Link>
         );
       })}

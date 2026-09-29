@@ -6,6 +6,8 @@ import { SegmentNavLinks, SegmentSwitcher, useActiveSegment } from '@/components
 import type { Segment } from '@/lib/segments';
 import { SignOutButton } from '@/components/layout/sign-out-button';
 import { postTagLabel, postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { LanguageSwitcher } from '@/components/i18n/language-switcher';
 
 export interface SidebarRecentPost {
   id: string;
@@ -25,14 +27,10 @@ interface AppSidebarProps {
 
 export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, recentPosts, isPlatformAdmin, className }: AppSidebarProps) {
   const segment = useActiveSegment(defaultSegment);
+  const { m } = useI18n();
 
   return (
-    <aside
-      className={cn(
-        'sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
-        className,
-      )}
-    >
+    <aside className={cn('sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground', className)}>
       <div className="flex items-center gap-2.5 px-5 py-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-icon.png" alt="" className="size-9 shrink-0" />
@@ -47,13 +45,13 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
       <SegmentSwitcher segment={segment} className="px-3 pb-3" />
 
       <nav className="flex flex-col gap-1 px-3 py-2">
-        <p className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">메뉴</p>
+        <p className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">{m.nav.menu}</p>
         <SegmentNavLinks segment={segment} variant="sidebar" isPlatformAdmin={isPlatformAdmin} />
       </nav>
 
       {recentPosts && recentPosts.length > 0 && (
         <div className="mt-auto flex flex-col gap-1 px-3 py-3">
-          <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">최근 게시글</p>
+          <p className="px-3 pb-1 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">{m.nav.recentPosts}</p>
           {recentPosts.map((post) => (
             <Link
               key={post.id}
@@ -75,6 +73,9 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
           <div className="text-sidebar-muted-foreground">{userRole}</div>
         </div>
         <SignOutButton className="text-sidebar-muted-foreground hover:bg-sidebar-hover-bg hover:text-sidebar-foreground" />
+      </div>
+      <div className="border-t border-sidebar-border px-4 py-2.5">
+        <LanguageSwitcher />
       </div>
     </aside>
   );

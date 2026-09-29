@@ -6,7 +6,11 @@ import { resolveInventoryCost } from '@/domain/inventory/costs';
 import type { Prisma } from '@prisma/client';
 import type { SkuDescriptor, DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import { attachIntervalInbounds, type DatedInbound } from '@/domain/inventory/inbounds';
-import { NO_HOLIDAYS } from '@/domain/inventory/shipping-calendar';
+import { NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
+
+/** 창고 하나의 달력 또는 창고별 달력을 돌려주는 함수. */
+type CalendarInput = ClosedDays | ((warehouseId: string) => ClosedDays);
+const calendarOf = (input: CalendarInput, warehouseId: string) => (typeof input === 'function' ? input(warehouseId) : input);
 
 /** 조직의 사용 중인(보관되지 않은) 창고에 속한 데이터만 보도록 하는 공통 조건. */
 function activeWarehouseOf(orgId: string) {
@@ -51,7 +55,11 @@ async function resolveSoldOutGraceSkuIds(orgId: string, warehouseId: string | un
  */
 async function resolveMockFilter(orgId: string, warehouseId?: string, asOfDate?: string): Promise<Prisma.InventorySnapshotWhereInput> {
   const realWarehouses = await prisma.inventorySnapshot.findMany({
-    where: { status: 'ACTIVE', isMock: false, warehouse: { organizationId: orgId }, ...(warehouseId ? { warehouseId } : {}),
+    where: {
+      status: 'ACTIVE',
+      isMock: false,
+      warehouse: { organizationId: orgId },
+      ...(warehouseId ? { warehouseId } : {}),
       ...(asOfDate ? { snapshotDate: { lte: new Date(`${asOfDate}T00:00:00.000Z`) } } : {}),
     },
     select: { warehouseId: true },
@@ -86,9 +94,19 @@ export async function loadInboundsBySku(skuIds: string[], asOfDate?: string): Pr
 
 // Shared projection avoids transferring unused item IDs, extra JSON and audit fields for every observation.
 const observationSelect = {
-  skuId: true, productName: true, option: true, barcode: true, location: true,
-  unitCost: true, unitCostProvided: true, totalCost: true, normalStock: true,
-  defectiveStock: true, incomingStock: true, warningQty: true, dangerQty: true,
+  skuId: true,
+  productName: true,
+  option: true,
+  barcode: true,
+  location: true,
+  unitCost: true,
+  unitCostProvided: true,
+  totalCost: true,
+  normalStock: true,
+  defectiveStock: true,
+  incomingStock: true,
+  warningQty: true,
+  dangerQty: true,
   snapshot: { select: { snapshotDate: true } },
 } satisfies Prisma.InventoryItemSelect;
 
@@ -97,7 +115,7 @@ export async function loadActiveSkusWithSeries(
   orgId: string,
   warehouseId?: string,
   asOfDate?: string,
-  holidays: ReadonlySet<string> = NO_HOLIDAYS,
+  holidays: CalendarInput = NO_HOLIDAYS,
 ): Promise<{ descriptor: SkuDescriptor; observations: StockObservation[] }[]> {
   const mockFilter = await resolveMockFilter(orgId, warehouseId, asOfDate);
   const latestSnapshots = await prisma.inventorySnapshot.findMany({
@@ -216,7 +234,7 @@ export async function loadActiveSkusWithSeries(
         eaPerPallet: sku.eaPerPallet,
         packagingBarcode: sku.packagingBarcode,
       },
-      observations: attachIntervalInbounds(observationsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], holidays),
+      observations: attachIntervalInbounds(observationsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], calendarOf(holidays, sku.warehouseId)),
     };
   });
 }
@@ -227,9 +245,14 @@ export async function loadDailyWarehouseTotals(orgId: string, asOfDate?: string)
   // Match resolveInventoryCost without sending every historical item to Node:
   // each explicit cost starts a new carry-forward group; before the first explicit
   // cost, use the first inferable total/quantity only from its observation date onward.
-  const totals = await prisma.$queryRaw<{
-    date: Date; warehouseId: string; totalAvailableStock: bigint; totalInventoryValue: Prisma.Decimal;
-  }[]>`
+  const totals = await prisma.$queryRaw<
+    {
+      date: Date;
+      warehouseId: string;
+      totalAvailableStock: bigint;
+      totalInventoryValue: Prisma.Decimal;
+    }[]
+  >`
     WITH org_warehouses AS (
       SELECT id FROM warehouses WHERE "organizationId" = ${orgId} AND NOT "isArchived"
     ), real_warehouses AS (
@@ -267,8 +290,11 @@ export async function loadDailyWarehouseTotals(orgId: string, asOfDate?: string)
         CASE WHEN "snapshotDate" >= inferred_date THEN inferred_cost END, 0))) AS "totalInventoryValue"
     FROM costs GROUP BY "snapshotDate", "warehouseId" ORDER BY "snapshotDate", "warehouseId"
   `;
-  return totals.map(total => ({ ...total, date: dateOnlyToString(total.date),
-    totalAvailableStock: Number(total.totalAvailableStock), totalInventoryValue: Number(total.totalInventoryValue),
+  return totals.map((total) => ({
+    ...total,
+    date: dateOnlyToString(total.date),
+    totalAvailableStock: Number(total.totalAvailableStock),
+    totalInventoryValue: Number(total.totalInventoryValue),
   }));
 }
 
@@ -276,7 +302,7 @@ export async function loadSkuWithSeries(
   orgId: string,
   skuId: string,
   asOfDate?: string,
-  holidays: ReadonlySet<string> = NO_HOLIDAYS,
+  holidays: CalendarInput = NO_HOLIDAYS,
 ): Promise<{ descriptor: SkuDescriptor; observations: StockObservation[] } | null> {
   const sku = await prisma.sku.findFirst({
     where: { id: skuId, warehouse: activeWarehouseOf(orgId) },
@@ -287,13 +313,16 @@ export async function loadSkuWithSeries(
   const mockFilter = await resolveMockFilter(orgId, sku.warehouseId, asOfDate);
   // Match the list's point-in-time membership, including SKUs now inactive.
   const latestSnapshot = await prisma.inventorySnapshot.findFirst({
-    where: { warehouseId: sku.warehouseId, status: 'ACTIVE', ...mockFilter,
-      ...(asOfDate ? { snapshotDate: { lte: new Date(`${asOfDate}T00:00:00.000Z`) } } : {}),
-    }, orderBy: { snapshotDate: 'desc' }, select: { id: true },
+    where: { warehouseId: sku.warehouseId, status: 'ACTIVE', ...mockFilter, ...(asOfDate ? { snapshotDate: { lte: new Date(`${asOfDate}T00:00:00.000Z`) } } : {}) },
+    orderBy: { snapshotDate: 'desc' },
+    select: { id: true },
   });
-  const isInLatestSnapshot = !!latestSnapshot && !!(await prisma.inventoryItem.findUnique({
-    where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } }, select: { id: true },
-  }));
+  const isInLatestSnapshot =
+    !!latestSnapshot &&
+    !!(await prisma.inventoryItem.findUnique({
+      where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } },
+      select: { id: true },
+    }));
   // 최신 목록에는 없어도 품절 인식 1개월 유예기간 이내면(휘발 방지) 목록과 동일하게 계속 보여준다.
   let isSoldOut = false;
   if (!isInLatestSnapshot) {
@@ -368,7 +397,7 @@ export async function loadSkuWithSeries(
       eaPerPallet: sku.eaPerPallet,
       packagingBarcode: sku.packagingBarcode,
     },
-    observations: attachIntervalInbounds(observations, inboundsBySku.get(skuId) ?? [], holidays),
+    observations: attachIntervalInbounds(observations, inboundsBySku.get(skuId) ?? [], calendarOf(holidays, sku.warehouseId)),
   };
 }
 

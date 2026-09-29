@@ -6,6 +6,7 @@ import { listSchedules } from '@/server/repositories/schedule-repository';
 import { UploadCalendar } from '@/components/upload/upload-calendar';
 import { dateOnlyToString } from '@/lib/date';
 import { requireTenant } from '@/server/tenant';
+import { getSegmentSettings } from '@/server/repositories/settings-repository';
 
 export default async function UploadPage() {
   const tenant = await requireTenant();
@@ -14,6 +15,7 @@ export default async function UploadPage() {
   const inboundCounts = await listInboundCountsByWarehouseAndDate(tenant.orgId);
   const holidays = await listHolidays(tenant.orgId);
   const schedules = await listSchedules(tenant.orgId);
+  const { allowNonWorkingDayUploads } = await getSegmentSettings(tenant.orgId);
 
   const calendarEntries = (
     await Promise.all(
@@ -44,6 +46,7 @@ export default async function UploadPage() {
         holidays={holidays.map((h) => ({ date: h.date, name: h.name }))}
         schedules={schedules}
         isAdmin={isAdmin}
+        allowNonWorkingDayUploads={allowNonWorkingDayUploads}
       />
     </div>
   );

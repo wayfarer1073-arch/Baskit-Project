@@ -8,13 +8,15 @@ import { listLatestPostPerTag } from '@/server/repositories/post-repository';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { ActingAsBanner } from '@/components/platform/acting-as-banner';
+import { getMessages } from '@/server/i18n';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const tenant = await getTenant();
   if (!session?.user) redirect('/login');
   if (!tenant) redirect(BLOCKED_LOGIN_PATH);
-  const roleLabel = tenant.actingAs ? '운영자' : tenant.role === 'ADMIN' ? '관리자' : '멤버';
+  const m = await getMessages();
+  const roleLabel = tenant.actingAs ? m.nav.roles.operator : tenant.role === 'ADMIN' ? m.nav.roles.admin : m.nav.roles.member;
   const [recentPosts, organization] = await Promise.all([listLatestPostPerTag(tenant.orgId), getOrganization(tenant.orgId)]);
   const remembered = (await cookies()).get(SEGMENT_COOKIE)?.value;
   const defaultSegment = isSegment(remembered) ? remembered : organization.segment;

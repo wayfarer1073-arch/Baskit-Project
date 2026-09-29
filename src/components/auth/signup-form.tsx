@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { SEGMENT_META, SEGMENT_ORDER, type Segment } from '@/lib/segments';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 export function SignupForm() {
+  const { m } = useI18n();
   const router = useRouter();
   const [organizationName, setOrganizationName] = useState('');
   const [segment, setSegment] = useState<Segment>('DAILY_SYNC');
@@ -32,7 +34,7 @@ export function SignupForm() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? '가입에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        setError(data.error ?? m.auth.signupFailed);
         return;
       }
       const result = await signIn('credentials', { email, password, redirect: false });
@@ -52,22 +54,21 @@ export function SignupForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <Label htmlFor="organizationName">워크스페이스 이름</Label>
+            <Label htmlFor="organizationName">{m.auth.workspaceName}</Label>
             <Input
               id="organizationName"
               required
               maxLength={50}
               value={organizationName}
               onChange={(e) => setOrganizationName(e.target.value)}
-              placeholder="회사명 또는 매장명"
+              placeholder={m.auth.workspaceNamePlaceholder}
             />
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">재고를 어떻게 관리하고 있나요?</legend>
+            <legend className="text-sm font-medium">{m.auth.howDoYouManage}</legend>
             <div className="grid gap-2" role="radiogroup">
               {SEGMENT_ORDER.map((value) => {
-                const meta = SEGMENT_META[value];
                 const selected = segment === value;
                 return (
                   <label
@@ -77,35 +78,28 @@ export function SignupForm() {
                       selected ? 'border-brand-accent bg-brand-accent/10' : 'hover:bg-muted/60',
                     )}
                   >
-                    <input
-                      type="radio"
-                      name="segment"
-                      value={value}
-                      checked={selected}
-                      onChange={() => setSegment(value)}
-                      className="mt-1 accent-[var(--brand-accent)]"
-                    />
+                    <input type="radio" name="segment" value={value} checked={selected} onChange={() => setSegment(value)} className="mt-1 accent-[var(--brand-accent)]" />
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium">{meta.label}</span>
-                      <span className="block text-xs text-muted-foreground">{meta.audience}</span>
+                      <span className="block text-sm font-medium">{m.segments[value].label}</span>
+                      <span className="block text-xs text-muted-foreground">{m.segments[value].audience}</span>
                     </span>
                   </label>
                 );
               })}
             </div>
-            <p className="text-xs text-muted-foreground">나중에 사이드바에서 언제든 다른 대시보드로 바꿔 볼 수 있어요.</p>
+            <p className="text-xs text-muted-foreground">{m.auth.switchLater}</p>
           </fieldset>
 
           <div className="space-y-1.5">
-            <Label htmlFor="adminName">이름</Label>
+            <Label htmlFor="adminName">{m.auth.yourName}</Label>
             <Input id="adminName" required maxLength={50} autoComplete="name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="email">이메일</Label>
+            <Label htmlFor="email">{m.auth.email}</Label>
             <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">비밀번호</Label>
+            <Label htmlFor="password">{m.auth.password}</Label>
             <Input
               id="password"
               type="password"
@@ -114,7 +108,7 @@ export function SignupForm() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="8자 이상"
+              placeholder={m.auth.passwordPlaceholder}
             />
           </div>
           {error && (
@@ -123,7 +117,7 @@ export function SignupForm() {
             </p>
           )}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '워크스페이스 만드는 중...' : '워크스페이스 만들기'}
+            {loading ? m.auth.creating : m.auth.createWorkspace}
           </Button>
         </form>
       </CardContent>

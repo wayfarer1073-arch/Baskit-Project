@@ -8,12 +8,26 @@ import type { InventoryRow } from './read-model';
 /** 기간 모드는 양 끝 날짜가 정확히 일치하는 동일 SKU만 비교한다. 신규/누락 SKU는 0으로 대체하지 않는다. */
 export function calculateSnapshotKpis(rows: InventoryRow[], compareFromDate?: string | null, holidays: ReadonlySet<string> = NO_HOLIDAYS): SnapshotKpis {
   const result: SnapshotKpis = {
-    observedSkuCount: 0, positiveStockSkuCount: 0, zeroStockSkuCount: 0, negativeStockSkuCount: 0,
-    inStockSkuRatio: null, valuedSkuCount: 0, unvaluedSkuCount: 0,
-    knownInventoryValue: null, valuationCoverageRatio: null, staleSkuCount: 0,
-    oldestObservationDate: null, newestObservationDate: null, comparableSkuCount: 0,
-    observedDecrease: null, observedIncrease: null, recordedInbound: null, estimatedDepletion: null,
-    unexplainedIncreaseTotal: null, unexplainedIncreaseSkus: [], earliestFirstSeenDate: null,
+    observedSkuCount: 0,
+    positiveStockSkuCount: 0,
+    zeroStockSkuCount: 0,
+    negativeStockSkuCount: 0,
+    inStockSkuRatio: null,
+    valuedSkuCount: 0,
+    unvaluedSkuCount: 0,
+    knownInventoryValue: null,
+    valuationCoverageRatio: null,
+    staleSkuCount: 0,
+    oldestObservationDate: null,
+    newestObservationDate: null,
+    comparableSkuCount: 0,
+    observedDecrease: null,
+    observedIncrease: null,
+    recordedInbound: null,
+    estimatedDepletion: null,
+    unexplainedIncreaseTotal: null,
+    unexplainedIncreaseSkus: [],
+    earliestFirstSeenDate: null,
     soldOutSkuCount: 0,
   };
   for (const row of rows) {
@@ -35,9 +49,11 @@ export function calculateSnapshotKpis(rows: InventoryRow[], compareFromDate?: st
       result.soldOutSkuCount++;
       continue;
     }
-    // 주말·등록 공휴일은 출고가 없으므로 마지막 영업일 재고를 인정한다.
-    const expectedObservationDate = mostRecentBusinessDayOnOrBefore(asOfDate, holidays);
-    if (latest.date < expectedObservationDate) {
+    // 주말·등록 공휴일은 출고가 없으므로 마지막 영업일 재고를 인정한다. 운영 분석이 이미 창고별 달력(휴무일에
+    // 실제로 올라온 자료 포함)으로 자료 공백을 셌으면 그 값을 쓴다 — 한 창고의 주말 업로드가 다른 창고를
+    // "자료 갱신 필요"로 만들지 않도록.
+    const stale = row.analysis.operating ? row.analysis.operating.staleShippingDays > 0 : latest.date < mostRecentBusinessDayOnOrBefore(asOfDate, holidays);
+    if (stale) {
       result.staleSkuCount++;
     } else {
       result.observedSkuCount++;
@@ -63,13 +79,19 @@ export function calculateSnapshotKpis(rows: InventoryRow[], compareFromDate?: st
     result.comparableSkuCount++;
     result.observedDecrease = (result.observedDecrease ?? 0) + Math.max(-change, 0);
     result.observedIncrease = (result.observedIncrease ?? 0) + Math.max(change, 0);
-    result.recordedInbound = (result.recordedInbound ?? 0) + (compareFromDate ? period!.totalInboundQuantity ?? 0 : delta!.inboundQuantity);
+    result.recordedInbound = (result.recordedInbound ?? 0) + (compareFromDate ? (period!.totalInboundQuantity ?? 0) : delta!.inboundQuantity);
     result.estimatedDepletion = (result.estimatedDepletion ?? 0) + (compareFromDate ? period!.totalDepletion : delta!.depletion);
     const unexplainedIncrease = compareFromDate ? period!.totalIncrease : delta!.increase;
     if (unexplainedIncrease > 0) {
       result.unexplainedIncreaseTotal = (result.unexplainedIncreaseTotal ?? 0) + unexplainedIncrease;
       const observedDate = compareFromDate ? period!.actualEndDate : delta!.toDate;
-      result.unexplainedIncreaseSkus.push({ skuId: row.descriptor.skuId, productCode: row.descriptor.productCode, productName: row.descriptor.productName, amount: unexplainedIncrease, observedDate });
+      result.unexplainedIncreaseSkus.push({
+        skuId: row.descriptor.skuId,
+        productCode: row.descriptor.productCode,
+        productName: row.descriptor.productName,
+        amount: unexplainedIncrease,
+        observedDate,
+      });
     }
   }
   if (result.observedSkuCount) {
@@ -153,11 +175,7 @@ export function calculateCompanyKpis(
   };
 }
 
-export function calculateWarehouseSummaries(
-  rows: InventoryRow[],
-  stagnantDaysThreshold: number,
-  holidays: ReadonlySet<string> = NO_HOLIDAYS,
-): WarehouseSummary[] {
+export function calculateWarehouseSummaries(rows: InventoryRow[], stagnantDaysThreshold: number, holidays: ReadonlySet<string> = NO_HOLIDAYS): WarehouseSummary[] {
   const byWarehouse = new Map<string, InventoryRow[]>();
   for (const row of rows) {
     const list = byWarehouse.get(row.descriptor.warehouseId) ?? [];
@@ -167,7 +185,7 @@ export function calculateWarehouseSummaries(
 
   return [...byWarehouse.entries()].map(([warehouseId, whRows]) => {
     const skuCount = whRows.length;
-    const inventoryValue = whRows.filter(r => !r.descriptor.isSoldOut).reduce((sum, r) => sum + r.valueBreakdown.normalStockValue, 0);
+    const inventoryValue = whRows.filter((r) => !r.descriptor.isSoldOut).reduce((sum, r) => sum + r.valueBreakdown.normalStockValue, 0);
     const dangerSkuCount = whRows.filter((r) => r.analysis.thresholdRisk.level === 'DANGER').length;
     const stockoutSoonCount = whRows.filter((r) => r.analysis.coverage.band === 'STOCKOUT_SOON' || r.analysis.coverage.band === 'NEEDS_MANAGEMENT').length;
     const stagnantCount = whRows.filter((r) => r.analysis.stagnation.isMeaningful && r.analysis.stagnation.stagnantDays >= stagnantDaysThreshold).length;

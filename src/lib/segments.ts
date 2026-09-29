@@ -5,6 +5,9 @@ export type SegmentSlug = 'daily' | 'periodic' | 'store';
 
 export interface NavItem {
   href: string;
+  /** 문구 사전(nav.items)의 키 — 화면 언어에 맞는 이름을 여기서 찾는다. */
+  key: 'dashboard' | 'calendar' | 'periodicCount' | 'periodicExcel' | 'storeRecords' | 'board' | 'settings' | 'admin';
+  /** 서버 로그·운영자 화면용 한국어 이름. */
   label: string;
   icon: 'dashboard' | 'calendar' | 'records' | 'board' | 'settings' | 'admin';
 }
@@ -19,8 +22,8 @@ export interface SegmentMeta {
 }
 
 const COMMON_TAIL: NavItem[] = [
-  { href: '/board', label: '게시판', icon: 'board' },
-  { href: '/settings', label: '설정', icon: 'settings' },
+  { href: '/board', key: 'board', label: '게시판', icon: 'board' },
+  { href: '/settings', key: 'settings', label: '설정', icon: 'settings' },
 ];
 
 export const SEGMENT_ORDER: Segment[] = ['DAILY_SYNC', 'PERIODIC_COUNT', 'ORDER_CYCLE'];
@@ -32,8 +35,8 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     audience: '3PL·OMS에서 매일 재고 파일을 받아요',
     dashboardHref: '/dashboard/daily',
     nav: [
-      { href: '/dashboard/daily', label: '대시보드', icon: 'dashboard' },
-      { href: '/upload', label: '캘린더', icon: 'calendar' },
+      { href: '/dashboard/daily', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
+      { href: '/upload', key: 'calendar', label: '캘린더', icon: 'calendar' },
       ...COMMON_TAIL,
     ],
   },
@@ -43,9 +46,9 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     audience: '자체 창고 재고를 가끔 직접 세요',
     dashboardHref: '/dashboard/periodic',
     nav: [
-      { href: '/dashboard/periodic', label: '대시보드', icon: 'dashboard' },
-      { href: '/count', label: '실사 입력', icon: 'records' },
-      { href: '/upload', label: '엑셀 실사', icon: 'calendar' },
+      { href: '/dashboard/periodic', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
+      { href: '/count', key: 'periodicCount', label: '실사 입력', icon: 'records' },
+      { href: '/upload', key: 'periodicExcel', label: '엑셀 실사', icon: 'calendar' },
       ...COMMON_TAIL,
     ],
   },
@@ -55,8 +58,8 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     audience: '재고를 세기 어려워 발주 주기로 관리해요 (카페·음식점)',
     dashboardHref: '/dashboard/store',
     nav: [
-      { href: '/dashboard/store', label: '대시보드', icon: 'dashboard' },
-      { href: '/store/records', label: '발주·매출 기록', icon: 'records' },
+      { href: '/dashboard/store', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
+      { href: '/store/records', key: 'storeRecords', label: '발주·매출 기록', icon: 'records' },
       ...COMMON_TAIL,
     ],
   },

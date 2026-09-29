@@ -7,9 +7,11 @@ import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 export function SignOutButton({ className }: { className?: string } = {}) {
   const router = useRouter();
+  const { m } = useI18n();
   const [loading, setLoading] = useState(false);
 
   async function handleSignOut() {
@@ -23,7 +25,7 @@ export function SignOutButton({ className }: { className?: string } = {}) {
       router.refresh();
     } catch {
       // 세션 정리 요청이 실패해도 사용자가 에러 화면에 갇히지 않도록 로그인 화면으로는 보낸다.
-      toast.error('로그아웃 요청이 실패했습니다. 다시 시도해주세요.');
+      toast.error(m.common.signOutFailed);
       router.push('/login');
     } finally {
       setLoading(false);
@@ -33,7 +35,7 @@ export function SignOutButton({ className }: { className?: string } = {}) {
   return (
     <Button variant="ghost" size="sm" onClick={handleSignOut} disabled={loading} className={cn(className)}>
       <LogOut className="size-4" />
-      로그아웃
+      {m.common.signOut}
     </Button>
   );
 }

@@ -64,13 +64,6 @@
   --chart-4: oklch(0.55 0.14 150);
   --chart-5: oklch(0.5 0.02 260);
 
-  /* 창고 식별 색상 — 업로드 캘린더에서 A/B/C를 구분하는 파스텔 톤 (재고 상태 색상과 별개) */
-  --warehouse-a: oklch(0.45 0.1 300);
-  --warehouse-a-bg: oklch(0.89 0.05 300);
-  --warehouse-b: oklch(0.42 0.08 195);
-  --warehouse-b-bg: oklch(0.88 0.05 195);
-  --warehouse-c: oklch(0.45 0.11 40);
-  --warehouse-c-bg: oklch(0.89 0.06 40);
 
   --today-highlight-bg: oklch(0.94 0.03 221);
   --today-highlight-border: oklch(0.75 0.08 221);
@@ -135,12 +128,6 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --color-warehouse-a: var(--warehouse-a);
-  --color-warehouse-a-bg: var(--warehouse-a-bg);
-  --color-warehouse-b: var(--warehouse-b);
-  --color-warehouse-b-bg: var(--warehouse-b-bg);
-  --color-warehouse-c: var(--warehouse-c);
-  --color-warehouse-c-bg: var(--warehouse-c-bg);
 
   --color-today-highlight-bg: var(--today-highlight-bg);
   --color-today-highlight-border: var(--today-highlight-border);
