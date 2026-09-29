@@ -83,6 +83,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             currentUserId={tenant.userId}
             warehouses={warehouseRows}
             users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
+            holidays={holidays}
+            allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
+            importTemplates={importTemplates}
             account={tenant.actingAs || !account ? null : { email: account.email, verified: !!account.emailVerifiedAt, workspaceName: organization.name }}
           />
         }
@@ -93,10 +96,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             settings={settings}
             skus={skus}
             expirations={expirations}
-            holidays={holidays}
             packagingStatuses={packagingStatuses}
-            allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
-            importTemplates={importTemplates}
             codeAliases={codeAliases}
             reorderDefaults={reorderDefaults}
             supplierPolicies={supplierPolicies}

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/components/i18n/i18n-provider';
 
-/** 일일 재고 연동: 주말·등록 휴무일에도 업로드를 받을지 켜고 끈다. 꺼도 이미 올라온 휴무일 자료는 계산에 남는다. */
+/** 공통: 주말·등록 휴무일에도 재고 업로드·실사 입력을 받을지 켜고 끈다. 꺼도 이미 올라온 휴무일 자료는 계산에 남는다. */
 export function HolidayUploadToggle({ isAdmin, initial }: { isAdmin: boolean; initial: boolean }) {
   const { m } = useI18n();
   const t = m.settings.holidayUpload;

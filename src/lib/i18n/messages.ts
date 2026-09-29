@@ -70,7 +70,7 @@ const ko = {
     noWarehouse: '아직 창고가 없어요. 설정 > 공통에서 창고를 먼저 추가해 주세요.',
     existingReplace: '해당 일자에 업로드된 재고 데이터가 있습니다. 교체하시겠습니까? ({name}님이 {time}에 올린 {count}건)',
     existingInfo: '{name}님이 {time}에 올린 {count}건이 있습니다.',
-    blockedHoliday: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 일일 재고 연동에서 휴무일 업로드를 켤 수 있어요.',
+    blockedHoliday: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 공통에서 휴무일 업로드를 켤 수 있어요.',
     fileLabel: 'Excel 파일 (.xls, .xlsx)',
     requiredColumns: '업체마다 다른 양식도 열을 자동으로 찾아요. 상품코드·상품명·재고수량만 있으면 되고, 원가·원가합계·기준일은 선택이에요.',
     missingItemNotice:
@@ -323,7 +323,7 @@ const ko = {
     openDashboard: '대시보드 열기',
     holidayUpload: {
       title: '휴무일 업로드',
-      description: '켜면 주말·등록 휴무일에도 재고 파일을 올릴 수 있고, 자료가 올라온 휴무일은 영업일로 계산해요. 꺼도 이미 올라온 휴무일 자료는 그대로 계산에 반영돼요.',
+      description: '켜면 주말·등록 휴무일에도 재고 파일 업로드와 실사 입력(일일 재고 연동·비정기 실사)을 받고, 자료가 들어온 휴무일은 영업일로 계산해요. 꺼도 이미 들어온 휴무일 자료는 그대로 계산에 반영돼요. 매장 매출·발주 기록은 주말에도 영업하는 경우가 많아 이 설정과 관계없이 받아요.',
       label: '휴무일에도 업로드 받기',
       on: '휴무일 업로드를 켰어요.',
       off: '휴무일 업로드를 껐어요. 이미 올라온 휴무일 자료는 그대로 반영돼요.',
@@ -401,7 +401,7 @@ const en: Messages = {
     noWarehouse: 'There is no warehouse yet. Add one under Settings > General first.',
     existingReplace: 'Stock data already exists for this date. Replace it? ({count} rows uploaded by {name} at {time})',
     existingInfo: '{count} rows were uploaded by {name} at {time}.',
-    blockedHoliday: 'Uploads are closed on non-working days (weekends and registered holidays). You can allow them under Settings > Daily stock sync.',
+    blockedHoliday: 'Uploads are closed on non-working days (weekends and registered holidays). You can allow them under Settings > General.',
     fileLabel: 'Excel file (.xls, .xlsx)',
     requiredColumns:
       'Columns are detected automatically, whatever your provider’s layout. Only product code, name and stock quantity are required; unit cost, total cost and date are optional.',
@@ -664,7 +664,7 @@ const en: Messages = {
     holidayUpload: {
       title: 'Uploads on non-working days',
       description:
-        'When on, you can upload stock files on weekends and registered holidays, and a day with an upload counts as a working day. Turning it off keeps any data already uploaded on those days in the calculations.',
+        'When on, stock-file uploads and stock counts (daily sync and periodic counts) are accepted on weekends and registered holidays, and a day with data counts as a working day. Turning it off keeps data already entered on those days in the calculations. Store sales and order records are always accepted, since many stores open on weekends.',
       label: 'Accept uploads on non-working days',
       on: 'Uploads on non-working days are now on.',
       off: 'Uploads on non-working days are now off. Data already uploaded on those days still counts.',

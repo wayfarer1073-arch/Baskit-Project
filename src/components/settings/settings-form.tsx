@@ -60,24 +60,33 @@ interface PackagingUploadStatus {
 
 type UserRow = { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string };
 
-/** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 사용자). */
+/** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 휴무일, 업로드 양식, 사용자). */
 export function CommonSettings({
   isAdmin,
   currentUserId,
   warehouses,
   users: initialUsers,
   account,
+  holidays,
+  allowNonWorkingDayUploads,
+  importTemplates,
 }: {
   isAdmin: boolean;
   currentUserId: string | null;
   warehouses: { id: string; code: string; name: string }[];
   users: UserRow[];
   account: { email: string; verified: boolean; workspaceName: string } | null;
+  holidays: { id: string; date: string; name: string }[];
+  allowNonWorkingDayUploads: boolean;
+  importTemplates: ImportTemplateView[];
 }) {
   const [users, setUsers] = useState(initialUsers);
   return (
     <div className="space-y-6">
       <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
+      <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
+      <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
+      <ImportTemplateManagement templates={importTemplates} />
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}
@@ -91,10 +100,7 @@ interface DailySettingsProps {
   settings: RiskThresholdSettings;
   skus: SkuVisibilityRow[];
   expirations: ExpirationLotRow[];
-  holidays: { id: string; date: string; name: string }[];
   packagingStatuses: PackagingUploadStatus[];
-  allowNonWorkingDayUploads: boolean;
-  importTemplates: ImportTemplateView[];
   codeAliases: CodeAliasView[];
   reorderDefaults: ReorderDefaults;
   supplierPolicies: SupplierPolicyRow[];
@@ -107,10 +113,7 @@ export function DailySettings({
   settings,
   skus,
   expirations,
-  holidays,
   packagingStatuses,
-  allowNonWorkingDayUploads,
-  importTemplates,
   codeAliases,
   reorderDefaults,
   supplierPolicies,
@@ -190,13 +193,8 @@ export function DailySettings({
 
       <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={packagingStatuses} />
 
-      <ImportTemplateManagement templates={importTemplates} />
-
       <CodeAliasManagement aliases={codeAliases} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} />
 
-      <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
-
-      <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
     </div>
   );
 }

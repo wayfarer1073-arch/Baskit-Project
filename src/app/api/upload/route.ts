@@ -4,9 +4,7 @@ import { processUpload } from '@/server/services/upload-service';
 import { resetUploadForDate } from '@/server/repositories/snapshot-repository';
 import { todayKstDateString } from '@/lib/date';
 import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
-import { getSegmentSettings } from '@/server/repositories/settings-repository';
-import { listHolidayDateStrings } from '@/server/repositories/holiday-repository';
-import { isShippingDay } from '@/domain/inventory/shipping-calendar';
+import { nonWorkingDayRejection } from '@/server/services/input-day-policy';
 import { BACKGROUND_UPLOAD_BYTES, MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
 import { createUploadJob, runUploadJob } from '@/server/services/upload-job-service';
 import { parseLayoutField, templateNameSchema } from '@/server/validation/import-layout';
@@ -48,10 +46,8 @@ export async function POST(request: Request) {
   }
 
   // 휴무일 업로드가 꺼져 있으면 주말·등록 휴무일에는 받지 않는다(화면과 같은 규칙을 서버에서도 지킨다).
-  const { allowNonWorkingDayUploads } = await getSegmentSettings(tenant.orgId);
-  if (!allowNonWorkingDayUploads && !isShippingDay(snapshotDateStr, new Set(await listHolidayDateStrings(tenant.orgId)))) {
-    return NextResponse.json({ error: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 일일 재고 연동에서 휴무일 업로드를 켤 수 있어요.' }, { status: 400 });
-  }
+  const dayRejection = await nonWorkingDayRejection(tenant.orgId, snapshotDateStr);
+  if (dayRejection) return NextResponse.json({ error: dayRejection }, { status: 400 });
 
   const layout = parseLayoutField(formData.get('layout'));
   if (layout === null) return NextResponse.json({ error: '양식 정보가 올바르지 않습니다.' }, { status: 400 });
