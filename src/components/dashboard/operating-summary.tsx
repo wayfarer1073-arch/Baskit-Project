@@ -17,7 +17,7 @@ export function OperatingSummary({ rows }: { rows: InventoryRow[] }) {
         <h2 className="text-base font-semibold">운영 유형별 판단</h2>
         <InfoTooltip>
           금액은 평가 가능한 관측 재고만 포함합니다. 커버리지는 관측일 재고 ÷ 출고일평균 추정 소진입니다.
-          주말·등록 공휴일 제외, 반품·조정 미분리. 자동 발주량·안전재고·마진·폐기 예상 수량은 산출하지 않습니다.
+          주말 제외, 등록 공휴일은 주문이 쌓이는 날로 보고 포함, 반품·조정 미분리. 자동 발주량·안전재고·마진·폐기 예상 수량은 산출하지 않습니다.
         </InfoTooltip>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

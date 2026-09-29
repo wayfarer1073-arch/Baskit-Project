@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { analyzeSku, buildDailyDeltas, calculateCoverage, calculateThresholdRisk, resolveEffectiveThresholds } from './calculations';
-import { latestShippingDay, NO_HOLIDAYS, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
+import { demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
 import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalysis, StockObservation, WindowDepletion } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
 
@@ -17,13 +17,18 @@ interface ShippingWindow extends WindowDepletion {
   inconsistent: boolean;
 }
 
-/** Last N calendar days, normalized by actual shipping days, never by upload count. */
+/**
+ * Last N calendar days, normalized by demand days (shipping days + weekday holidays), never by upload count.
+ * 휴무 동안 쌓인 주문은 휴무 뒤 첫 출고일 재고에서 한꺼번에 빠지므로, 그 감소량을 출고일 수로만 나누면 소진 속도가
+ * 부풀고 커버리지가 과소평가된다 — 분모에 평일 휴무일을 포함한다. 업로드 간격(longestGap)은 자료가 빠졌는지를
+ * 보는 값이라 실제 출고일 기준 그대로 둔다(긴 연휴 뒤에도 관측 자료 부족으로 떨어지지 않도록).
+ */
 function shippingWindow(deltas: DailyDelta[], end: string, days: number, holidays: ReadonlySet<string>): ShippingWindow {
   const relevant = deltas.filter(d => d.fromDate >= shiftDate(end, -days) && d.toDate <= end);
   let observedIntervalDays = 0, totalDepletion = 0, totalInboundQuantity = 0, intervalCount = 0, longestGap = 0, unexplainedIncrease = 0;
   let inconsistent = false;
   for (const d of relevant) {
-    const span = shippingDaysBetween(d.fromDate, d.toDate, holidays);
+    const span = demandDaysBetween(d.fromDate, d.toDate);
     if (span === 0) {
       if (d.depletion > 0 || d.increase > 0) inconsistent = true;
       continue;
@@ -32,7 +37,7 @@ function shippingWindow(deltas: DailyDelta[], end: string, days: number, holiday
     totalDepletion += d.depletion;
     totalInboundQuantity += d.inboundQuantity;
     unexplainedIncrease += d.increase;
-    longestGap = Math.max(longestGap, span);
+    longestGap = Math.max(longestGap, shippingDaysBetween(d.fromDate, d.toDate, holidays));
     intervalCount++;
   }
   return { windowDays: days, observedIntervalDays, totalDepletion, totalInboundQuantity, intervalCount,
@@ -71,7 +76,8 @@ export function analyzeOperationalSku(
     : basis!.windowDays === 7 ? 'HIGH' : basis!.windowDays === 14 ? 'MEDIUM' : 'LOW';
   const rate = canEstimate ? basis!.averageDailyDepletion : null;
   const coverage = calculateCoverage(latest.normalStock, rate, settings);
-  const stockoutDate = coverage.coverageDays === null ? null : shippingDateAfter(latest.date, coverage.coverageDays, holidays);
+  // 커버리지는 수요일(평일, 휴무 포함) 단위이므로 앞으로의 휴무일도 주문이 쌓이는 날로 센다 — 연휴 직후 품절을 놓치지 않도록.
+  const stockoutDate = coverage.coverageDays === null ? null : shippingDateAfter(latest.date, coverage.coverageDays);
   const thresholds = resolveEffectiveThresholds(latest, manual, rate, settings);
   let thresholdRisk = calculateThresholdRisk({ ...latest, dangerQty: thresholds.dangerQty, warningQty: thresholds.warningQty });
   const manualKnown = thresholds.source === 'manual' || thresholds.source === 'legacy';
@@ -79,8 +85,8 @@ export function analyzeOperationalSku(
     thresholdRisk = { level: 'UNKNOWN', reason: null };
   }
   const p7 = shippingWindow(deltas, shiftDate(latest.date, -7), 7, holidays);
-  const expected7 = shippingDaysBetween(shiftDate(latest.date, -7), latest.date, holidays);
-  const expectedP7 = shippingDaysBetween(shiftDate(latest.date, -14), shiftDate(latest.date, -7), holidays);
+  const expected7 = demandDaysBetween(shiftDate(latest.date, -7), latest.date);
+  const expectedP7 = demandDaysBetween(shiftDate(latest.date, -14), shiftDate(latest.date, -7));
   const comparable = (canEstimate || reason === '소진 미관측') && expected7 > 0 && expectedP7 > 0
     && w7.observedIntervalDays === expected7 && p7.observedIntervalDays === expectedP7
     && w7.intervalCount >= 3 && p7.intervalCount >= 3 && !p7.inconsistent && p7.unexplainedIncrease === 0;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeOperationalSku } from './operational-analysis';
-import { isShippingDay, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
+import { demandDaysBetween, isDemandDay, isShippingDay, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
 import type { StockObservation } from './types';
 import { calculateSnapshotKpis } from './aggregation';
 import { buildInventorySheetRows, buildRiskSheetRows } from '../excel/export';
@@ -9,11 +9,15 @@ import type { InventoryRow } from './read-model';
 
 const obs = (date: string, stock: number, inbound = 0): StockObservation => ({ date, normalStock: stock,
   availableStock: stock, unitCost: 10, defectiveStock: 0, incomingStock: 0, warningQty: 0, dangerQty: 0, inboundQuantity: inbound });
-function daily(rate = 10, holidays = new Set<string>()) {
-  const result: StockObservation[] = [obs('2026-09-04', 200)];
-  let stock = 200;
-  for (let d = '2026-09-05'; d <= '2026-09-18'; d = shiftDate(d, 1)) {
-    if (isShippingDay(d, holidays)) { stock -= rate; result.push(obs(d, stock)); }
+/** 평일마다 rate만큼 주문이 들어온다. 휴무일 주문은 쌓였다가 휴무 뒤 첫 출고일에 한꺼번에 빠진다(업로드도 그날). */
+function daily(rate = 10, holidays = new Set<string>(), from = '2026-09-04', to = '2026-09-18', start = 200) {
+  const result: StockObservation[] = [obs(from, start)];
+  let stock = start;
+  let backlog = 0;
+  for (let d = shiftDate(from, 1); d <= to; d = shiftDate(d, 1)) {
+    if (!isDemandDay(d)) continue;
+    backlog += rate;
+    if (isShippingDay(d, holidays)) { stock -= backlog; backlog = 0; result.push(obs(d, stock)); }
   }
   return result;
 }
@@ -34,13 +38,37 @@ describe('shipping-day trading inventory', () => {
     expect(a.forecast.expectedStockoutDate).toBe('2026-10-02');
     expect(a.operating?.staleShippingDays).toBe(0);
   });
-  it('falls back to a sufficiently observed window when holidays shorten the latest week', () => {
+  it('counts a weekday holiday as a demand day, so the backlog shipped after it does not inflate the daily rate', () => {
     const holidays = new Set(['2026-09-16']);
     const a = analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!;
-    expect(a.window7.observedIntervalDays).toBe(4);
+    expect(a.window7.observedIntervalDays).toBe(5);
     expect(a.window7.averageDailyDepletion).toBe(10);
+    expect(a.operating?.basisWindowDays).toBe(7);
+    expect(a.coverage.coverageDays).toBe(10);
+  });
+  it('divides the drop across a long holiday by working days plus weekday holidays (9/22 upload → 9/23~27 휴무 → 9/28 upload)', () => {
+    const holidays = new Set(['2026-09-23', '2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27']);
+    expect(shippingDaysBetween('2026-09-22', '2026-09-28', holidays)).toBe(1);
+    expect(demandDaysBetween('2026-09-22', '2026-09-28')).toBe(4); // 9/23·24·25 휴무 + 9/28 출고 (주말 제외)
+    const rows = daily(10, holidays, '2026-09-07', '2026-09-28', 400);
+    // 9/28 하루에 휴무 3일치 + 당일 주문 = 40이 빠진다.
+    expect(rows.at(-2)!.normalStock - rows.at(-1)!.normalStock).toBe(40);
+    const a = analyzeOperationalSku(rows, '2026-09-28', undefined, undefined, undefined, { holidays })!;
+    expect(a.operating?.reason).toBeNull();
+    expect(a.window7.averageDailyDepletion).toBe(10); // 수정 전: (10 + 40) ÷ 2출고일 = 25
+    expect(a.coverage.coverageDays).toBe(rows.at(-1)!.normalStock / 10);
+  });
+  it('lets a long holiday gap keep the SKU estimable instead of marking it under-observed', () => {
+    const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
+    const a = analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!;
+    expect(a.operating?.reason).toBeNull();
     expect(a.operating?.basisWindowDays).toBe(14);
-    expect(a.coverage.coverageDays).toBe(11);
+    expect(a.window14.averageDailyDepletion).toBe(10);
+  });
+  it('counts upcoming holidays as demand days when projecting the stockout date', () => {
+    const a = analyzeOperationalSku(daily(), '2026-09-18', undefined, undefined, undefined, { holidays: new Set(['2026-09-21', '2026-09-22']) })!;
+    expect(a.coverage.coverageDays).toBe(10);
+    expect(a.forecast.expectedStockoutDate).toBe('2026-10-02'); // 휴무일도 주문이 쌓이므로 휴무가 없을 때와 같은 날
   });
   it('does not treat a new SKU or a single long interval as reliable repeat demand', () => {
     for (const observations of [[obs('2026-09-17', 100), obs('2026-09-18', 90)], [obs('2026-08-19', 200), obs('2026-09-18', 100)]]) {
@@ -77,7 +105,7 @@ describe('shipping-day trading inventory', () => {
   });
   it('grades forecast confidence by basis window size, and drops it to LOW whenever a disqualifying reason exists even if an old basis window still looks valid', () => {
     expect(analyzeOperationalSku(daily(), '2026-09-19')!.forecast.confidence).toBe('HIGH');
-    const holidays = new Set(['2026-09-16']);
+    const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
     expect(analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!.forecast.confidence).toBe('MEDIUM');
     const stale = analyzeOperationalSku(daily(), '2026-09-21')!;
     expect(stale.operating?.reason).toBe('자료 갱신 필요');

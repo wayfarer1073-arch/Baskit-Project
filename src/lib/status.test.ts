@@ -77,7 +77,8 @@ describe('dataReliabilityLevel', () => {
   });
 
   it('14일까지 넓혀야 근거를 찾았으면 중', () => {
-    const holidays = new Set(['2026-09-16']);
+    // 하루짜리 휴무는 수요일로 세어 최근 7일 근거가 그대로 유지된다 — 7일 안에 업로드가 한 번뿐인 긴 연휴라야 14일로 넓어진다.
+    const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
     const a = analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!;
     expect(a.operating?.basisWindowDays).toBe(14);
     expect(dataReliabilityLevel(a)).toBe('MEDIUM');

@@ -390,7 +390,7 @@ export function InventoryTable({
                 <SortableHead
                   className="hidden 2xl:table-cell"
                   label="평균소진"
-                  tooltip="정식 이름은 '출고일 평균 소진량(최근 7일 기준)'이에요. 최근 7일 중 실제로 재고가 줄어든 날만 골라, 하루 평균 얼마나 줄었는지 계산한 값이에요."
+                  tooltip="정식 이름은 '출고일 평균 소진량(최근 7일 기준)'이에요. 최근 7일 중 실제로 재고가 줄어든 날만 골라, 하루 평균 얼마나 줄었는지 계산한 값이에요. 평일 휴무일은 주문이 쌓였다가 휴무 뒤 한꺼번에 출고되므로 하루로 함께 나눠요."
                   active={sortKey === 'depletionRateDesc'}
                   asc={sortAsc}
                   onClick={() => toggleSort('depletionRateDesc')}
@@ -408,7 +408,7 @@ export function InventoryTable({
               {isVisible('coverage') && (
                 <SortableHead
                   label="지속일수"
-                  tooltip="정식 이름은 '출고일 기준 재고 지속일수'예요. 지금 남은 재고로, 실제 출고가 있는 날 기준으로 며칠 더 버틸 수 있는지 예상한 값이에요."
+                  tooltip="정식 이름은 '출고일 기준 재고 지속일수'예요. 지금 남은 재고로, 주말을 뺀 날 기준으로 며칠 더 버틸 수 있는지 예상한 값이에요. 휴무일에도 주문은 쌓이므로 휴무일도 하루로 셉니다."
                   active={sortKey === 'coverageAsc'}
                   asc={sortAsc}
                   onClick={() => toggleSort('coverageAsc')}

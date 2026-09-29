@@ -15,22 +15,23 @@ afterEach(async () => {
   await cleanupFixture(fixture);
 });
 afterAll(() => prisma.$disconnect());
-async function seed(dates = ['04', '07', '08', '09', '10', '11', '14', '15', '16', '17', '18']) {
+async function seed(dates = ['04', '07', '08', '09', '10', '11', '14', '15', '16', '17', '18'], stocks?: number[]) {
   for (const [i, day] of dates.entries()) await createSnapshot({ warehouseId: fixture.warehouse.id,
     uploadedById: fixture.user.id, snapshotDate: new Date(`2026-09-${day}`), sourceFileName: 'metrics.xlsx', fileHash: day,
-    rows: [row('A', 200 - i * 10)] });
+    rows: [row('A', stocks?.[i] ?? 200 - i * 10)] });
   return prisma.sku.findFirstOrThrow({ where: { warehouseId: fixture.warehouse.id, productCode: 'A' } });
 }
 
 it('uses registered non-shipping holidays identically in list and detail services', async () => {
   holidayId = (await prisma.holiday.create({ data: { organizationId: fixture.org.id, date: new Date('2026-09-16'), name: 'Local test holiday' } })).id;
-  const sku = await seed(['04', '07', '08', '09', '10', '11', '14', '15', '17', '18']);
+  // 9/16 휴무에 들어온 주문은 9/17에 함께 출고된다(9/15 → 9/17: −20).
+  const sku = await seed(['04', '07', '08', '09', '10', '11', '14', '15', '17', '18'], [200, 190, 180, 170, 160, 150, 140, 130, 110, 100]);
   const rows = await getInventoryRows({ orgId: fixture.org.id,  warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
   const detail = await getSkuDetail(fixture.org.id, sku.id, '2026-09-18');
   expect(rows[0].analysis).toEqual(detail?.analysis);
   expect(rows[0].analysis.window7.averageDailyDepletion).toBe(10);
-  expect(rows[0].analysis.window7.observedIntervalDays).toBe(4);
-  expect(rows[0].analysis.coverage.coverageDays).toBe(11);
+  expect(rows[0].analysis.window7.observedIntervalDays).toBe(5);
+  expect(rows[0].analysis.coverage.coverageDays).toBe(10);
 });
 
 it('keeps B2B cost and earliest lot dates while suppressing repeated-demand predictions', async () => {

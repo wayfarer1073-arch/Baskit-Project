@@ -32,3 +32,21 @@ export function shippingDateAfter(from: string, days: number, holidays: Readonly
   }
   return date;
 }
+
+/**
+ * 주문(수요)이 생기는 날 — 주말을 뺀 모든 날. 등록 휴무일은 출고가 없을 뿐 주문은 계속 쌓여 휴무 뒤 첫 출고일에
+ * 한꺼번에 빠지므로, 소진 속도의 분모와 소진 예상일에서는 휴무일도 하루로 센다. 주말은 매주 똑같이 반복되어
+ * 이미 "출고일당 소진량"에 녹아 있으므로 세지 않는다(평소 한 주 = 5일, 휴무가 낀 주도 5일).
+ */
+export function isDemandDay(date: string): boolean {
+  const day = parseISO(date).getDay();
+  return day !== 0 && day !== 6;
+}
+/** (from, to] 구간의 수요일 수 = 출고일 + 평일에 걸친 등록 휴무일. */
+export function demandDaysBetween(from: string, to: string): number {
+  let count = 0;
+  for (let day = shiftDate(from, 1); day <= to; day = shiftDate(day, 1)) {
+    if (isDemandDay(day)) count++;
+  }
+  return count;
+}
