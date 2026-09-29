@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getTenant } from '@/server/tenant';
+import { after, NextResponse } from 'next/server';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { processUpload } from '@/server/services/upload-service';
 import { resetUploadForDate } from '@/server/repositories/snapshot-repository';
 import { todayKstDateString } from '@/lib/date';
@@ -7,13 +7,15 @@ import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
 import { listHolidayDateStrings } from '@/server/repositories/holiday-repository';
 import { isShippingDay } from '@/domain/inventory/shipping-calendar';
-import { MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
+import { BACKGROUND_UPLOAD_BYTES, MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
+import { createUploadJob, runUploadJob } from '@/server/services/upload-job-service';
 import { parseLayoutField, templateNameSchema } from '@/server/validation/import-layout';
-
 
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const formData = await request.formData();
   const warehouseId = formData.get('warehouseId');
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
   const arrayBuffer = await file.arrayBuffer();
   const fileBuffer = Buffer.from(arrayBuffer);
 
-  const result = await processUpload({
+  const uploadRequest = {
     orgId: tenant.orgId,
     layout,
     saveTemplateAs,
@@ -74,7 +76,16 @@ export async function POST(request: Request) {
     fileName: file.name,
     uploadedById: tenant.userId,
     replaceExisting,
-  });
+  };
+
+  // 큰 파일은 먼저 접수만 하고 응답 뒤에 처리한다. 화면은 /api/upload/jobs/[id]로 결과를 확인한다.
+  if (file.size > BACKGROUND_UPLOAD_BYTES) {
+    const job = await createUploadJob({ orgId: tenant.orgId, userId: tenant.userId, warehouseId, snapshotDate, fileName: file.name, fileSize: file.size });
+    after(() => runUploadJob(job.id, uploadRequest));
+    return NextResponse.json({ status: 'QUEUED', jobId: job.id }, { status: 202 });
+  }
+
+  const result = await processUpload(uploadRequest);
 
   if (result.status === 'ERROR') {
     return NextResponse.json({ status: 'ERROR', issues: result.issues }, { status: 422 });
@@ -89,6 +100,8 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 초기화할 수 있습니다.' }, { status: 403 });
 
   const url = new URL(request.url);

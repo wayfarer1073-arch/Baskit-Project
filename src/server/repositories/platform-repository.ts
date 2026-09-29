@@ -15,8 +15,12 @@ async function aggregateByOrg(): Promise<{
   sales: Map<string, Date>;
   events: Map<string, Date>;
   logins: Map<string, Date>;
+  uploads30d: Map<string, number>;
+  activeUsers30d: Map<string, number>;
+  storedRows: Map<string, number>;
 }> {
-  const [skus, snapshots, orders, sales, events, logins] = await Promise.all([
+  const since30 = addDays(new Date(), -30);
+  const [skus, snapshots, orders, sales, events, logins, uploads30d, activeUsers30d, storedRows] = await Promise.all([
     prisma.$queryRaw<{ org: string; n: number }[]>`
       SELECT w."organizationId" AS org, COUNT(*)::int AS n FROM skus s JOIN warehouses w ON w.id = s."warehouseId" GROUP BY 1`,
     prisma.$queryRaw<OrgAgg[]>`
@@ -29,6 +33,13 @@ async function aggregateByOrg(): Promise<{
     prisma.$queryRaw<{ org: string; last: Date }[]>`
       SELECT w."organizationId" AS org, MAX(e."createdAt") AS last FROM inventory_events e JOIN warehouses w ON w.id = e."warehouseId" GROUP BY 1`,
     prisma.$queryRaw<{ org: string; last: Date }[]>`SELECT "organizationId" AS org, MAX("lastLoginAt") AS last FROM users GROUP BY 1`,
+    prisma.$queryRaw<{ org: string; n: number }[]>`
+      SELECT w."organizationId" AS org, COUNT(*)::int AS n FROM inventory_snapshots s JOIN warehouses w ON w.id = s."warehouseId" WHERE s."uploadedAt" >= ${since30} GROUP BY 1`,
+    prisma.$queryRaw<{ org: string; n: number }[]>`
+      SELECT "organizationId" AS org, COUNT(*)::int AS n FROM users WHERE "isActive" AND "lastLoginAt" >= ${since30} GROUP BY 1`,
+    prisma.$queryRaw<{ org: string; n: number }[]>`
+      SELECT w."organizationId" AS org, COUNT(*)::int AS n
+      FROM inventory_items i JOIN inventory_snapshots s ON s.id = i."snapshotId" JOIN warehouses w ON w.id = s."warehouseId" GROUP BY 1`,
   ]);
   return {
     skus: new Map(skus.map((r) => [r.org, r.n])),
@@ -37,6 +48,9 @@ async function aggregateByOrg(): Promise<{
     sales: new Map(sales.map((r) => [r.org, r.last])),
     events: new Map(events.map((r) => [r.org, r.last])),
     logins: new Map(logins.filter((r) => r.last).map((r) => [r.org, r.last])),
+    uploads30d: new Map(uploads30d.map((r) => [r.org, r.n])),
+    activeUsers30d: new Map(activeUsers30d.map((r) => [r.org, r.n])),
+    storedRows: new Map(storedRows.map((r) => [r.org, r.n])),
   };
 }
 
@@ -50,15 +64,13 @@ export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
     prisma.organization.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: { select: { users: true, storeItems: true, dailySales: true, warehouses: { where: { isArchived: false } } } },
+        _count: { select: { users: true, storeItems: true, dailySales: true, warehouses: { where: { isArchived: false } }, invitations: { where: { acceptedAt: null } } } },
         users: { where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' }, take: 1, select: { email: true, name: true } },
       },
     }),
     aggregateByOrg(),
   ]);
-  const platformAdminOrgs = new Set(
-    (await prisma.user.findMany({ where: { isPlatformAdmin: true }, select: { organizationId: true } })).map((u) => u.organizationId),
-  );
+  const platformAdminOrgs = new Set((await prisma.user.findMany({ where: { isPlatformAdmin: true }, select: { organizationId: true } })).map((u) => u.organizationId));
   return orgs.map((o) => {
     const snap = agg.snapshots.get(o.id);
     const orders = agg.orders.get(o.id);
@@ -83,6 +95,10 @@ export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
       lastActivityAt: lastActivity?.toISOString() ?? null,
       lastLoginAt: login?.toISOString() ?? null,
       hasPlatformAdmin: platformAdminOrgs.has(o.id),
+      uploads30d: agg.uploads30d.get(o.id) ?? 0,
+      activeUsers30d: agg.activeUsers30d.get(o.id) ?? 0,
+      storedRows: agg.storedRows.get(o.id) ?? 0,
+      pendingInvites: o._count.invitations,
     };
   });
 }
@@ -181,7 +197,10 @@ export async function deleteWorkspace(orgId: string) {
 }
 
 export function getUserForAdmin(userId: string) {
-  return prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, isPlatformAdmin: true, organizationId: true, organization: { select: { name: true } } } });
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, isPlatformAdmin: true, organizationId: true, organization: { select: { name: true } } },
+  });
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {

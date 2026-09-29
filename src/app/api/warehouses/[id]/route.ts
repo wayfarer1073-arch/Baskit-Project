@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { archiveWarehouse, listWarehouses, renameWarehouse } from '@/server/repositories/warehouse-repository';
 
 const schema = z.object({ name: z.string().trim().min(1).max(50) });
@@ -8,6 +8,8 @@ const schema = z.object({ name: z.string().trim().min(1).max(50) });
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 변경할 수 있습니다.' }, { status: 403 });
 
   const { id } = await params;
@@ -24,6 +26,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 변경할 수 있습니다.' }, { status: 403 });
 
   const { id } = await params;

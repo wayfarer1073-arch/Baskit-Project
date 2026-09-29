@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { addHoliday, listHolidays } from '@/server/repositories/holiday-repository';
 
 function isValidCalendarDate(dateStr: string): boolean {
@@ -25,6 +25,8 @@ const postSchema = z.object({
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 추가할 수 있습니다.' }, { status: 403 });
 
   const body = await request.json();

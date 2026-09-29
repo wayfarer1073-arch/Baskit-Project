@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { clientIp, rateLimit } from '@/server/rate-limit';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: 'jwt' },
@@ -14,10 +15,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: '이메일', type: 'email' },
         password: { label: '비밀번호', type: 'password' },
       },
-      authorize: async (credentials) => {
+      authorize: async (credentials, request) => {
         const email = typeof credentials?.email === 'string' ? credentials.email.trim().toLowerCase() : undefined;
         const password = typeof credentials?.password === 'string' ? credentials.password : undefined;
         if (!email || !password) return null;
+        // 비밀번호 대입을 막는다: 같은 이메일 15분에 10번, 같은 IP 15분에 30번까지.
+        if (!rateLimit(`login-email:${email}`, 10, 15 * 60_000).ok) return null;
+        if (request instanceof Request && !rateLimit(`login-ip:${clientIp(request)}`, 30, 15 * 60_000).ok) return null;
 
         const user = await prisma.user.findUnique({ where: { email }, include: { organization: { select: { suspendedAt: true } } } });
         if (!user || !user.isActive) return null;

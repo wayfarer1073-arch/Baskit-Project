@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -28,7 +29,8 @@ export async function createUser(orgId: string, input: { email: string; name: st
 
 /**
  * 업로드/이벤트/게시글 등 참조 이력이 없는 계정은 실제로 삭제하고, 이력이 있어 참조 무결성상
- * 지울 수 없는 계정은 로그인만 차단(isActive=false)한다. 어느 쪽이든 목록에서는 즉시 사라진다.
+ * 지울 수 없는 계정은 로그인을 막고 개인정보(이름·이메일·비밀번호)를 지운다 — 기록에는 '삭제된 사용자'로 남는다.
+ * 어느 쪽이든 목록에서는 즉시 사라진다.
  */
 export async function deleteUser(userId: string): Promise<{ mode: 'hard' | 'soft' }> {
   try {
@@ -36,7 +38,17 @@ export async function deleteUser(userId: string): Promise<{ mode: 'hard' | 'soft
     return { mode: 'hard' };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-      await prisma.user.update({ where: { id: userId }, data: { isActive: false } });
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          isActive: false,
+          name: '삭제된 사용자',
+          email: `deleted-${userId}@deleted.invalid`,
+          passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+          emailVerifiedAt: null,
+        },
+      });
+      await prisma.authToken.deleteMany({ where: { userId } });
       return { mode: 'soft' };
     }
     throw e;

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { addPurchaseOrders } from '@/server/repositories/store-repository';
 import { isDateString, todayKstDateString } from '@/lib/date';
 
@@ -23,6 +23,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '입력값이 올바르지 않습니다.' }, { status: 400 });

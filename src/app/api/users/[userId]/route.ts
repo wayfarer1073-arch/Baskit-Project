@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { countActiveAdmins, deleteUser, getUserRole } from '@/server/repositories/user-repository';
 
 // 계정 삭제는 관리자 권한 전용 기능이다.
 export async function DELETE(_: Request, { params }: { params: Promise<{ userId: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 삭제할 수 있습니다.' }, { status: 403 });
 
   const { userId } = await params;

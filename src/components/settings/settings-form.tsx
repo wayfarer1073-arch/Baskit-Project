@@ -20,6 +20,8 @@ import { WarehouseManagement } from '@/components/settings/warehouse-management'
 import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
 import { ImportTemplateManagement, type ImportTemplateView } from '@/components/settings/import-template-management';
 import { CodeAliasManagement, type CodeAliasView } from '@/components/settings/code-alias-management';
+import { TeamInvitations } from '@/components/settings/team-invitations';
+import { AccountDangerZone } from '@/components/settings/account-danger-zone';
 import { ReorderSettings, type ReorderDefaults } from '@/components/settings/reorder-settings';
 import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
@@ -56,7 +58,7 @@ interface PackagingUploadStatus {
   lastUpload: { uploadedAt: string; uploadedByName: string; sourceFileName: string; rowCount: number } | null;
 }
 
-type UserRow = { id: string; email: string; name: string; role: 'MEMBER' | 'ADMIN'; createdAt: string };
+type UserRow = { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string };
 
 /** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 사용자). */
 export function CommonSettings({
@@ -64,17 +66,21 @@ export function CommonSettings({
   currentUserId,
   warehouses,
   users: initialUsers,
+  account,
 }: {
   isAdmin: boolean;
   currentUserId: string | null;
   warehouses: { id: string; code: string; name: string }[];
   users: UserRow[];
+  account: { email: string; verified: boolean; workspaceName: string } | null;
 }) {
   const [users, setUsers] = useState(initialUsers);
   return (
     <div className="space-y-6">
       <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
+      {isAdmin && <TeamInvitations />}
+      {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}
     </div>
   );
 }
@@ -406,14 +412,14 @@ function UserManagement({
   onUsersChange,
   currentUserId,
 }: {
-  users: { id: string; email: string; name: string; role: 'MEMBER' | 'ADMIN'; createdAt: string }[];
-  onUsersChange: (users: { id: string; email: string; name: string; role: 'MEMBER' | 'ADMIN'; createdAt: string }[]) => void;
+  users: { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string }[];
+  onUsersChange: (users: { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string }[]) => void;
   currentUserId: string | null;
 }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
+  const [role, setRole] = useState<'VIEWER' | 'MEMBER' | 'ADMIN'>('MEMBER');
   const [submitting, setSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
@@ -464,7 +470,7 @@ function UserManagement({
     <Card>
       <CardHeader>
         <CardTitle>사용자 관리</CardTitle>
-        <CardDescription>member / admin 권한을 가진 계정을 추가하거나 삭제할 수 있습니다.</CardDescription>
+        <CardDescription>조회 전용·멤버·관리자 계정을 직접 만들거나 삭제할 수 있어요. 본인이 비밀번호를 정하게 하려면 아래 &apos;팀 초대&apos;를 쓰세요.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
@@ -479,7 +485,7 @@ function UserManagement({
                   <span className="font-medium">{u.name}</span> <span className="text-muted-foreground">{u.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{u.role === 'ADMIN' ? '관리자' : '멤버'}</Badge>
+                  <Badge variant="outline">{u.role === 'ADMIN' ? '관리자' : u.role === 'VIEWER' ? '조회 전용' : '멤버'}</Badge>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -512,11 +518,12 @@ function UserManagement({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-user-role">권한</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as 'MEMBER' | 'ADMIN')}>
+            <Select value={role} onValueChange={(v) => setRole(v as 'VIEWER' | 'MEMBER' | 'ADMIN')}>
               <SelectTrigger id="new-user-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="VIEWER">조회 전용</SelectItem>
                 <SelectItem value="MEMBER">멤버</SelectItem>
                 <SelectItem value="ADMIN">관리자</SelectItem>
               </SelectContent>

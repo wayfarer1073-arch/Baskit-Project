@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { previewUpload } from '@/server/services/upload-service';
 import { parseLayoutField } from '@/server/validation/import-layout';
 import { MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
@@ -9,6 +9,8 @@ import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const formData = await request.formData();
   const file = formData.get('file');

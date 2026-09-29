@@ -10,6 +10,7 @@ import { listPackagingUploadStatus } from '@/server/repositories/packaging-repos
 import { getOrganization } from '@/server/repositories/organization-repository';
 import { listSuppliers } from '@/server/repositories/store-repository';
 import { getReorderDefaults, listSupplierPolicies } from '@/server/repositories/reorder-repository';
+import { getAccountStatus } from '@/server/repositories/account-repository';
 import { listImportTemplates } from '@/server/repositories/import-template-repository';
 import { listCodeAliases } from '@/server/repositories/code-alias-repository';
 import { getStoreItemLearning } from '@/server/services/store-service';
@@ -41,6 +42,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     codeAliases,
     reorderDefaults,
     supplierPolicies,
+    account,
   ] = await Promise.all([
     getOrganization(tenant.orgId),
     listWarehouses(tenant.orgId),
@@ -57,6 +59,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     listCodeAliases(tenant.orgId),
     getReorderDefaults(tenant.orgId),
     listSupplierPolicies(tenant.orgId),
+    getAccountStatus(tenant.userId),
   ]);
 
   // 탭을 지정하지 않고 들어오면 지금 보고 있는 대시보드의 설정부터 보여준다.
@@ -75,7 +78,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         initialTab={initialTab}
         activeSegment={activeSegment}
         common={
-          <CommonSettings isAdmin={isAdmin} currentUserId={tenant.userId} warehouses={warehouseRows} users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))} />
+          <CommonSettings
+            isAdmin={isAdmin}
+            currentUserId={tenant.userId}
+            warehouses={warehouseRows}
+            users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
+            account={tenant.actingAs || !account ? null : { email: account.email, verified: !!account.emailVerifiedAt, workspaceName: organization.name }}
+          />
         }
         daily={
           <DailySettings

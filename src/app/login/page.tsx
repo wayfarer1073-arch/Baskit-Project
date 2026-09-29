@@ -24,6 +24,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <Suspense fallback={null}>
           <LoginForm />
         </Suspense>
+        <p className="-mt-4 text-center text-sm">
+          <Link href="/forgot-password" className="text-sidebar-muted-foreground underline-offset-4 hover:text-sidebar-foreground hover:underline">
+            {m.account.forgotLink}
+          </Link>
+        </p>
         <p className="text-center text-sm text-sidebar-muted-foreground">
           {m.auth.newHere}{' '}
           <Link href="/signup" className="font-medium text-sidebar-foreground underline-offset-4 hover:underline">

@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/server/auth';
 
+const PUBLIC_PATHS = ['/forgot-password', '/reset-password', '/verify-email', '/invite', '/terms', '/privacy'];
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname.startsWith('/login') || req.nextUrl.pathname.startsWith('/signup');
+  const path = req.nextUrl.pathname;
+  const isLoginPage = path.startsWith('/login') || path.startsWith('/signup');
+  // 로그인 없이 열리는 화면(메일 링크·약관). 로그인한 상태에서도 그대로 보여준다.
+  const isPublicPage = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+  if (isPublicPage) return NextResponse.next();
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL('/login', req.nextUrl.origin);

@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SEGMENT_META, SEGMENT_ORDER, type Segment } from '@/lib/segments';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { TermsConsent } from '@/components/auth/terms-consent';
 
 export function SignupForm() {
   const { m } = useI18n();
@@ -19,6 +20,7 @@ export function SignupForm() {
   const [adminName, setAdminName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +32,7 @@ export function SignupForm() {
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationName, segment, adminName, email, password }),
+        body: JSON.stringify({ organizationName, segment, adminName, email, password, acceptTerms }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -111,6 +113,7 @@ export function SignupForm() {
               placeholder={m.auth.passwordPlaceholder}
             />
           </div>
+          <TermsConsent checked={acceptTerms} onChange={setAcceptTerms} />
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { archiveStoreItem, StoreItemNameTakenError, updateStoreItem } from '@/server/repositories/store-repository';
 import { storeItemSchema } from '@/server/validation/store';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const { id } = await params;
   const parsed = storeItemSchema.partial().safeParse(await request.json().catch(() => null));
@@ -24,6 +26,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const { id } = await params;
   const ok = await archiveStoreItem(tenant.orgId, id);

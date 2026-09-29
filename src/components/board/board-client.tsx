@@ -36,7 +36,7 @@ interface BoardClientProps {
   totalPages: number;
   totalCount: number;
   currentUserId: string;
-  currentUserRole: 'MEMBER' | 'ADMIN';
+  currentUserRole: 'VIEWER' | 'MEMBER' | 'ADMIN';
   filter: BoardFilter;
 }
 

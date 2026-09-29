@@ -6,6 +6,8 @@ import { listSchedules } from '@/server/repositories/schedule-repository';
 import { UploadCalendar } from '@/components/upload/upload-calendar';
 import { dateOnlyToString } from '@/lib/date';
 import { requireTenant } from '@/server/tenant';
+import { ViewerNotice } from '@/components/auth/viewer-notice';
+import { getMessages } from '@/server/i18n';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
 
 export default async function UploadPage() {
@@ -40,6 +42,7 @@ export default async function UploadPage() {
 
   return (
     <div className="space-y-6">
+      {tenant.role === 'VIEWER' && <ViewerNotice message={(await getMessages()).account.viewerNotice} />}
       <UploadCalendar
         warehouses={warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name }))}
         entries={calendarEntries}

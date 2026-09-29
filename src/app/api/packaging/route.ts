@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { parsePackagingWorkbook } from '@/domain/excel/packaging-parser';
 import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 import { applyPackagingRows, listPackagingUploadStatus } from '@/server/repositories/packaging-repository';
@@ -17,6 +17,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 업로드할 수 있습니다.' }, { status: 403 });
 
   const formData = await request.formData();

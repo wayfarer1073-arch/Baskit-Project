@@ -36,7 +36,7 @@ export async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFi
   await prisma.supplier.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.dailySales.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.importTemplate.deleteMany({ where: { organizationId: fixture.org.id } });
-  await prisma.user.delete({ where: { id: fixture.user.id } });
+  await prisma.user.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.organization.delete({ where: { id: fixture.org.id } });
 }
 

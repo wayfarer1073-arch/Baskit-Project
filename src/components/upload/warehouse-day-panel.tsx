@@ -118,17 +118,30 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
 
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const body = await res.json();
+      let body = await res.json();
+      let status = res.status;
 
-      if (res.status === 409) {
+      // 큰 파일은 뒤에서 처리된다 — 끝날 때까지 작업 상태를 확인한다.
+      if (status === 202 && body.jobId) {
+        toast.info(m.upload.processingLarge);
+        const job = await waitForUploadJob(body.jobId);
+        if (job.status === 'FAILED' || !job.result) {
+          toast.error(job.error ?? m.upload.failed);
+          return;
+        }
+        body = job.result;
+        status = body.status === 'ERROR' ? 422 : body.status === 'CONFLICT' ? 409 : 200;
+      }
+
+      if (status === 409) {
         toast.error(m.upload.conflict);
         return;
       }
-      if (res.status === 422) {
+      if (status === 422) {
         setIssues(body.issues ?? []);
         return;
       }
-      if (!res.ok) {
+      if (status >= 400) {
         toast.error(body.error ?? m.upload.failed);
         return;
       }
@@ -247,4 +260,23 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
       <InboundManager warehouseId={warehouseId} date={date} />
     </div>
   );
+}
+
+interface UploadJobState {
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  result: any;
+  error: string | null;
+}
+
+/** 뒤에서 처리 중인 업로드가 끝날 때까지 1.5초 간격으로 확인한다(최대 약 15분). */
+async function waitForUploadJob(jobId: string): Promise<UploadJobState> {
+  for (let i = 0; i < 600; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const res = await fetch(`/api/upload/jobs/${jobId}`);
+    if (!res.ok) continue;
+    const job: UploadJobState = await res.json();
+    if (job.status === 'SUCCEEDED' || job.status === 'FAILED') return job;
+  }
+  return { status: 'FAILED', result: null, error: null };
 }

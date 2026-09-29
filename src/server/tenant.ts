@@ -12,7 +12,7 @@ export const BLOCKED_LOGIN_PATH = '/login?reason=blocked';
 
 export interface Tenant {
   userId: string;
-  role: 'MEMBER' | 'ADMIN';
+  role: 'VIEWER' | 'MEMBER' | 'ADMIN';
   /** 지금 보고 있는 조직. 운영자가 다른 워크스페이스에 들어가 있으면 그 조직이다. */
   orgId: string;
   isAdmin: boolean;
@@ -75,4 +75,10 @@ export async function requireTenant(): Promise<Tenant> {
 export async function getPlatformAdmin(): Promise<Tenant | null> {
   const tenant = await getTenant();
   return tenant?.isPlatformAdmin ? tenant : null;
+}
+
+/** 조회 전용(VIEWER) 사용자는 데이터를 바꾸는 요청을 할 수 없다. 막아야 하면 403 응답을, 아니면 null. */
+export function forbidViewer(tenant: Tenant): Response | null {
+  if (tenant.role !== 'VIEWER') return null;
+  return Response.json({ error: '조회 전용 계정은 변경할 수 없습니다.' }, { status: 403 });
 }

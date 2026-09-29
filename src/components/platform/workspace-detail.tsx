@@ -118,6 +118,11 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
         <SummaryMetric label="사용자" value={`${w.userCount}명`} detail={`마지막 로그인 ${timeAgo(w.lastLoginAt)}`} />
         <SummaryMetric label="마지막 활동" value={timeAgo(w.lastActivityAt)} detail="업로드·발주·매출·이벤트·로그인" />
         <SummaryMetric label="창고" value={`${w.warehouseCount}개`} detail={dataSummary(w)} />
+        <SummaryMetric
+          label="최근 30일 사용량"
+          value={`업로드 ${w.uploads30d}회`}
+          detail={`로그인 사용자 ${w.activeUsers30d}명 · 저장된 재고 행 ${w.storedRows.toLocaleString()}개${w.pendingInvites ? ` · 대기 초대 ${w.pendingInvites}건` : ''}`}
+        />
         <SummaryMetric label="상태" value={w.suspendedAt ? '정지됨' : '사용 중'} emphasis={w.suspendedAt ? 'danger' : 'normal'} detail={w.suspendedAt ? `${formatKstDateTime(w.suspendedAt)} 정지` : undefined} />
       </SummaryPanel>
 
@@ -186,7 +191,7 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
                     <p className="text-xs text-muted-foreground">{u.email}</p>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {u.role === 'ADMIN' ? '관리자' : '멤버'}
+                    {u.role === 'ADMIN' ? '관리자' : u.role === 'VIEWER' ? '조회 전용' : '멤버'}
                     {u.isPlatformAdmin && (
                       <Badge variant="notice" className="ml-1.5">
                         운영자

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { setExpirationRiskDays } from '@/server/repositories/expiration-repository';
 
 // 소비기한 자체는 로트 단위로 관리한다 (/api/expiration/lots, /api/expiration/lots/[lotId]).
@@ -10,6 +10,8 @@ const patchSchema = z.object({ expirationRiskDays: z.number().int().min(0).nulla
 export async function PATCH(request: Request, { params }: { params: Promise<{ skuId: string }> }) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
   if (!tenant.isAdmin) return NextResponse.json({ error: '관리자만 변경할 수 있습니다.' }, { status: 403 });
 
   const { skuId } = await params;

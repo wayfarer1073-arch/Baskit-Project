@@ -20,6 +20,11 @@ export interface WorkspaceSummary {
   lastActivityAt: string | null;
   lastLoginAt: string | null;
   hasPlatformAdmin: boolean;
+  /** 사용량: 최근 30일 파일 업로드 수(교체 포함), 최근 30일 로그인한 사용자 수, 저장된 재고 행 수, 대기 중 초대 수. */
+  uploads30d: number;
+  activeUsers30d: number;
+  storedRows: number;
+  pendingInvites: number;
 }
 
 export interface PlatformMetrics {
@@ -38,7 +43,7 @@ export interface WorkspaceUserRow {
   id: string;
   email: string;
   name: string;
-  role: 'MEMBER' | 'ADMIN';
+  role: 'VIEWER' | 'MEMBER' | 'ADMIN';
   isActive: boolean;
   isPlatformAdmin: boolean;
   createdAt: string;

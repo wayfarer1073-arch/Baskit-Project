@@ -29,7 +29,7 @@ interface PlatformConsoleProps {
 
 export function dataSummary(w: WorkspaceSummary) {
   if (w.segment === 'ORDER_CYCLE') return `품목 ${w.storeItemCount} · 발주 ${w.orderCount} · 매출 ${w.salesDays}일`;
-  return `SKU ${w.skuCount} · 스냅샷 ${w.snapshotCount}`;
+  return `SKU ${w.skuCount} · 스냅샷 ${w.snapshotCount} · 30일 업로드 ${w.uploads30d}`;
 }
 
 export function WorkspaceBadges({ w, homeOrgId }: { w: WorkspaceSummary; homeOrgId: string }) {

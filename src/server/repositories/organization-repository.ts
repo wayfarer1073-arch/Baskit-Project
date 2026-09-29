@@ -21,8 +21,8 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
     return await prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({ data: { name: input.organizationName, segment: input.segment } });
       const user = await tx.user.create({
-        data: { organizationId: organization.id, email, name: input.adminName, passwordHash, role: 'ADMIN' },
-        select: { id: true, email: true },
+        data: { organizationId: organization.id, email, name: input.adminName, passwordHash, role: 'ADMIN', termsAcceptedAt: new Date() },
+        select: { id: true, email: true, name: true },
       });
       await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: '기본 창고', sortOrder: 1 } });
       await tx.settings.create({ data: { organizationId: organization.id, ...DEFAULT_RISK_SETTINGS } });

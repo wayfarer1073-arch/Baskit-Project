@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getTenant } from '@/server/tenant';
+import { forbidViewer, getTenant } from '@/server/tenant';
 import { prisma } from '@/lib/prisma';
 import { createEvent, findSimilarSchedule, listEventsForSku, listEventsForWarehouse } from '@/server/repositories/event-repository';
 import { isSkuInOrg } from '@/server/repositories/inventory-repository';
@@ -46,6 +46,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const tenant = await getTenant();
   if (!tenant) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+  const viewerDenied = forbidViewer(tenant);
+  if (viewerDenied) return viewerDenied;
 
   const body = await request.json();
   const parsed = createEventSchema.safeParse(body);

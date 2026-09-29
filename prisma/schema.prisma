@@ -18,6 +18,7 @@ datasource db {
 }
 
 enum Role {
+  VIEWER // 조회만 가능(업로드·수정 불가)
   MEMBER
   ADMIN
 }
@@ -50,6 +51,8 @@ model Organization {
   suppliers       Supplier[]
   importTemplates ImportTemplate[]
   dailySales      DailySales[]
+  invitations     Invitation[]
+  uploadJobs      UploadJob[]
 
   @@map("organizations")
 }
@@ -96,6 +99,10 @@ model User {
   // 앱 화면에서는 바꿀 수 없고 scripts/grant-platform-admin.ts로만 부여한다.
   isPlatformAdmin Boolean      @default(false)
   lastLoginAt     DateTime?
+  // 가입·초대 수락 때 받은 메일의 링크로 확인한 시각. 초대로 들어온 사용자는 초대 메일로 확인된 것으로 본다.
+  emailVerifiedAt DateTime?
+  // 이용약관·개인정보 처리방침 동의 시각(가입·초대 수락 때 기록).
+  termsAcceptedAt DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -107,6 +114,9 @@ model User {
   packagingUploads  SkuPackagingUpload[]
   purchaseOrders    PurchaseOrder[]
   platformActions   PlatformAuditLog[]
+  authTokens        AuthToken[]
+  sentInvites       Invitation[]
+  uploadJobs        UploadJob[]
 
   @@index([organizationId])
   @@map("users")
@@ -591,4 +601,72 @@ model SkuCodeAlias {
   @@unique([warehouseId, externalCode])
   @@index([skuId])
   @@map("sku_code_aliases")
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+/// 메일 링크용 일회성 토큰. 원문은 메일에만 담고 DB에는 SHA-256 해시만 둔다.
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+  @@map("auth_tokens")
+}
+
+/// 팀 초대. 링크를 받은 사람이 이름·비밀번호를 정하면 이 워크스페이스의 사용자가 된다.
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           Role         @default(MEMBER)
+  tokenHash      String       @unique
+  invitedById    String?
+  invitedBy      User?        @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@map("invitations")
+}
+
+enum UploadJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// 큰 재고 파일은 응답을 먼저 돌려주고 뒤에서 처리한다. 화면은 이 상태를 조회해 결과를 보여준다.
+model UploadJob {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  warehouseId    String
+  snapshotDate   DateTime        @db.Date
+  fileName       String
+  fileSize       Int
+  status         UploadJobStatus @default(QUEUED)
+  /// 처리 결과(업로드 응답과 같은 모양) 또는 오류 메시지.
+  result         Json?
+  error          String?
+  createdAt      DateTime        @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  @@index([organizationId, createdAt])
+  @@map("upload_jobs")
 }
