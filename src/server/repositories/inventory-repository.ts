@@ -5,7 +5,8 @@ import type { StockObservation } from '@/domain/inventory/types';
 import { resolveInventoryCost } from '@/domain/inventory/costs';
 import type { Prisma } from '@prisma/client';
 import type { SkuDescriptor, DailyWarehouseTotal } from '@/domain/inventory/read-model';
-import { attachIntervalInbounds, type DatedInbound } from '@/domain/inventory/inbounds';
+import type { DatedInbound } from '@/domain/inventory/inbounds';
+import { observationsFromLedger, type LedgerEntry } from '@/domain/ledger/ledger';
 import { NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
 
 /** 창고 하나의 달력 또는 창고별 달력을 돌려주는 함수. */
@@ -107,8 +108,51 @@ const observationSelect = {
   incomingStock: true,
   warningQty: true,
   dangerQty: true,
-  snapshot: { select: { snapshotDate: true } },
+  extra: true,
+  snapshot: { select: { snapshotDate: true, warehouseId: true } },
 } satisfies Prisma.InventoryItemSelect;
+
+type ObservationItem = Prisma.InventoryItemGetPayload<{ select: typeof observationSelect }>;
+
+/** 직접 입력한 실사 줄은 extra.manual = true로 저장된다(count-repository). */
+function isManualCount(extra: unknown) {
+  return !!extra && typeof extra === 'object' && (extra as { manual?: unknown }).manual === true;
+}
+
+/**
+ * 스냅샷 행(날짜순)과 입고 기록을 품목 하나의 재고 원장으로 바꾼다. 원가가 비어 있는 행은 직전에 알려진
+ * 단가를 이어받아 평가한다(resolveInventoryCost).
+ */
+function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedInbound[]): LedgerEntry[] {
+  let latestKnownUnitCost: number | null = null;
+  const entries: LedgerEntry[] = items.map((item) => {
+    const resolved = resolveInventoryCost(
+      { unitCost: Number(item.unitCost), unitCostProvided: item.unitCostProvided, totalCost: item.totalCost === null ? null : Number(item.totalCost), normalStock: item.normalStock },
+      latestKnownUnitCost,
+    );
+    latestKnownUnitCost = resolved.latestKnownUnitCost;
+    return {
+      date: dateOnlyToString(item.snapshot.snapshotDate),
+      locationId: item.snapshot.warehouseId,
+      itemId: skuId,
+      // 현재 업로드 규격은 정상재고를 유일한 재고 수량으로 쓴다(가용재고 열이 비어 0으로 저장된 과거 자료 포함).
+      source: isManualCount(item.extra) ? 'COUNT' : 'SNAPSHOT',
+      quantity: item.normalStock,
+      valuation: {
+        unitCost: resolved.unitCost,
+        totalCost: resolved.totalCost,
+        valuationKnown: resolved.valuationKnown,
+        defectiveStock: item.defectiveStock,
+        incomingStock: item.incomingStock,
+        warningQty: item.warningQty,
+        dangerQty: item.dangerQty,
+      },
+    };
+  });
+  const locationId = items[0]?.snapshot.warehouseId ?? '';
+  for (const inbound of inbounds) entries.push({ date: inbound.date, locationId, itemId: skuId, source: 'INBOUND', quantity: inbound.quantity });
+  return entries;
+}
 
 /** 기준일의 최신 스냅샷에 존재하는 SKU와 관측 시계열. 현재 isActive는 과거 조회에 적용하지 않는다. */
 export async function loadActiveSkusWithSeries(
@@ -171,41 +215,15 @@ export async function loadActiveSkusWithSeries(
   });
   const inboundsBySku = await loadInboundsBySku(skuIds, asOfDate);
 
-  const observationsBySku = new Map<string, StockObservation[]>();
-  const latestKnownUnitCostBySku = new Map<string, number>();
+  const itemsBySku = new Map<string, ObservationItem[]>();
   // items가 snapshotDate asc로 정렬되어 있으므로, 마지막에 덮어써지는 값이 asOfDate 시점 기준
   // "가장 최근" 관측치의 상품 속성이 된다. sku.current*는 asOfDate와 무관하게 항상 "지금" 값이라
   // 과거 조회에 미래 변경 사항이 섞여 보이므로 쓰지 않는다.
   const latestAttrsBySku = new Map<string, { productName: string; option: string | null; barcode: string | null; location: string | null }>();
   for (const item of items) {
-    const resolvedCost = resolveInventoryCost(
-      {
-        unitCost: Number(item.unitCost),
-        unitCostProvided: item.unitCostProvided,
-        totalCost: item.totalCost === null ? null : Number(item.totalCost),
-        normalStock: item.normalStock,
-      },
-      latestKnownUnitCostBySku.get(item.skuId) ?? null,
-    );
-    if (resolvedCost.latestKnownUnitCost !== null) {
-      latestKnownUnitCostBySku.set(item.skuId, resolvedCost.latestKnownUnitCost);
-    }
-    const list = observationsBySku.get(item.skuId) ?? [];
-    list.push({
-      date: dateOnlyToString(item.snapshot.snapshotDate),
-      // 현재 업로드 규격은 정상재고를 유일한 재고 수량으로 사용한다. 과거 스냅샷도
-      // 별도 가용재고 열이 비어 0으로 저장됐을 수 있으므로 정상재고로 분석한다.
-      availableStock: item.normalStock,
-      normalStock: item.normalStock,
-      defectiveStock: item.defectiveStock,
-      incomingStock: item.incomingStock,
-      unitCost: resolvedCost.unitCost,
-      totalCost: resolvedCost.totalCost,
-      valuationKnown: resolvedCost.valuationKnown,
-      warningQty: item.warningQty,
-      dangerQty: item.dangerQty,
-    });
-    observationsBySku.set(item.skuId, list);
+    const list = itemsBySku.get(item.skuId);
+    if (list) list.push(item);
+    else itemsBySku.set(item.skuId, [item]);
     latestAttrsBySku.set(item.skuId, { productName: item.productName, option: item.option, barcode: item.barcode, location: item.location });
   }
 
@@ -234,7 +252,7 @@ export async function loadActiveSkusWithSeries(
         eaPerPallet: sku.eaPerPallet,
         packagingBarcode: sku.packagingBarcode,
       },
-      observations: attachIntervalInbounds(observationsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], calendarOf(holidays, sku.warehouseId)),
+      observations: observationsFromLedger(ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? []), calendarOf(holidays, sku.warehouseId)),
     };
   });
 }
@@ -345,31 +363,7 @@ export async function loadSkuWithSeries(
   });
   const inboundsBySku = await loadInboundsBySku([skuId], asOfDate);
 
-  let latestKnownUnitCost: number | null = null;
-  const observations: StockObservation[] = items.map((item) => {
-    const resolvedCost = resolveInventoryCost(
-      {
-        unitCost: Number(item.unitCost),
-        unitCostProvided: item.unitCostProvided,
-        totalCost: item.totalCost === null ? null : Number(item.totalCost),
-        normalStock: item.normalStock,
-      },
-      latestKnownUnitCost,
-    );
-    latestKnownUnitCost = resolvedCost.latestKnownUnitCost;
-    return {
-      date: dateOnlyToString(item.snapshot.snapshotDate),
-      availableStock: item.normalStock,
-      normalStock: item.normalStock,
-      defectiveStock: item.defectiveStock,
-      incomingStock: item.incomingStock,
-      unitCost: resolvedCost.unitCost,
-      totalCost: resolvedCost.totalCost,
-      valuationKnown: resolvedCost.valuationKnown,
-      warningQty: item.warningQty,
-      dangerQty: item.dangerQty,
-    };
-  });
+  const observations = observationsFromLedger(ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? []), calendarOf(holidays, sku.warehouseId));
 
   // asOfDate 시점 기준 가장 최근 관측치의 상품 속성을 쓴다(과거 조회에 이후 변경분이 섞이지 않도록).
   const latestItem = items.at(-1);
@@ -397,7 +391,7 @@ export async function loadSkuWithSeries(
       eaPerPallet: sku.eaPerPallet,
       packagingBarcode: sku.packagingBarcode,
     },
-    observations: attachIntervalInbounds(observations, inboundsBySku.get(skuId) ?? [], calendarOf(holidays, sku.warehouseId)),
+    observations,
   };
 }
 

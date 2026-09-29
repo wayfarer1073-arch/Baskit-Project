@@ -3,6 +3,8 @@
 /** 특정 SKU의 특정 기준일 스냅샷 관측값 (날짜는 'YYYY-MM-DD', KST 달력 기준) */
 export interface StockObservation {
   date: string;
+  /** 이 재고 수준의 출처 — 외부 재고현황 파일(SNAPSHOT)인지, 사람이 직접 센 실사(COUNT)인지. 없으면 SNAPSHOT. */
+  source?: 'SNAPSHOT' | 'COUNT';
   /** 이전 스냅샷 이후 이 스냅샷까지 실제 입고된 것으로 사용자가 기록한 수량 */
   inboundQuantity?: number;
   availableStock: number;
