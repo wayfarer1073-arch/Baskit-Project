@@ -38,7 +38,7 @@ export function SoldOutSkuSheet({ rows, open, onOpenChange, onSelectSku }: SoldO
         <SheetHeader>
           <SheetTitle>품절 SKU {rows.length}개</SheetTitle>
           <SheetDescription>
-            최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 1개월이 지나지 않은 SKU예요. 관리 목록에서는 빠지고 여기서만 보여요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.
+            최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 1개월이 지나지 않은 SKU예요. 1개월 동안은 전체 재고 표에도 품절 배지로 남아요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.
           </SheetDescription>
         </SheetHeader>
         {rows.length === 0 ? (

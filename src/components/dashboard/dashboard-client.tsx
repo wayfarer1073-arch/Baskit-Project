@@ -58,8 +58,8 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
   const todayActions = useMemo(() => buildTodayActions(rows, asOfDate, settings.stagnantDays), [rows, asOfDate, settings.stagnantDays]);
   const favoriteRows = useMemo(() => rows.filter((r) => favorites.has(r.descriptor.skuId)), [rows, favorites]);
   // 즐겨찾기한 SKU는 위쪽 즐겨찾기 섹션에서 보이므로, 아래 전체 재고 표에서는 중복 노출하지 않는다.
-  // 품절 SKU는 관리 목록(전체 재고 표)에서 빠지고, 1개월 동안 품절 SKU 목록에서만 보인다.
-  const tableRows = useMemo(() => rows.filter((r) => !favorites.has(r.descriptor.skuId) && !r.descriptor.isSoldOut), [rows, favorites]);
+  // 품절 SKU는 1개월 동안 표에도 품절 배지로 남겨 둔다 — 품절이 이슈일 때 놓치지 않고 팔로우하도록.
+  const tableRows = useMemo(() => rows.filter((r) => !favorites.has(r.descriptor.skuId)), [rows, favorites]);
   const soldOutRows = useMemo(() => rows.filter((r) => r.descriptor.isSoldOut), [rows]);
 
   async function toggleFavorite(skuId: string, next: boolean) {
