@@ -8,6 +8,13 @@ export const importLayoutSchema = z.object({
   headerRowIndex: z.number().int().min(0).max(50),
   columns: z.object({ productCode: header, productName: header, normalStock: header, unitCost: header, totalCost: header, snapshotDate: header }),
   duplicateMode: z.enum(['sum', 'skip']),
+  stockUnit: z.enum(['EA', 'BOX', 'PLT']).optional(),
+});
+
+export const codeAliasSchema = z.object({
+  warehouseId: z.string().min(1),
+  externalCode: z.string().trim().min(1, '파일의 상품코드를 입력하세요.').max(100),
+  skuId: z.string().min(1, '연결할 상품을 고르세요.'),
 });
 
 export const templateNameSchema = z.string().trim().min(1, '템플릿 이름을 입력하세요.').max(60);

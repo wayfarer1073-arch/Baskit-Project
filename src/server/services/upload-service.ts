@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { autoLayout, parseSheets } from '@/domain/excel/parser';
 import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField } from '@/domain/excel/layout';
+import { applyCodeAliases, convertStockUnit } from '@/domain/excel/normalize';
+import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-alias-repository';
 import { findMatchingTemplate, layoutFingerprint, saveImportTemplate, touchImportTemplate } from '@/server/repositories/import-template-repository';
 import { validateAgainstPreviousSnapshot } from '@/domain/excel/validator';
 import type { ParsedInventoryRow, ValidationIssue } from '@/domain/excel/types';
@@ -33,7 +35,7 @@ export type UploadResult =
       status: 'DUPLICATE';
       existing: { snapshotDate: Date; uploadedAt: Date; uploadedByName: string; rowCount: number };
     }
-  | { status: 'SUCCESS'; snapshotId: string; rowCount: number; issues: ValidationIssue[]; fileDates: string[] };
+  | { status: 'SUCCESS'; snapshotId: string; rowCount: number; issues: ValidationIssue[]; fileDates: string[]; newCodes: string[] };
 
 function sha256(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
@@ -57,6 +59,22 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
   return sha256(Buffer.from(JSON.stringify(normalizedRows)));
 }
 
+/**
+ * 파싱한 행을 창고 기준으로 맞춘다: 연결된 상품코드를 기존 SKU로 바꾸고, 박스·팔레트 단위면 낱개로 환산한다.
+ * 처음 보는 상품코드도 함께 돌려준다(업로드 뒤 '새 상품' 안내용).
+ */
+async function normalizeForWarehouse(warehouseId: string | undefined, rows: ParsedInventoryRow[], layout: ImportLayout) {
+  if (!warehouseId) return { rows, issues: [] as ValidationIssue[], newCodes: [] as string[] };
+  const [aliasMap, info] = await Promise.all([loadAliasMap(warehouseId), loadWarehouseSkuInfo(warehouseId)]);
+  const aliased = applyCodeAliases(rows, aliasMap);
+  const converted = convertStockUnit(aliased.rows, layout.stockUnit ?? 'EA', info.factors);
+  const issues: ValidationIssue[] = [...converted.issues];
+  if (aliased.aliased > 0) issues.push({ level: 'WARNING', code: 'CODE_ALIAS_APPLIED', message: `연결된 상품코드 ${aliased.aliased}개를 기존 상품으로 바꿔 저장합니다.` });
+  // 창고에 첫 업로드면 전부 새 상품이라 알릴 필요가 없다.
+  const newCodes = info.knownCodes.size === 0 ? [] : converted.rows.filter((r) => !info.knownCodes.has(r.productCode)).map((r) => r.productCode);
+  return { rows: converted.rows, issues, newCodes };
+}
+
 export interface UploadPreview {
   sheets: { name: string; rowCount: number }[];
   layout: ImportLayout;
@@ -69,13 +87,15 @@ export interface UploadPreview {
   sample: { productCode: string; productName: string; normalStock: number; unitCost: number | null }[];
   fileDates: string[];
   issues: ValidationIssue[];
+  /** 창고에 처음 들어오는 상품코드(창고를 지정한 경우). */
+  newCodes: string[];
 }
 
 /**
  * 파일을 저장하지 않고 양식만 확인한다. 양식을 주지 않으면 저장된 템플릿 → 자동 인식 순으로 정한다.
  * 사용자가 화면에서 시트·헤더 행·열을 바꾸면 그 양식으로 다시 미리보기를 요청한다.
  */
-export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout): Promise<UploadPreview | { error: string }> {
+export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout, warehouseId?: string): Promise<UploadPreview | { error: string }> {
   const sheets = readSheets(fileBuffer);
   if (sheets.length === 0) return { error: '파일에서 표 데이터를 찾을 수 없습니다.' };
   const template = layout ? null : await findMatchingTemplate(orgId, sheets);
@@ -84,6 +104,9 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
   const headers = sheet.aoa[chosen.headerRowIndex] ?? [];
   const { confidence } = suggestColumns(headers, sheet.aoa.slice(chosen.headerRowIndex + 1, chosen.headerRowIndex + 21));
   const parsed = parseSheets(sheets, chosen);
+  const normalized = parsed.issues.some((i) => i.level === 'ERROR')
+    ? { rows: parsed.rows, issues: [], newCodes: [] }
+    : await normalizeForWarehouse(warehouseId, parsed.rows, chosen);
   return {
     sheets: sheets.map((s) => ({ name: s.name, rowCount: s.aoa.length })),
     layout: chosen,
@@ -91,12 +114,13 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
     confidence: template ? {} : confidence,
     topRows: sheet.aoa.slice(0, 15).map((r) => r.slice(0, 30)),
     headers,
-    rowCount: parsed.rows.length,
-    sample: parsed.rows
+    rowCount: normalized.rows.length,
+    sample: normalized.rows
       .slice(0, 8)
       .map((r) => ({ productCode: r.productCode, productName: r.productName, normalStock: r.normalStock, unitCost: r.costMissing ? null : r.unitCost })),
     fileDates: parsed.fileDates,
-    issues: parsed.issues,
+    issues: [...parsed.issues, ...normalized.issues],
+    newCodes: normalized.newCodes,
   };
 }
 
@@ -105,11 +129,21 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
   if (sheets.length === 0) return { status: 'ERROR', issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }] };
   const template = !request.layout && request.orgId ? await findMatchingTemplate(request.orgId, sheets) : null;
   const layout = request.layout ?? template?.layout ?? autoLayout(sheets);
-  const parseResult = parseSheets(sheets, layout);
+  const parsed = parseSheets(sheets, layout);
+  const normalized = parsed.issues.some((i) => i.level === 'ERROR')
+    ? { rows: parsed.rows, issues: [], newCodes: [] }
+    : await normalizeForWarehouse(request.warehouseId, parsed.rows, layout);
+  const parseResult = { ...parsed, rows: normalized.rows, issues: [...parsed.issues, ...normalized.issues] };
 
   const errors = parseResult.issues.filter((i) => i.level === 'ERROR');
   if (errors.length > 0) {
     return { status: 'ERROR', issues: parseResult.issues };
+  }
+  if (parseResult.rows.length === 0) {
+    return {
+      status: 'ERROR',
+      issues: [...parseResult.issues, { level: 'ERROR', code: 'NO_ROWS_AFTER_NORMALIZE', message: '저장할 수 있는 품목이 없습니다. 경고 내용을 확인해 주세요.' }],
+    };
   }
 
   const contentSignature = computeContentSignature(parseResult.rows);
@@ -216,5 +250,6 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
     rowCount: parseResult.rows.length,
     issues: [...parseResult.issues, ...crossCheck.issues],
     fileDates: parseResult.fileDates,
+    newCodes: normalized.newCodes,
   };
 }

@@ -9,6 +9,8 @@ export type LayoutField = (typeof LAYOUT_FIELDS)[number];
 export const REQUIRED_LAYOUT_FIELDS: LayoutField[] = ['productCode', 'productName', 'normalStock'];
 
 export type DuplicateMode = 'sum' | 'skip';
+/** 파일의 재고수량 단위 — 박스·팔레트면 SKU 추가 정보의 입수량으로 낱개(EA)로 바꾼다. */
+export type StockUnit = 'EA' | 'BOX' | 'PLT';
 
 export interface ImportLayout {
   /** null이면 첫 번째 시트. */
@@ -19,6 +21,8 @@ export interface ImportLayout {
   columns: Partial<Record<LayoutField, string | null>>;
   /** 같은 상품코드가 여러 행(로케이션·로트별)으로 나뉘어 있을 때 합산할지. */
   duplicateMode: DuplicateMode;
+  /** 없으면 EA(낱개). */
+  stockUnit?: StockUnit;
 }
 
 export type MatchConfidence = 'exact' | 'partial' | 'guess';

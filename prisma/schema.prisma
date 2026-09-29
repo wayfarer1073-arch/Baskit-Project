@@ -129,6 +129,7 @@ model Warehouse {
   snapshots       InventorySnapshot[]
   events          InventoryEvent[]
   packagingUpload SkuPackagingUpload?
+  codeAliases     SkuCodeAlias[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -195,6 +196,7 @@ model Sku {
   snapshotInbounds SnapshotInbound[]
   expirationLots   SkuExpirationLot[]
   favoritedBy      SkuFavorite[]
+  codeAliases      SkuCodeAlias[]
 
   @@unique([warehouseId, productCode])
   @@index([warehouseId])
@@ -554,4 +556,20 @@ model ImportTemplate {
   @@unique([organizationId, fingerprint])
   @@index([organizationId])
   @@map("import_templates")
+}
+
+/// 창고 안에서 파일의 다른 상품코드(업체 코드 변경, 바코드로 내보낸 파일 등)를 기존 SKU로 잇는 연결.
+/// 업로드 때 이 코드로 들어온 행은 연결된 SKU의 코드로 저장된다.
+model SkuCodeAlias {
+  id           String    @id @default(cuid())
+  warehouseId  String
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  externalCode String
+  skuId        String
+  sku          Sku       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
+  @@unique([warehouseId, externalCode])
+  @@index([skuId])
+  @@map("sku_code_aliases")
 }

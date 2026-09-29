@@ -3,6 +3,7 @@ import { getTenant } from '@/server/tenant';
 import { previewUpload } from '@/server/services/upload-service';
 import { parseLayoutField } from '@/server/validation/import-layout';
 import { MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
+import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 
 /** 저장하지 않고 파일 양식(시트·헤더·열 추천·샘플)을 확인한다. */
 export async function POST(request: Request) {
@@ -16,7 +17,9 @@ export async function POST(request: Request) {
   const layout = parseLayoutField(formData.get('layout'));
   if (layout === null) return NextResponse.json({ error: '양식 정보가 올바르지 않습니다.' }, { status: 400 });
 
-  const preview = await previewUpload(tenant.orgId, Buffer.from(await file.arrayBuffer()), layout);
+  const warehouseIdRaw = formData.get('warehouseId');
+  const warehouseId = typeof warehouseIdRaw === 'string' && (await getWarehouseInOrg(tenant.orgId, warehouseIdRaw)) ? warehouseIdRaw : undefined;
+  const preview = await previewUpload(tenant.orgId, Buffer.from(await file.arrayBuffer()), layout, warehouseId);
   if ('error' in preview) return NextResponse.json(preview, { status: 422 });
   return NextResponse.json(preview);
 }

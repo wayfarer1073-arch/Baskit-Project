@@ -25,6 +25,7 @@ export interface LayoutPreview {
   sample: { productCode: string; productName: string; normalStock: number; unitCost: number | null }[];
   fileDates: string[];
   issues: { level: 'ERROR' | 'WARNING'; code: string; message: string }[];
+  newCodes: string[];
 }
 
 const NONE = '__none__';
@@ -170,17 +171,32 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
             })}
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs">{t.duplicateMode}</Label>
-            <Select value={layout.duplicateMode} onValueChange={(v) => set({ duplicateMode: v === 'skip' ? 'skip' : 'sum' })}>
-              <SelectTrigger className="h-8 w-full text-xs sm:w-80">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sum">{t.duplicateSum}</SelectItem>
-                <SelectItem value="skip">{t.duplicateSkip}</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-xs">{t.stockUnit}</Label>
+              <Select value={layout.stockUnit ?? 'EA'} onValueChange={(v) => set({ stockUnit: v === 'BOX' || v === 'PLT' ? v : 'EA' })}>
+                <SelectTrigger className="h-8 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EA">{t.unitEA}</SelectItem>
+                  <SelectItem value="BOX">{t.unitBOX}</SelectItem>
+                  <SelectItem value="PLT">{t.unitPLT}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t.duplicateMode}</Label>
+              <Select value={layout.duplicateMode} onValueChange={(v) => set({ duplicateMode: v === 'skip' ? 'skip' : 'sum' })}>
+                <SelectTrigger className="h-8 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sum">{t.duplicateSum}</SelectItem>
+                  <SelectItem value="skip">{t.duplicateSkip}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       )}
@@ -225,9 +241,12 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
         </div>
       )}
 
-      {(dateNote || warnings.length > 0) && (
+      {(dateNote || warnings.length > 0 || preview.newCodes.length > 0) && (
         <div className="space-y-1 text-xs text-status-warning">
           {dateNote && <p>{dateNote}</p>}
+          {preview.newCodes.length > 0 && (
+            <p>{format(t.newCodes, { count: preview.newCodes.length, codes: preview.newCodes.slice(0, 5).join(', ') + (preview.newCodes.length > 5 ? ' …' : '') })}</p>
+          )}
           {warnings.length > 0 && (
             <details>
               <summary className="cursor-pointer">{format(t.warningsCount, { count: warnings.length })}</summary>

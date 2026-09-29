@@ -51,6 +51,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
     setPreviewing(true);
     const formData = new FormData();
     formData.append('file', target);
+    formData.append('warehouseId', warehouseId);
     if (layout) formData.append('layout', JSON.stringify(layout));
     try {
       const res = await fetch('/api/upload/preview', { method: 'POST', body: formData });
@@ -137,6 +138,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
       }
 
       toast.success(format(m.upload.saved, { warehouse: warehouseName, count: body.rowCount.toLocaleString() }));
+      if (body.newCodes?.length) toast.info(format(m.codeAliases.newCodesToast, { count: body.newCodes.length }), { duration: 8000 });
       setFile(null);
       setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';

@@ -90,3 +90,59 @@ it('saves a confirmed layout as a template and applies it to the next file even 
   if ('error' in other) throw new Error(other.error);
   expect(other.template).toBeNull();
 });
+
+it('routes a linked code to the existing product and converts box counts with the pack size', async () => {
+  const day1 = workbook([
+    ['상품코드', '상품명', '정상재고'],
+    ['P1', '사과', 48],
+  ]);
+  await processUpload({
+    orgId: a.org.id,
+    warehouseId: a.warehouse.id,
+    snapshotDate: new Date('2026-09-17'),
+    fileBuffer: day1,
+    fileName: 'd1.xlsx',
+    uploadedById: a.user.id,
+    replaceExisting: false,
+  });
+  const sku = await prisma.sku.findFirstOrThrow({ where: { warehouseId: a.warehouse.id, productCode: 'P1' } });
+  await prisma.sku.update({ where: { id: sku.id }, data: { eaPerBox: 24 } });
+  const { createCodeAlias } = await import('../src/server/repositories/code-alias-repository');
+  // 다른 조직은 이 창고의 상품에 연결할 수 없다.
+  expect(await createCodeAlias(b.org.id, { warehouseId: a.warehouse.id, externalCode: '8801', skuId: sku.id })).toBeNull();
+  await createCodeAlias(a.org.id, { warehouseId: a.warehouse.id, externalCode: '8801', skuId: sku.id });
+
+  // 다음 날 파일은 바코드(8801)로 박스 단위 재고를 내보낸다. 새 코드 N1은 입수량을 몰라 건너뛴다.
+  const day2 = workbook([
+    ['상품코드', '상품명', '박스수량'],
+    ['8801', '사과', 2],
+    ['N1', '새상품', 3],
+  ]);
+  const layout = {
+    sheetName: null,
+    headerRowIndex: 0,
+    columns: { productCode: '상품코드', productName: '상품명', normalStock: '박스수량' },
+    duplicateMode: 'sum' as const,
+    stockUnit: 'BOX' as const,
+  };
+  const preview = await previewUpload(a.org.id, day2, layout, a.warehouse.id);
+  if ('error' in preview) throw new Error(preview.error);
+  expect(preview.sample).toEqual([expect.objectContaining({ productCode: 'P1', normalStock: 48 })]);
+  expect(preview.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['CODE_ALIAS_APPLIED', 'UNIT_FACTOR_MISSING']));
+  const result = await processUpload({
+    orgId: a.org.id,
+    layout,
+    warehouseId: a.warehouse.id,
+    snapshotDate: new Date('2026-09-18'),
+    fileBuffer: day2,
+    fileName: 'd2.xlsx',
+    uploadedById: a.user.id,
+    replaceExisting: false,
+  });
+  expect(result.status).toBe('SUCCESS');
+  const items = await prisma.inventoryItem.findMany({
+    where: { snapshot: { warehouseId: a.warehouse.id, snapshotDate: new Date('2026-09-18') } },
+    select: { productCode: true, normalStock: true },
+  });
+  expect(items).toEqual([{ productCode: 'P1', normalStock: 48 }]);
+});
