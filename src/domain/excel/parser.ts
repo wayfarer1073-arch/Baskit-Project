@@ -1,14 +1,6 @@
-import {
-  CANONICAL_FIELDS,
-  HEADER_ALIASES,
-  NUMERIC_FIELDS,
-  REQUIRED_FIELDS,
-  type CanonicalField,
-  type ParseResult,
-  type ParsedInventoryRow,
-  type ValidationIssue,
-} from './types';
-import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap } from './aoa-reader';
+import { NUMERIC_FIELDS, type CanonicalField, type ParseResult, type ParsedInventoryRow, type ValidationIssue } from './types';
+import { normalizeString } from './aoa-reader';
+import { detectHeaderRow, parseDateCell, readSheets, REQUIRED_LAYOUT_FIELDS, resolveColumns, suggestColumns, type ImportLayout, type LayoutField, type SheetData } from './layout';
 
 /** 콤마 천단위 구분자, 공백, 통화기호를 제거하고 숫자로 변환한다. 빈 값/파싱 실패는 null. */
 function normalizeNumber(value: string): number | null {
@@ -38,44 +30,68 @@ const DECIMAL_24_2_MIN = -DECIMAL_24_2_MAX;
 
 const MAX_DATA_ROWS = 50_000; // 실제 창고 품목 수보다 훨씬 넉넉한 상한 (동기 파싱 리소스 보호용)
 
-export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
+const FIELD_LABEL: Record<LayoutField, string> = {
+  productCode: '상품코드',
+  productName: '상품명',
+  normalStock: '재고수량',
+  unitCost: '단위원가',
+  totalCost: '원가합계',
+  snapshotDate: '기준일',
+};
+
+/** 레이아웃을 주지 않으면 첫 시트에서 헤더 행과 열을 자동으로 찾는다(가장 흔한 양식은 확인 없이 바로 들어간다). */
+export function autoLayout(sheets: SheetData[], sheetName?: string | null): ImportLayout {
+  const sheet = sheets.find((s) => s.name === sheetName) ?? sheets[0];
+  const headerRowIndex = sheet ? detectHeaderRow(sheet.aoa) : 0;
+  const headers = sheet?.aoa[headerRowIndex] ?? [];
+  const { columns } = suggestColumns(headers, sheet?.aoa.slice(headerRowIndex + 1, headerRowIndex + 21) ?? []);
+  return { sheetName: sheet?.name ?? null, headerRowIndex, columns, duplicateMode: 'sum' };
+}
+
+/**
+ * 재고 파일을 레이아웃대로 읽는다. 문제가 있는 행만 건너뛰고(경고) 나머지 정상 행은 전부 살린다 —
+ * 한 셀의 오타 때문에 수백 개 상품이 통째로 사라지지 않도록.
+ */
+export function parseInventoryWorkbook(buffer: Buffer, layout?: ImportLayout): ParseResult {
+  const sheets = readSheets(buffer);
+  if (sheets.length === 0) {
+    return { rows: [], headerMap: {}, issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }], fileDates: [] };
+  }
+  return parseSheets(sheets, layout ?? autoLayout(sheets));
+}
+
+export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseResult {
   const issues: ValidationIssue[] = [];
-  const aoa = bufferToAoa(buffer);
-
-  if (aoa.length === 0) {
-    issues.push({ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' });
-    return { rows: [], headerMap: {}, issues };
+  const sheet = (layout.sheetName ? sheets.find((s) => s.name === layout.sheetName) : sheets[0]) ?? null;
+  if (!sheet) {
+    issues.push({ level: 'ERROR', code: 'SHEET_NOT_FOUND', message: `양식에 지정된 시트 '${layout.sheetName}'를 파일에서 찾을 수 없습니다.` });
+    return { rows: [], headerMap: {}, issues, fileDates: [], layout };
   }
+  const aoa = sheet.aoa;
+  const headerRow = aoa[layout.headerRowIndex] ?? [];
+  const { indexes, missing } = resolveColumns(headerRow, layout.columns);
+  const headerMap: ParseResult['headerMap'] = {};
+  for (const [field, idx] of Object.entries(indexes)) if (field !== 'snapshotDate') headerMap[field as CanonicalField] = headerRow[idx as number];
 
-  const headerRowIdx = findHeaderRowIndex(aoa, HEADER_ALIASES);
-  const headerRow = aoa[headerRowIdx];
-  const headerMap = buildHeaderMap(headerRow, HEADER_ALIASES, CANONICAL_FIELDS);
-
-  const missingRequired = REQUIRED_FIELDS.filter((f) => !headerMap[f]);
-  if (missingRequired.length > 0) {
-    for (const field of missingRequired) {
-      issues.push({
-        level: 'ERROR',
-        code: 'MISSING_REQUIRED_COLUMN',
-        message: `필수 컬럼을 찾을 수 없습니다: ${HEADER_ALIASES[field][0]} (인식 가능한 이름: ${HEADER_ALIASES[field].join(', ')})`,
-        column: field,
-      });
+  for (const field of missing) {
+    issues.push({
+      level: REQUIRED_LAYOUT_FIELDS.includes(field) ? 'ERROR' : 'WARNING',
+      code: 'TEMPLATE_COLUMN_NOT_FOUND',
+      message: `'${FIELD_LABEL[field]}'로 지정한 열 '${layout.columns[field]}'을(를) 파일에서 찾을 수 없습니다.`,
+      column: field,
+    });
+  }
+  for (const field of REQUIRED_LAYOUT_FIELDS) {
+    if (indexes[field] === undefined && !missing.includes(field)) {
+      issues.push({ level: 'ERROR', code: 'MISSING_REQUIRED_COLUMN', message: `필수 컬럼을 찾을 수 없습니다: ${FIELD_LABEL[field]}`, column: field });
     }
-    return { rows: [], headerMap, issues };
   }
+  if (issues.some((i) => i.level === 'ERROR')) return { rows: [], headerMap, issues, fileDates: [], layout };
 
-  const headerIndexByField = new Map<CanonicalField, number>();
-  for (const field of CANONICAL_FIELDS) {
-    const headerName = headerMap[field];
-    if (!headerName) continue;
-    headerIndexByField.set(field, headerRow.indexOf(headerName));
-  }
-
-  const dataRows = aoa.slice(headerRowIdx + 1).filter((r) => r.some((c) => normalizeString(c) !== ''));
-
+  const dataRows = aoa.slice(layout.headerRowIndex + 1).filter((r) => r.some((c) => normalizeString(c) !== ''));
   if (dataRows.length === 0) {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 상품 데이터가 한 건도 없습니다.' });
-    return { rows: [], headerMap, issues };
+    return { rows: [], headerMap, issues, fileDates: [], layout };
   }
   if (dataRows.length > MAX_DATA_ROWS) {
     issues.push({
@@ -83,42 +99,45 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
       code: 'TOO_MANY_ROWS',
       message: `상품 행이 ${dataRows.length.toLocaleString()}건으로 처리 가능한 최대치(${MAX_DATA_ROWS.toLocaleString()}건)를 초과합니다.`,
     });
-    return { rows: [], headerMap, issues };
+    return { rows: [], headerMap, issues, fileDates: [], layout };
   }
 
   const rows: ParsedInventoryRow[] = [];
-  const seenProductCodes = new Map<string, number>(); // productCode -> first rowNumber
+  const rowByCode = new Map<string, ParsedInventoryRow>();
+  const mergedCodes: string[] = [];
+  const fileDates = new Set<string>();
 
   dataRows.forEach((rawRow, i) => {
     const rowNumber = i + 1;
-    const get = (field: CanonicalField): string => {
-      const idx = headerIndexByField.get(field);
-      if (idx === undefined || idx === -1) return '';
-      return normalizeString(rawRow[idx]);
+    const get = (field: LayoutField): string => {
+      const idx = indexes[field];
+      return idx === undefined ? '' : normalizeString(rawRow[idx]);
     };
+
+    if (indexes.snapshotDate !== undefined) {
+      const date = parseDateCell(get('snapshotDate'));
+      if (date) fileDates.add(date);
+    }
 
     const productCode = get('productCode');
     if (productCode === '') {
-      // 이 행 하나만 제외하고 나머지 정상 행은 그대로 저장한다 — 파일 전체를 막으면 수백 개
-      // 정상 상품이 상품코드 오탈자 한 줄 때문에 통째로 사라진다.
       issues.push({ level: 'WARNING', code: 'MISSING_PRODUCT_CODE', message: `${rowNumber}행: 상품코드가 비어 있어 이 행은 건너뜁니다.`, rowNumber, column: 'productCode' });
       return;
     }
-    if (seenProductCodes.has(productCode)) {
+    const existing = rowByCode.get(productCode);
+    if (existing && layout.duplicateMode === 'skip') {
       issues.push({
         level: 'WARNING',
         code: 'DUPLICATE_PRODUCT_CODE',
-        message: `${rowNumber}행: 상품코드 '${productCode}'가 ${seenProductCodes.get(productCode)}행과 중복되어 이 행은 건너뜁니다.`,
+        message: `${rowNumber}행: 상품코드 '${productCode}'가 ${existing.rowNumber}행과 중복되어 이 행은 건너뜁니다.`,
         rowNumber,
         column: 'productCode',
       });
       return;
     }
-    seenProductCodes.set(productCode, rowNumber);
 
     const productName = get('productName');
-    if (productName === '') {
-      // 다른 필수값 누락과 동일하게 이 행만 건너뛴다 — 파일 전체를 막지 않는다.
+    if (productName === '' && !existing) {
       issues.push({ level: 'WARNING', code: 'MISSING_PRODUCT_NAME', message: `${rowNumber}행: 상품명이 비어 있어 이 행은 건너뜁니다.`, rowNumber, column: 'productName' });
       return;
     }
@@ -127,17 +146,13 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
     let hasParseFailure = false;
     for (const field of NUMERIC_FIELDS) {
       const raw = get(field);
-      if (raw === '') {
-        continue;
-      }
+      if (raw === '') continue;
       const parsed = normalizeNumber(raw);
       if (parsed === null) {
-        // 이 필드가 있는 행 하나만 건너뛴다 — 아래 세 case 모두 동일한 이유(파일 전체를
-        // 막으면 한 셀의 오타 때문에 수백 개 정상 상품이 통째로 사라짐).
         issues.push({
           level: 'WARNING',
           code: 'NUMBER_PARSE_FAILED',
-          message: `${rowNumber}행: '${HEADER_ALIASES[field][0]}' 값 '${raw}'을(를) 숫자로 해석할 수 없어 이 행은 건너뜁니다.`,
+          message: `${rowNumber}행: '${FIELD_LABEL[field]}' 값 '${raw}'을(를) 숫자로 해석할 수 없어 이 행은 건너뜁니다.`,
           rowNumber,
           column: field,
         });
@@ -148,7 +163,7 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
         issues.push({
           level: 'WARNING',
           code: 'NUMBER_NOT_INTEGER',
-          message: `${rowNumber}행: '${HEADER_ALIASES[field][0]}' 값 '${raw}'은(는) 소수가 아닌 정수여야 해서 이 행은 건너뜁니다.`,
+          message: `${rowNumber}행: '${FIELD_LABEL[field]}' 값 '${raw}'은(는) 소수가 아닌 정수여야 해서 이 행은 건너뜁니다.`,
           rowNumber,
           column: field,
         });
@@ -164,7 +179,7 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
         issues.push({
           level: 'WARNING',
           code: 'NUMBER_OUT_OF_RANGE',
-          message: `${rowNumber}행: '${HEADER_ALIASES[field][0]}' 값 '${raw}'이(가) 처리 가능한 범위를 벗어나 이 행은 건너뜁니다.`,
+          message: `${rowNumber}행: '${FIELD_LABEL[field]}' 값 '${raw}'이(가) 처리 가능한 범위를 벗어나 이 행은 건너뜁니다.`,
           rowNumber,
           column: field,
         });
@@ -175,29 +190,37 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
     }
     if (hasParseFailure) return;
 
-    const costMissing = get('unitCost') === '';
-    if (costMissing) {
-      issues.push({
-        level: 'WARNING',
-        code: 'COST_MISSING',
-        message: `${rowNumber}행: 원가가 비어 있어 동일 SKU의 최근 원가를 사용합니다. 이전 원가도 없으면 0원으로 처리됩니다.`,
-        rowNumber,
-        column: 'unitCost',
-      });
-    }
-
-    if ((numericValues.normalStock ?? 0) < 0) {
-      issues.push({
-        level: 'WARNING',
-        code: 'NEGATIVE_STOCK',
-        message: `${rowNumber}행: 정상재고가 음수입니다 (${numericValues.normalStock}).`,
-        rowNumber,
-      });
-    }
-
     const normalStock = numericValues.normalStock ?? 0;
+    const costMissing = get('unitCost') === '';
 
-    rows.push({
+    if (existing) {
+      // 로케이션·로트별로 나뉜 행 — 재고와 원가합은 더하고, 단가는 먼저 적힌 값을 쓴다.
+      const merged = existing.normalStock + normalStock;
+      if (merged > INT32_MAX) {
+        issues.push({
+          level: 'WARNING',
+          code: 'NUMBER_OUT_OF_RANGE',
+          message: `${rowNumber}행: 상품코드 '${productCode}'의 합산 재고가 처리 가능한 범위를 벗어나 이 행은 더하지 않습니다.`,
+          rowNumber,
+        });
+        return;
+      }
+      existing.normalStock = merged;
+      existing.availableStock = merged;
+      existing.totalCost = existing.totalCost !== null && numericValues.totalCost !== undefined ? existing.totalCost + numericValues.totalCost : null;
+      if (existing.costMissing && !costMissing) {
+        existing.unitCost = numericValues.unitCost ?? 0;
+        existing.costMissing = false;
+      }
+      if (!mergedCodes.includes(productCode)) mergedCodes.push(productCode);
+      return;
+    }
+
+    if (normalStock < 0) {
+      issues.push({ level: 'WARNING', code: 'NEGATIVE_STOCK', message: `${rowNumber}행: 정상재고가 음수입니다 (${normalStock}).`, rowNumber });
+    }
+
+    const row: ParsedInventoryRow = {
       rowNumber,
       productCode,
       productName,
@@ -215,8 +238,30 @@ export function parseInventoryWorkbook(buffer: Buffer): ParseResult {
       category: null,
       extra: {},
       costMissing,
-    });
+    };
+    rows.push(row);
+    rowByCode.set(productCode, row);
   });
 
-  return { rows, headerMap, issues };
+  for (const row of rows) {
+    if (row.costMissing) {
+      issues.push({
+        level: 'WARNING',
+        code: 'COST_MISSING',
+        message: `${row.rowNumber}행: 원가가 비어 있어 동일 SKU의 최근 원가를 사용합니다. 이전 원가도 없으면 0원으로 처리됩니다.`,
+        rowNumber: row.rowNumber,
+        column: 'unitCost',
+      });
+    }
+  }
+  if (mergedCodes.length > 0) {
+    const sample = mergedCodes.slice(0, 5).join(', ');
+    issues.push({
+      level: 'WARNING',
+      code: 'DUPLICATE_PRODUCT_CODE_MERGED',
+      message: `상품코드 ${mergedCodes.length}개가 여러 행(로케이션·로트별)으로 나뉘어 있어 재고를 합산했습니다: ${sample}${mergedCodes.length > 5 ? ' 외' : ''}`,
+    });
+  }
+
+  return { rows, headerMap, issues, fileDates: [...fileDates].sort(), layout };
 }

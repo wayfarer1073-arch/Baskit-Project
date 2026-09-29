@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { InboundManager } from '@/components/upload/inbound-manager';
+import { LayoutReview, type LayoutPreview } from '@/components/upload/layout-review';
+import type { ImportLayout } from '@/domain/excel/layout-types';
 import { formatKstDate, formatKstDateTime } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
@@ -36,7 +38,44 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [duplicate, setDuplicate] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [preview, setPreview] = useState<LayoutPreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [saveTemplate, setSaveTemplate] = useState(true);
+  const [templateName, setTemplateName] = useState(() => format(m.layout.templateNameDefault, { warehouse: warehouseName }));
+  const previewSeq = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** 파일(과 사용자가 고친 양식)을 서버 파서로 미리 읽는다. 늦게 온 이전 응답은 버린다. */
+  async function loadPreview(target: File, layout?: ImportLayout) {
+    const seq = ++previewSeq.current;
+    setPreviewing(true);
+    const formData = new FormData();
+    formData.append('file', target);
+    if (layout) formData.append('layout', JSON.stringify(layout));
+    try {
+      const res = await fetch('/api/upload/preview', { method: 'POST', body: formData });
+      const body = await res.json().catch(() => ({}));
+      if (seq !== previewSeq.current) return;
+      if (!res.ok) {
+        setPreview(null);
+        toast.error(body.error ?? m.upload.failed);
+        return;
+      }
+      setPreview(body);
+    } catch {
+      if (seq === previewSeq.current) toast.error(m.common.networkError);
+    } finally {
+      if (seq === previewSeq.current) setPreviewing(false);
+    }
+  }
+
+  function chooseFile(next: File | null) {
+    setFile(next);
+    setPreview(null);
+    setIssues([]);
+    setDuplicate(false);
+    if (next) loadPreview(next);
+  }
 
   async function resetUpload() {
     if (!confirm(format(m.upload.resetConfirm, { warehouse: warehouseName, date: formatKstDate(date) }))) return;
@@ -73,6 +112,8 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
     formData.append('snapshotDate', date);
     formData.append('replaceExisting', String(!!existing));
     formData.append('file', file);
+    if (preview) formData.append('layout', JSON.stringify(preview.layout));
+    if (preview && !preview.template && saveTemplate && templateName.trim()) formData.append('templateName', templateName.trim());
 
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
@@ -97,6 +138,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
 
       toast.success(format(m.upload.saved, { warehouse: warehouseName, count: body.rowCount.toLocaleString() }));
       setFile(null);
+      setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       router.refresh();
     } catch {
@@ -130,14 +172,26 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
       {!blocked && (
         <div className="space-y-1.5">
           <Label htmlFor={`warehouse-day-file-${warehouseId}`}>{m.upload.fileLabel}</Label>
-          <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx,.csv" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} />
+          {file && (
+            <LayoutReview
+              preview={preview}
+              loading={previewing}
+              date={date}
+              onLayoutChange={(layout) => loadPreview(file, layout)}
+              saveTemplate={saveTemplate}
+              onSaveTemplateChange={setSaveTemplate}
+              templateName={templateName}
+              onTemplateNameChange={setTemplateName}
+            />
+          )}
           <p className="text-xs text-muted-foreground">{m.upload.requiredColumns}</p>
           <p className="flex items-start gap-1.5 rounded-md border border-status-warning/30 bg-status-warning-bg p-2.5 text-xs text-status-warning">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <span>{m.upload.missingItemNotice}</span>
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button onClick={submit} disabled={uploading || !file}>
+            <Button onClick={submit} disabled={uploading || !file || previewing || !preview || preview.issues.some((i) => i.level === 'ERROR')}>
               <UploadCloud className="size-4" />
               {uploading ? m.upload.uploading : existing ? m.upload.replace : m.upload.upload}
             </Button>

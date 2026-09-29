@@ -72,4 +72,8 @@ export interface ParseResult {
   rows: ParsedInventoryRow[];
   headerMap: Partial<Record<CanonicalField, string>>;
   issues: ValidationIssue[];
+  /** 파일 안 '기준일' 열에서 읽은 날짜들(열이 없으면 빈 배열). */
+  fileDates: string[];
+  /** 실제로 쓴 양식(시트·헤더 행·열). 파일이 비어 있으면 없음. */
+  layout?: import('./layout').ImportLayout;
 }

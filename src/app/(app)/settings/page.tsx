@@ -9,6 +9,7 @@ import { listHolidays } from '@/server/repositories/holiday-repository';
 import { listPackagingUploadStatus } from '@/server/repositories/packaging-repository';
 import { getOrganization } from '@/server/repositories/organization-repository';
 import { listSuppliers } from '@/server/repositories/store-repository';
+import { listImportTemplates } from '@/server/repositories/import-template-repository';
 import { getStoreItemLearning } from '@/server/services/store-service';
 import { CommonSettings, DailySettings } from '@/components/settings/settings-form';
 import { PeriodicSettings, StoreSettings } from '@/components/settings/segment-settings';
@@ -22,7 +23,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const isAdmin = tenant.isAdmin;
   const params = await searchParams;
 
-  const [organization, warehouses, settings, segmentSettings, users, skus, expirations, holidays, packagingStatuses, suppliers, storeItems] = await Promise.all([
+  const [organization, warehouses, settings, segmentSettings, users, skus, expirations, holidays, packagingStatuses, suppliers, storeItems, importTemplates] = await Promise.all([
     getOrganization(tenant.orgId),
     listWarehouses(tenant.orgId),
     getSettings(tenant.orgId),
@@ -34,6 +35,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     listPackagingUploadStatus(tenant.orgId),
     listSuppliers(tenant.orgId),
     getStoreItemLearning(tenant.orgId, todayKstDateString()),
+    listImportTemplates(tenant.orgId),
   ]);
 
   // 탭을 지정하지 않고 들어오면 지금 보고 있는 대시보드의 설정부터 보여준다.
@@ -64,6 +66,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             holidays={holidays}
             packagingStatuses={packagingStatuses}
             allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
+            importTemplates={importTemplates}
           />
         }
         periodic={<PeriodicSettings isAdmin={isAdmin} recountDays={segmentSettings.periodicRecountDays} stockoutSoonDays={settings.stockoutSoonDays} />}

@@ -7,8 +7,9 @@ import { getWarehouseInOrg } from '@/server/repositories/warehouse-repository';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
 import { listHolidayDateStrings } from '@/server/repositories/holiday-repository';
 import { isShippingDay } from '@/domain/inventory/shipping-calendar';
+import { MAX_UPLOAD_BYTES } from '@/lib/upload-limits';
+import { parseLayoutField, templateNameSchema } from '@/server/validation/import-layout';
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB — 일반적인 재고 Excel보다 훨씬 넉넉한 상한
 
 export async function POST(request: Request) {
   const tenant = await getTenant();
@@ -26,8 +27,8 @@ export async function POST(request: Request) {
 
   if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
 
-  if (file.size > MAX_FILE_BYTES) {
-    return NextResponse.json({ error: `파일이 너무 큽니다 (최대 ${MAX_FILE_BYTES / 1024 / 1024}MB).` }, { status: 413 });
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: `파일이 너무 큽니다 (최대 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB).` }, { status: 413 });
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDateStr)) {
@@ -50,10 +51,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 일일 재고 연동에서 휴무일 업로드를 켤 수 있어요.' }, { status: 400 });
   }
 
+  const layout = parseLayoutField(formData.get('layout'));
+  if (layout === null) return NextResponse.json({ error: '양식 정보가 올바르지 않습니다.' }, { status: 400 });
+  const templateNameRaw = formData.get('templateName');
+  let saveTemplateAs: string | undefined;
+  if (typeof templateNameRaw === 'string' && templateNameRaw.trim() !== '') {
+    const name = templateNameSchema.safeParse(templateNameRaw);
+    if (!name.success) return NextResponse.json({ error: name.error.issues[0]?.message ?? '템플릿 이름을 확인하세요.' }, { status: 400 });
+    saveTemplateAs = name.data;
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const fileBuffer = Buffer.from(arrayBuffer);
 
   const result = await processUpload({
+    orgId: tenant.orgId,
+    layout,
+    saveTemplateAs,
     warehouseId,
     snapshotDate,
     fileBuffer,

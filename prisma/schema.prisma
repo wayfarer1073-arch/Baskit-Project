@@ -40,15 +40,16 @@ model Organization {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  users      User[]
-  warehouses Warehouse[]
-  settings   Settings?
-  holidays   Holiday[]
-  posts      Post[]
-  schedules  EventSchedule[]
-  storeItems StoreItem[]
-  suppliers  Supplier[]
-  dailySales DailySales[]
+  users           User[]
+  warehouses      Warehouse[]
+  settings        Settings?
+  holidays        Holiday[]
+  posts           Post[]
+  schedules       EventSchedule[]
+  storeItems      StoreItem[]
+  suppliers       Supplier[]
+  importTemplates ImportTemplate[]
+  dailySales      DailySales[]
 
   @@map("organizations")
 }
@@ -530,4 +531,27 @@ model Supplier {
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("suppliers")
+}
+
+/// 재고 파일 양식 템플릿 — 업체마다 다른 엑셀 양식을 한 번 확인해 두면 다음 업로드부터 자동 적용된다.
+/// 헤더 행의 지문(열 이름 집합)으로 같은 양식인지 알아본다.
+model ImportTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  fingerprint    String
+  sheetName      String?
+  headerRowIndex Int
+  /// 필드별 헤더 이름 { productCode: "품번", ... }
+  columns        Json
+  /// 같은 상품코드 여러 행: sum(합산) | skip(첫 행만)
+  duplicateMode  String       @default("sum")
+  lastUsedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, fingerprint])
+  @@index([organizationId])
+  @@map("import_templates")
 }

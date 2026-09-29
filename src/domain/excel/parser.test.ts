@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseInventoryWorkbook } from './parser';
+import { autoLayout, parseInventoryWorkbook } from './parser';
+import { detectHeaderRow, headerFingerprint, parseDateCell, readSheets, suggestColumns } from './layout';
 
 function buildXlsxBuffer(aoa: (string | number)[][]): Buffer {
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -84,7 +85,7 @@ describe('parseInventoryWorkbook - 최소 헤더 기반 업로드', () => {
     expect(result.issues.some((issue) => issue.code === 'MISSING_REQUIRED_COLUMN' && issue.column === 'productCode')).toBe(true);
   });
 
-  it('상품코드·상품명 누락과 상품코드 중복은 WARNING으로 표시되고 그 행만 제외된다(파일 전체를 막지 않음, 회귀 테스트)', () => {
+  it('상품코드·상품명 누락은 그 행만 제외하고, 상품코드 중복은 합산하며 모두 WARNING이다(파일 전체를 막지 않음, 회귀 테스트)', () => {
     const rows = [
       ['상품코드', '상품명', '정상재고'],
       ['', '상품A', '1'],
@@ -97,7 +98,9 @@ describe('parseInventoryWorkbook - 최소 헤더 기반 업로드', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.issues.some((issue) => issue.code === 'MISSING_PRODUCT_CODE' && issue.level === 'WARNING')).toBe(true);
     expect(result.issues.some((issue) => issue.code === 'MISSING_PRODUCT_NAME' && issue.level === 'WARNING')).toBe(true);
-    expect(result.issues.some((issue) => issue.code === 'DUPLICATE_PRODUCT_CODE' && issue.level === 'WARNING')).toBe(true);
+    // 같은 상품코드가 여러 행이면(로케이션·로트별 양식) 재고를 합산하고 경고로 알린다.
+    expect(result.rows[0]).toMatchObject({ productCode: 'B', normalStock: 3 });
+    expect(result.issues.some((issue) => issue.code === 'DUPLICATE_PRODUCT_CODE_MERGED' && issue.level === 'WARNING')).toBe(true);
     expect(result.issues.filter((issue) => issue.level === 'ERROR')).toHaveLength(0);
   });
 
@@ -146,5 +149,66 @@ describe('parseInventoryWorkbook - HTML 기반 유사-xls', () => {
 
     expect(result.issues.filter((issue) => issue.level === 'ERROR')).toHaveLength(0);
     expect(result.rows[0]).toMatchObject({ productCode: '00001', productName: 'A(special)', unitCost: 1200, normalStock: 420, availableStock: 420 });
+  });
+});
+
+function buildMultiSheet(sheets: Record<string, (string | number)[][]>): Buffer {
+  const workbook = XLSX.utils.book_new();
+  for (const [name, aoa] of Object.entries(sheets)) XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), name);
+  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+describe('양식(레이아웃) 자동 인식과 템플릿', () => {
+  it('찾은 헤더가 3행 아래에 있어도, 영어 헤더여도 필드를 추천한다', () => {
+    const aoa = [['Stock report'], ['Warehouse: Seoul'], [], ['Item Code', 'Description', 'Qty On Hand', 'Unit Cost', 'As of'], ['A1', 'Apple', '5', '100', '2026-09-28']];
+    const sheets = readSheets(buildMultiSheet({ Report: aoa }));
+    const header = detectHeaderRow(sheets[0].aoa);
+    expect(sheets[0].aoa[header][0]).toBe('Item Code');
+    const suggestion = suggestColumns(sheets[0].aoa[header], sheets[0].aoa.slice(header + 1));
+    expect(suggestion.columns).toMatchObject({ productCode: 'Item Code', productName: 'Description', normalStock: 'Qty On Hand', unitCost: 'Unit Cost', snapshotDate: 'As of' });
+    const result = parseInventoryWorkbook(buildMultiSheet({ Report: aoa }));
+    expect(result.rows).toEqual([expect.objectContaining({ productCode: 'A1', normalStock: 5, unitCost: 100 })]);
+    expect(result.fileDates).toEqual(['2026-09-28']);
+  });
+
+  it('사용자가 고른 시트·헤더 행·열 이름으로 읽고, 열 순서가 바뀌어도 이름으로 찾는다', () => {
+    const buffer = buildMultiSheet({
+      Summary: [['요약'], ['합계', '100']],
+      Detail: [['로케이션', '재고', '품번', '품명'], ['A-01', '7', 'X1', '엑스'], ['A-02', '3', 'X1', '엑스'], ['B-01', '4', 'Y1', '와이']],
+    });
+    const layout = { sheetName: 'Detail', headerRowIndex: 0, columns: { productCode: '품번', productName: '품명', normalStock: '재고' }, duplicateMode: 'sum' as const };
+    const result = parseInventoryWorkbook(buffer, layout);
+    expect(result.rows.map((r) => [r.productCode, r.normalStock])).toEqual([['X1', 10], ['Y1', 4]]);
+    const skipped = parseInventoryWorkbook(buffer, { ...layout, duplicateMode: 'skip' });
+    expect(skipped.rows.map((r) => [r.productCode, r.normalStock])).toEqual([['X1', 7], ['Y1', 4]]);
+  });
+
+  it('템플릿이 기억한 열이 파일에 없으면 필수 열은 오류, 선택 열은 경고로 알린다', () => {
+    const buffer = buildXlsxBuffer([['상품코드', '상품명', '정상재고'], ['A', '가', '1']]);
+    const missingOptional = parseInventoryWorkbook(buffer, { sheetName: null, headerRowIndex: 0, columns: { productCode: '상품코드', productName: '상품명', normalStock: '정상재고', unitCost: '매입가' }, duplicateMode: 'sum' });
+    expect(missingOptional.rows).toHaveLength(1);
+    expect(missingOptional.issues.find((i) => i.code === 'TEMPLATE_COLUMN_NOT_FOUND')?.level).toBe('WARNING');
+    const missingRequired = parseInventoryWorkbook(buffer, { sheetName: null, headerRowIndex: 0, columns: { productCode: '품번', productName: '상품명', normalStock: '정상재고' }, duplicateMode: 'sum' });
+    expect(missingRequired.issues.some((i) => i.level === 'ERROR')).toBe(true);
+    expect(parseInventoryWorkbook(buffer, { sheetName: 'Nope', headerRowIndex: 0, columns: {}, duplicateMode: 'sum' }).issues[0].code).toBe('SHEET_NOT_FOUND');
+  });
+
+  it('헤더 지문은 열 순서·공백·대소문자와 무관하다', () => {
+    expect(headerFingerprint(['상품 코드', 'Qty', '상품명'])).toBe(headerFingerprint(['상품명', 'qty', '상품코드']));
+    expect(headerFingerprint(['상품코드', '재고'])).not.toBe(headerFingerprint(['상품코드', '재고', '원가']));
+  });
+
+  it('여러 형식의 날짜를 읽고 없는 날짜는 거른다', () => {
+    expect(parseDateCell('2026.09.28')).toBe('2026-09-28');
+    expect(parseDateCell('20260928')).toBe('2026-09-28');
+    expect(parseDateCell('9/28/26')).toBe('2026-09-28');
+    expect(parseDateCell('2026년 9월 28일')).toBe('2026-09-28');
+    expect(parseDateCell('2026-02-30')).toBeNull();
+    expect(parseDateCell('재고')).toBeNull();
+  });
+
+  it('자동 레이아웃은 첫 시트와 합산 모드를 기본으로 쓴다', () => {
+    const sheets = readSheets(buildXlsxBuffer([['상품코드', '상품명', '정상재고']]));
+    expect(autoLayout(sheets)).toMatchObject({ sheetName: 'Sheet1', headerRowIndex: 0, duplicateMode: 'sum' });
   });
 });

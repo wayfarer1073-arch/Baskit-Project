@@ -18,6 +18,7 @@ import { SkuPackagingManagement } from '@/components/settings/sku-packaging-mana
 import { HolidayManagement } from '@/components/settings/holiday-management';
 import { WarehouseManagement } from '@/components/settings/warehouse-management';
 import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
+import { ImportTemplateManagement, type ImportTemplateView } from '@/components/settings/import-template-management';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 
 interface SkuVisibilityRow {
@@ -84,10 +85,11 @@ interface DailySettingsProps {
   holidays: { id: string; date: string; name: string }[];
   packagingStatuses: PackagingUploadStatus[];
   allowNonWorkingDayUploads: boolean;
+  importTemplates: ImportTemplateView[];
 }
 
 /** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
-export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses, allowNonWorkingDayUploads }: DailySettingsProps) {
+export function DailySettings({ isAdmin, warehouses, settings, skus, expirations, holidays, packagingStatuses, allowNonWorkingDayUploads, importTemplates }: DailySettingsProps) {
   const [thresholds, setThresholds] = useState(settings);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
@@ -160,6 +162,8 @@ export function DailySettings({ isAdmin, warehouses, settings, skus, expirations
       <ExpirationManagement isAdmin={isAdmin} warehouses={warehouses} initialEntries={expirations} />
 
       <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={packagingStatuses} />
+
+      <ImportTemplateManagement templates={importTemplates} />
 
       <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
 
