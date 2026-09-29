@@ -13,6 +13,8 @@ import { SCHEDULE_COLOR_CLASSNAMES, type ScheduleColor } from '@/lib/schedule-co
 import { assignScheduleLanes } from '@/domain/events/schedule-layout';
 import type { ScheduleRow } from '@/domain/events/schedule-types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format as fill } from '@/lib/i18n/locales';
 
 export interface CalendarEntry {
   warehouseId: string;
@@ -38,7 +40,6 @@ interface UploadCalendarProps {
   allowNonWorkingDayUploads: boolean;
 }
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_LANES = 3;
 const BAR_H = 15;
 const BAR_GAP = 3;
@@ -51,6 +52,7 @@ function chunkIntoWeeks(days: Date[]): Date[][] {
 }
 
 export function UploadCalendar({ warehouses, entries, holidays, schedules, isAdmin, allowNonWorkingDayUploads }: UploadCalendarProps) {
+  const t = useI18n().m.work;
   const [month, setMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [scheduleList, setScheduleList] = useState(schedules);
@@ -112,19 +114,17 @@ export function UploadCalendar({ warehouses, entries, holidays, schedules, isAdm
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-base font-semibold">업로드 현황 캘린더</h2>
+          <h2 className="text-base font-semibold">{t.upload.title}</h2>
           <InfoTooltip className="text-lime-400 hover:text-lime-300">
-            날짜 칸을 눌러 창고별로 재고 Excel을 업로드하거나 입고 특이사항을 기록하세요. 업로드가 끝난 창고는 날짜 옆에 작게 코드로 표시됩니다. 주말·공휴일(옅은 회색)은 업로드할
-            수 없지만 KPI 계산에는 직전 영업일 자료가 그대로 포함됩니다. 색이 있는 막대는 SKU 상세에서 등록한 일정(메모/이벤트)이며, 눌러서 내용을 확인하거나 색상을 바꿀 수
-            있습니다.
+            {t.upload.description}
           </InfoTooltip>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label="이전 달">
+          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label={t.calendar.prevMonth}>
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="w-24 text-center text-sm font-semibold tabular-nums">{format(month, 'yyyy년 M월')}</span>
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => addMonths(m, 1))} aria-label="다음 달">
+          <span className="w-24 text-center text-sm font-semibold tabular-nums">{format(month, t.calendar.monthFormat)}</span>
+          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => addMonths(m, 1))} aria-label={t.calendar.nextMonth}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -133,7 +133,7 @@ export function UploadCalendar({ warehouses, entries, holidays, schedules, isAdm
       <div className="p-4 sm:p-5">
         <div className="border-t border-l border-border">
           <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground">
-            {WEEKDAYS.map((d) => (
+            {t.calendar.weekdays.map((d) => (
               <div key={d} className="border-r border-b border-border py-1">
                 {d}
               </div>
@@ -256,7 +256,7 @@ export function UploadCalendar({ warehouses, entries, holidays, schedules, isAdm
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {seg.schedule.title} · {seg.schedule.events.length}건 · 눌러서 상세 보기
+                            {fill(t.upload.scheduleBar, { title: seg.schedule.title, count: seg.schedule.events.length })}
                           </TooltipContent>
                         </Tooltip>
                       ))}

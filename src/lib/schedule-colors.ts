@@ -5,15 +5,6 @@ export function isScheduleColor(value: string): value is ScheduleColor {
   return (SCHEDULE_COLORS as readonly string[]).includes(value);
 }
 
-export const SCHEDULE_COLOR_LABEL: Record<ScheduleColor, string> = {
-  red: '빨강',
-  orange: '주황',
-  pink: '연분홍',
-  lime: '라임',
-  cyan: 'Cyan',
-  lavender: '연보라',
-};
-
 /** 캘린더 바/뱃지 배경+텍스트, 그리고 색상 선택용 스와치 배경. 리터럴 클래스명이라 Tailwind JIT가 그대로 인식한다. */
 export const SCHEDULE_COLOR_CLASSNAMES: Record<ScheduleColor, { bar: string; swatch: string }> = {
   red: { bar: 'bg-red-200 text-red-900', swatch: 'bg-red-400' },

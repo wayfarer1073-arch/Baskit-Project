@@ -1,16 +1,5 @@
 import type { RiskLevel, SkuAnalysis } from '@/domain/inventory/types';
 
-export function riskLabel(level: RiskLevel): string {
-  if (level === 'DANGER') return '위험';
-  if (level === 'WARNING') return '주의';
-  if (level === 'UNKNOWN') return '개별 확인';
-  return '기준 내';
-}
-
-export function analysisStatusLabel(analysis: SkuAnalysis): string {
-  return analysis.operating?.reason ?? riskLabel(analysis.thresholdRisk.level);
-}
-
 export function riskBadgeVariant(level: RiskLevel): 'danger' | 'warning' | 'normal' | 'secondary' {
   if (level === 'DANGER') return 'danger';
   if (level === 'WARNING') return 'warning';
@@ -29,10 +18,6 @@ export type DataReliability = 'HIGH' | 'MEDIUM' | 'LOW';
  */
 export function dataReliabilityLevel(analysis: SkuAnalysis): DataReliability {
   return analysis.forecast.confidence ?? 'LOW';
-}
-
-export function dataReliabilityLabel(level: DataReliability): string {
-  return level === 'HIGH' ? '상' : level === 'MEDIUM' ? '중' : '하';
 }
 
 export function dataReliabilityClassName(level: DataReliability): string {

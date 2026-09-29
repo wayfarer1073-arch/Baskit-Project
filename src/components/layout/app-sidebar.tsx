@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { SegmentNavLinks, SegmentSwitcher, useActiveSegment } from '@/components/layout/segment-nav';
 import type { Segment } from '@/lib/segments';
 import { SignOutButton } from '@/components/layout/sign-out-button';
-import { postTagLabel, postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
+import { postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { LanguageSwitcher } from '@/components/i18n/language-switcher';
 
@@ -59,7 +59,7 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
               className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-sidebar-muted-foreground transition-colors hover:bg-sidebar-hover-bg hover:text-sidebar-foreground"
             >
               <span className={cn('size-1.5 shrink-0 rounded-full', postTagDotClassName(post.tag))} aria-hidden="true" />
-              <span className="truncate" title={`[${postTagLabel(post.tag)}] ${post.title}`}>
+              <span className="truncate" title={`[${m.work.board.tags[post.tag]}] ${post.title}`}>
                 {post.title}
               </span>
             </Link>

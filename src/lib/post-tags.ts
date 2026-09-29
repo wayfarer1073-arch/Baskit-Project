@@ -7,10 +7,6 @@ export const POST_TAG_OPTIONS = [
 
 export type PostTagValue = (typeof POST_TAG_OPTIONS)[number]['value'];
 
-export function postTagLabel(tag: PostTagValue): string {
-  return POST_TAG_OPTIONS.find((o) => o.value === tag)?.label ?? tag;
-}
-
 export function postTagBadgeVariant(tag: PostTagValue) {
   return POST_TAG_OPTIONS.find((o) => o.value === tag)?.badgeVariant ?? 'outline';
 }

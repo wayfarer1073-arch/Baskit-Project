@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { POST_TAG_OPTIONS, type PostTagValue } from '@/lib/post-tags';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 const TITLE_MAX = 50;
 const BODY_MAX = 200;
@@ -42,6 +43,8 @@ function CounterLabel({ length, max }: { length: number; max: number }) {
 }
 
 export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: PostFormDialogProps) {
+  const { m } = useI18n();
+  const t = m.work.post;
   const [tag, setTag] = useState<PostTagValue>('NOTICE');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -65,11 +68,11 @@ export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: P
 
   async function submit() {
     if (!title.trim()) {
-      toast.error('제목을 입력하세요.');
+      toast.error(t.titleRequired);
       return;
     }
     if (!body.trim()) {
-      toast.error('내용을 입력하세요.');
+      toast.error(t.bodyRequired);
       return;
     }
     setSubmitting(true);
@@ -80,14 +83,14 @@ export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: P
         : await fetch('/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? (isEditing ? '수정에 실패했습니다.' : '등록에 실패했습니다.'));
+        toast.error(data?.error ?? (isEditing ? t.updateFailed : t.createFailed));
         return;
       }
-      toast.success(isEditing ? '게시글이 수정되었습니다.' : '게시글이 등록되었습니다.');
+      toast.success(isEditing ? t.updated : t.created);
       onOpenChange(false);
       onCreated();
     } catch {
-      toast.error(isEditing ? '네트워크 오류로 수정에 실패했습니다.' : '네트워크 오류로 등록에 실패했습니다.');
+      toast.error(isEditing ? t.updateNetworkFailed : t.createNetworkFailed);
     } finally {
       setSubmitting(false);
     }
@@ -97,14 +100,14 @@ export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEditing ? '글 수정' : '새 글 작성'}</DialogTitle>
-          <DialogDescription>태그를 선택하고 제목과 내용을 작성하세요.</DialogDescription>
+          <DialogTitle>{isEditing ? t.editTitle : t.newTitle}</DialogTitle>
+          <DialogDescription>{t.description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="post-tag">태그</Label>
-            <div id="post-tag" role="radiogroup" aria-label="태그" className="inline-flex rounded-lg bg-muted p-1">
+            <Label htmlFor="post-tag">{t.tag}</Label>
+            <div id="post-tag" role="radiogroup" aria-label={t.tag} className="inline-flex rounded-lg bg-muted p-1">
               {POST_TAG_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -117,7 +120,7 @@ export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: P
                     tag === opt.value ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {opt.label}
+                  {m.work.board.tags[opt.value]}
                 </button>
               ))}
             </div>
@@ -125,27 +128,27 @@ export function PostFormDialog({ open, onOpenChange, editingPost, onCreated }: P
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="post-title">제목</Label>
+              <Label htmlFor="post-title">{t.title}</Label>
               <CounterLabel length={title.length} max={TITLE_MAX} />
             </div>
-            <Input id="post-title" value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력하세요" />
+            <Input id="post-title" value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={t.titlePlaceholder} />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="post-body">내용</Label>
+              <Label htmlFor="post-body">{t.body}</Label>
               <CounterLabel length={body.length} max={BODY_MAX} />
             </div>
-            <Textarea id="post-body" value={body} maxLength={BODY_MAX} onChange={(e) => setBody(e.target.value)} placeholder="내용을 입력하세요" rows={5} />
+            <Textarea id="post-body" value={body} maxLength={BODY_MAX} onChange={(e) => setBody(e.target.value)} placeholder={t.bodyPlaceholder} rows={5} />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            취소
+            {t.cancel}
           </Button>
           <Button onClick={submit} disabled={submitting}>
-            {submitting ? (isEditing ? '수정 중...' : '등록 중...') : isEditing ? '수정' : '등록'}
+            {submitting ? (isEditing ? t.updating : t.creating) : isEditing ? t.update : t.create}
           </Button>
         </DialogFooter>
       </DialogContent>

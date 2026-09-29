@@ -10,8 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Pagination } from '@/components/ui/pagination';
 import { PostFormDialog, type EditingPost } from '@/components/board/post-form-dialog';
 import { formatKstDateTime } from '@/lib/date';
-import { postTagLabel, postTagBadgeVariant, POST_TAG_OPTIONS, type PostTagValue } from '@/lib/post-tags';
+import { postTagBadgeVariant, POST_TAG_OPTIONS, type PostTagValue } from '@/lib/post-tags';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 export interface BoardPost {
   id: string;
@@ -54,6 +56,7 @@ function buildBoardUrl(page: number, filter: BoardFilter): string {
 const EMPTY_FILTER: BoardFilter = { keyword: '', tags: [], fromDate: '', toDate: '' };
 
 export function BoardClient({ posts, page, totalPages, totalCount, currentUserId, currentUserRole, filter }: BoardClientProps) {
+  const t = useI18n().m.work.board;
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<EditingPost | null>(null);
@@ -86,19 +89,19 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('이 게시글을 삭제할까요?')) return;
+    if (!confirm(t.deleteConfirm)) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? '삭제에 실패했습니다.');
+        toast.error(data?.error ?? t.deleteFailed);
         return;
       }
-      toast.success('삭제되었습니다.');
+      toast.success(t.deleted);
       router.refresh();
     } catch {
-      toast.error('네트워크 오류로 삭제에 실패했습니다.');
+      toast.error(t.deleteNetworkFailed);
     } finally {
       setDeletingId(null);
     }
@@ -108,9 +111,9 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">게시판</h1>
+          <h1 className="text-lg font-semibold">{t.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {hasActiveFilter ? `검색 결과 ${totalCount.toLocaleString('ko-KR')}건` : `${totalCount.toLocaleString('ko-KR')}건의 글이 있습니다.`}
+            {format(hasActiveFilter ? t.results : t.total, { count: totalCount.toLocaleString() })}
           </p>
         </div>
         <Button
@@ -120,7 +123,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
           }}
         >
           <PenSquare className="size-4" />
-          글쓰기
+          {t.write}
         </Button>
       </div>
 
@@ -132,9 +135,9 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
               value={draft.keyword}
               onChange={(e) => setDraft((prev) => ({ ...prev, keyword: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && applyFilter()}
-              placeholder="제목/내용 키워드 검색"
+              placeholder={t.keywordPlaceholder}
               className="pl-8"
-              aria-label="키워드 검색"
+              aria-label={t.keywordAria}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -143,7 +146,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
                 type="date"
                 value={draft.fromDate}
                 onChange={(e) => setDraft((prev) => ({ ...prev, fromDate: e.target.value }))}
-                aria-label="검색 시작일"
+                aria-label={t.fromAria}
                 className="h-9 rounded-lg border bg-background px-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
               />
               ~
@@ -151,7 +154,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
                 type="date"
                 value={draft.toDate}
                 onChange={(e) => setDraft((prev) => ({ ...prev, toDate: e.target.value }))}
-                aria-label="검색 종료일"
+                aria-label={t.toAria}
                 className="h-9 rounded-lg border bg-background px-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
@@ -172,7 +175,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
                     active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {opt.label}
+                  {t.tags[opt.value]}
                 </button>
               );
             })}
@@ -181,12 +184,12 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
             {hasActiveFilter && (
               <Button variant="ghost" size="sm" onClick={resetFilter}>
                 <X className="size-3.5" />
-                초기화
+                {t.reset}
               </Button>
             )}
             <Button size="sm" onClick={applyFilter}>
               <Search className="size-3.5" />
-              검색
+              {t.search}
             </Button>
           </div>
         </div>
@@ -196,13 +199,13 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
           {hasActiveFilter ? (
             <>
-              <p className="text-sm font-medium">검색 결과가 없습니다</p>
-              <p className="text-xs text-muted-foreground">검색어나 필터를 바꿔서 다시 시도해보세요.</p>
+              <p className="text-sm font-medium">{t.noResults}</p>
+              <p className="text-xs text-muted-foreground">{t.noResultsHint}</p>
             </>
           ) : (
             <>
-              <p className="text-sm font-medium">아직 작성된 글이 없습니다</p>
-              <p className="text-xs text-muted-foreground">글쓰기 버튼을 눌러 첫 글을 남겨보세요.</p>
+              <p className="text-sm font-medium">{t.empty}</p>
+              <p className="text-xs text-muted-foreground">{t.emptyHint}</p>
             </>
           )}
         </div>
@@ -213,7 +216,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
             return (
               <li key={post.id} className="flex items-start gap-3 px-5 py-4">
                 <Badge variant={postTagBadgeVariant(post.tag)} className="mt-0.5 shrink-0">
-                  {postTagLabel(post.tag)}
+                  {t.tags[post.tag]}
                 </Badge>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{post.title}</p>
@@ -230,7 +233,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
                         setFormOpen(true);
                       }}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label="수정"
+                      aria-label={t.edit}
                     >
                       <Pencil className="size-3.5" />
                     </button>
@@ -238,7 +241,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
                       onClick={() => handleDelete(post.id)}
                       disabled={deletingId === post.id}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                      aria-label="삭제"
+                      aria-label={t.delete}
                     >
                       <Trash2 className="size-3.5" />
                     </button>

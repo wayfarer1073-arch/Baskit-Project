@@ -6,6 +6,8 @@ import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface InboundEntryRow {
   id: string;
@@ -27,6 +29,7 @@ interface SkuSearchResult {
  * 창고 내 SKU를 검색해 드롭다운에서 선택하도록 해 오타·공백 차이로 인한 매칭 실패를 근본적으로 없앤다.
  */
 export function InboundManager({ warehouseId, date }: { warehouseId: string; date: string }) {
+  const t = useI18n().m.work.inbound;
   const [entries, setEntries] = useState<InboundEntryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -82,7 +85,7 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
     if (!selectedSku) return;
     const qty = Number(quantity);
     if (!Number.isSafeInteger(qty) || qty <= 0) {
-      toast.error('입고 수량은 1 이상의 정수로 입력하세요.');
+      toast.error(t.quantityInvalid);
       return;
     }
     setAdding(true);
@@ -94,7 +97,7 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
       });
       const body = await res.json();
       if (!res.ok) {
-        toast.error(body.error ?? '추가에 실패했습니다.');
+        toast.error(body.error ?? t.addFailed);
         return;
       }
       setEntries((prev) => {
@@ -104,12 +107,12 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
         next[idx] = body.entry;
         return next;
       });
-      toast.success('입고 특이사항을 추가했습니다.');
+      toast.success(t.added);
       setSelectedSku(null);
       setQuantity('');
       setQuery('');
     } catch {
-      toast.error('네트워크 오류로 추가에 실패했습니다.');
+      toast.error(t.addNetworkFailed);
     } finally {
       setAdding(false);
     }
@@ -120,13 +123,13 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
     try {
       const res = await fetch(`/api/inbound/${id}`, { method: 'DELETE' });
       if (!res.ok) {
-        toast.error('삭제에 실패했습니다.');
+        toast.error(t.deleteFailed);
         return;
       }
       setEntries((prev) => prev.filter((e) => e.id !== id));
-      toast.success('입고 특이사항을 삭제했습니다.');
+      toast.success(t.deleted);
     } catch {
-      toast.error('네트워크 오류로 삭제에 실패했습니다.');
+      toast.error(t.deleteNetworkFailed);
     } finally {
       setDeletingId(null);
     }
@@ -135,15 +138,14 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
   return (
     <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
       <div>
-        <Label>입고 특이사항</Label>
+        <Label>{t.title}</Label>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          이 날짜까지 입고된 상품과 수량을 기록하면 추정 소진량에서 입고분을 보정합니다. Excel 업로드와 별개로 저장되며, 자료를 교체해도 지워지지
-          않고 아래 삭제 버튼을 눌러야만 없어집니다.
+          {t.description}
         </p>
       </div>
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">불러오는 중...</p>
+        <p className="text-xs text-muted-foreground">{t.loading}</p>
       ) : entries.length > 0 ? (
         <ul className="space-y-1.5">
           {entries.map((entry) => (
@@ -153,13 +155,13 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
                 <span className="text-muted-foreground">{entry.productCode}</span>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="tabular-nums">{entry.quantity.toLocaleString()}개</span>
+                <span className="tabular-nums">{format(t.quantity, { count: entry.quantity.toLocaleString() })}</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="size-6"
-                  aria-label={`${entry.productName} 입고 특이사항 삭제`}
+                  aria-label={format(t.deleteAria, { name: entry.productName })}
                   disabled={deletingId === entry.id}
                   onClick={() => handleDelete(entry.id)}
                 >
@@ -170,14 +172,14 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">등록된 입고 특이사항이 없습니다.</p>
+        <p className="text-xs text-muted-foreground">{t.empty}</p>
       )}
 
       <div className="grid grid-cols-[minmax(0,1fr)_6rem_auto] items-start gap-2 pt-1">
         <div className="relative">
           <Input
-            aria-label="입고 상품 검색"
-            placeholder="상품명 또는 상품코드로 검색"
+            aria-label={t.searchAria}
+            placeholder={t.searchPlaceholder}
             value={selectedSku ? `${selectedSku.productName} (${selectedSku.productCode})` : query}
             onChange={(e) => handleQueryChange(e.target.value)}
             onFocus={() => setShowDropdown(true)}
@@ -186,9 +188,9 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
           {showDropdown && !selectedSku && query.trim() !== '' && (
             <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
               {searching ? (
-                <p className="p-2 text-xs text-muted-foreground">검색 중...</p>
+                <p className="p-2 text-xs text-muted-foreground">{t.searching}</p>
               ) : results.length === 0 ? (
-                <p className="p-2 text-xs text-muted-foreground">일치하는 상품이 없습니다.</p>
+                <p className="p-2 text-xs text-muted-foreground">{t.noMatch}</p>
               ) : (
                 results.map((r) => (
                   <button
@@ -209,16 +211,16 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
           )}
         </div>
         <Input
-          aria-label="입고 수량"
+          aria-label={t.quantityAria}
           type="number"
           min={1}
           step={1}
-          placeholder="수량"
+          placeholder={t.quantityPlaceholder}
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
         />
         <Button type="button" variant="outline" size="sm" disabled={!selectedSku || quantity.trim() === '' || adding} onClick={handleAdd}>
-          추가
+          {t.add}
         </Button>
       </div>
     </div>

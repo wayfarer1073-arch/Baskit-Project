@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatKstDate, todayKstDateString } from '@/lib/date';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 export interface DateRange {
   start: string; // yyyy-MM-dd
@@ -18,9 +19,8 @@ interface DateRangeCalendarInputProps {
   onChange: (value: DateRange) => void;
 }
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-
 export function DateRangeCalendarInput({ value, onChange }: DateRangeCalendarInputProps) {
+  const { m } = useI18n();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() => new Date(`${value.start}T00:00:00`));
   const [pendingStart, setPendingStart] = useState<string | null>(null);
@@ -67,20 +67,20 @@ export function DateRangeCalendarInput({ value, onChange }: DateRangeCalendarInp
       <PopoverContent className="w-64 p-3" align="start">
         <p className="mb-2 text-[11px] text-muted-foreground">
           {pendingStart === null
-            ? '시작일을 클릭하세요.'
-            : '같은 날짜를 다시 클릭하면 하루, 다른 날짜를 클릭하면 그 기간으로 저장됩니다.'}
+            ? m.work.event.pickStart
+            : m.work.event.pickEnd}
         </p>
         <div className="flex items-center justify-between">
-          <Button type="button" variant="outline" size="icon" className="size-7" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label="이전 달">
+          <Button type="button" variant="outline" size="icon" className="size-7" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label={m.work.calendar.prevMonth}>
             <ChevronLeft className="size-3.5" />
           </Button>
-          <span className="text-xs font-semibold tabular-nums">{format(month, 'yyyy년 M월')}</span>
-          <Button type="button" variant="outline" size="icon" className="size-7" onClick={() => setMonth((m) => addMonths(m, 1))} aria-label="다음 달">
+          <span className="text-xs font-semibold tabular-nums">{format(month, m.work.calendar.monthFormat)}</span>
+          <Button type="button" variant="outline" size="icon" className="size-7" onClick={() => setMonth((m) => addMonths(m, 1))} aria-label={m.work.calendar.nextMonth}>
             <ChevronRight className="size-3.5" />
           </Button>
         </div>
         <div className="mt-2 grid grid-cols-7 gap-0.5 text-center text-[10px] font-medium text-muted-foreground">
-          {WEEKDAYS.map((d) => (
+          {m.work.calendar.weekdays.map((d) => (
             <div key={d}>{d}</div>
           ))}
         </div>
