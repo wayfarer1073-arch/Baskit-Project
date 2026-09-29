@@ -353,7 +353,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="expiration-file">소비기한 Excel (.xls, .xlsx)</Label>
-              <Input id="expiration-file" type="file" accept=".xls,.xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
+              <Input id="expiration-file" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
             </div>
             <Button onClick={handleUpload} disabled={uploading || !file}>
               <UploadCloud className="size-4" />

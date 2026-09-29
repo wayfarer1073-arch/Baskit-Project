@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { decodeTextTable } from './text-encoding';
 
 /**
  * 사내 Excel 익스포트 중 상당수가 실제로는 "HTML table을 .xls 확장자로 저장한" 파일이다
@@ -45,7 +46,8 @@ export function bufferToAoa(buffer: Buffer): string[][] {
     if (aoa.length > 0) return aoa;
   }
 
-  const workbook = XLSX.read(buffer, { type: 'buffer', raw: false, cellText: true });
+  const textTable = decodeTextTable(buffer);
+  const workbook = textTable ? XLSX.read(textTable.text, { type: 'string', raw: true }) : XLSX.read(buffer, { type: 'buffer', raw: false, cellText: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   const sheet = workbook.Sheets[sheetName];

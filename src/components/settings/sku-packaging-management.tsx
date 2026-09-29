@@ -95,7 +95,7 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="packaging-file">SKU 추가 정보 Excel (.xls, .xlsx)</Label>
-              <Input id="packaging-file" type="file" accept=".xls,.xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
+              <Input id="packaging-file" type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-xs" />
             </div>
             <Button onClick={handleUpload} disabled={uploading || !file}>
               <UploadCloud className="size-4" />

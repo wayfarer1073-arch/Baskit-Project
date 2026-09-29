@@ -187,7 +187,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
       {!blocked && (
         <div className="space-y-1.5">
           <Label htmlFor={`warehouse-day-file-${warehouseId}`}>{m.upload.fileLabel}</Label>
-          <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx,.csv" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} />
+          <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} />
           {file && (
             <LayoutReview
               preview={preview}
