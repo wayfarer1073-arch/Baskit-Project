@@ -10,10 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SectionPanel, SegmentDashboardHeader } from '@/components/segment-dashboards/dashboard-parts';
-import { OPEN_UNIT_OPTIONS } from '@/components/segment-dashboards/coverage-parts';
-import { describeUnits } from '@/domain/segments/sales-coverage';
+import { OPEN_UNIT_OPTIONS, describeUnitsText } from '@/components/segment-dashboards/coverage-parts';
 import type { OrderEntryRow, SalesEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
-import { formatCurrency } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 type ItemSummary = StoreItemLearning;
 
@@ -31,11 +32,12 @@ async function send(url: string, method: string, body?: unknown) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? '요청에 실패했습니다.');
+  if (!res.ok) throw new Error(data.error ?? '');
   return data;
 }
 
 export function StoreRecords({ today, items, orders, sales }: StoreRecordsProps) {
+  const t = useI18n().m.store.records;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +49,7 @@ export function StoreRecords({ today, items, orders, sales }: StoreRecordsProps)
       router.refresh();
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '요청에 실패했습니다.');
+      toast.error(e instanceof Error && e.message ? e.message : t.requestFailed);
       return false;
     } finally {
       setBusy(false);
@@ -57,11 +59,11 @@ export function StoreRecords({ today, items, orders, sales }: StoreRecordsProps)
   return (
     <div className="space-y-6">
       <SegmentDashboardHeader
-        title="발주·매출 기록"
-        description="발주할 때 '이 양으로 얼마어치 매출을 감당할지'를 함께 적고, 매일 매출만 입력하면 발주가 필요할 때 알려드려요."
+        title={t.title}
+        description={t.description}
         action={
           <Link href="/settings?tab=store" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            품목·발주처 설정
+            {t.settingsLink}
           </Link>
         }
       />
@@ -104,6 +106,8 @@ function leftoverDraft(units: number): Pick<DraftLine, 'leftWhole' | 'leftOpen'>
 }
 
 function OrderSection({ today, items, orders, busy, run }: { today: string; items: ItemSummary[]; orders: OrderEntryRow[]; busy: boolean; run: Run }) {
+  const { m, locale } = useI18n();
+  const t = m.store.records;
   const [date, setDate] = useState(today);
   const [lines, setLines] = useState<DraftLine[]>([newLine(items[0]?.id ?? '', 0)]);
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -135,28 +139,28 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
         coverageAmount: l.coverage.trim() ? won(l.coverage) : null,
         leftoverQuantity: leftoverOf(l),
       }));
-    const ok = await run(() => send('/api/store/orders', 'POST', { date, lines: payload }), `발주 ${payload.length}건을 기록했어요.`);
+    const ok = await run(() => send('/api/store/orders', 'POST', { date, lines: payload }), format(t.ordersSaved, { count: payload.length }));
     if (ok) setLines([newLine(items[0]?.id ?? '')]);
   }
 
   return (
     <SectionPanel
-      title="발주 기록"
-      description="남은 양 = 발주하는 지금 남아 있는 양(모르면 비워 두세요). 충족 매출 = 남은 양과 이번 발주량으로 감당할 수 있다고 보는 매출액. 비워 두면 학습값으로 계산해요."
+      title={t.orderTitle}
+      description={t.orderDescription}
     >
       {items.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted-foreground">
-          발주 품목이 없어요.{' '}
+          {t.noItemsBefore}
           <Link href="/settings?tab=store" className="font-medium text-foreground underline underline-offset-4">
-            설정 &gt; 매장 발주 예측
+            {t.noItemsLink}
           </Link>
-          에서 품목과 발주처를 먼저 등록해 주세요.
+          {t.noItemsAfter}
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-3 border-b border-border px-5 py-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="order-date">발주일</Label>
+              <Label htmlFor="order-date">{t.orderDate}</Label>
               <Input id="order-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
             </div>
           </div>
@@ -168,7 +172,7 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                 <div key={line.key} className="grid grid-cols-2 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1.2fr_0.6fr_1.2fr_1fr_auto] sm:items-end">
                   <div className="col-span-2 space-y-1 sm:col-span-1">
                     <Label htmlFor={`order-item-${line.key}`} className="text-xs">
-                      품목 {index + 1}
+                      {format(t.item, { index: index + 1 })}
                     </Label>
                     <Select
                       value={line.itemId}
@@ -181,7 +185,7 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                       }
                     >
                       <SelectTrigger id={`order-item-${line.key}`} className="w-full">
-                        <SelectValue placeholder="품목 선택" />
+                        <SelectValue placeholder={t.pickItem} />
                       </SelectTrigger>
                       <SelectContent>
                         {items.map((i) => (
@@ -194,7 +198,8 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor={`order-qty-${line.key}`} className="text-xs">
-                      수량{item && ` (${item.unit})`}
+                      {t.quantity}
+                      {item && ` (${item.unit})`}
                     </Label>
                     <Input
                       id={`order-qty-${line.key}`}
@@ -208,29 +213,29 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                     />
                   </div>
                   <fieldset className="col-span-2 space-y-1 sm:col-span-1">
-                    <legend className="mb-1 text-xs font-medium">지금 남은 양</legend>
+                    <legend className="mb-1 text-xs font-medium">{t.leftNow}</legend>
                     <div className="flex gap-1.5">
                       <Input
                         id={`order-left-${line.key}`}
-                        aria-label={`뜯지 않은 ${item?.unit ?? '단위'} 수`}
+                        aria-label={format(t.unopenedAria, { unit: item?.unit ?? t.unitFallback })}
                         type="number"
                         inputMode="numeric"
                         min="0"
                         step="1"
-                        placeholder="모름"
+                        placeholder={t.unknown}
                         value={line.leftWhole}
                         onChange={(e) => update(line.key, { leftWhole: e.target.value })}
                         className="w-20"
                       />
                       <span className="self-center text-xs text-muted-foreground">{item?.unit}</span>
                       <Select value={line.leftOpen} onValueChange={(v) => update(line.key, { leftOpen: v })}>
-                        <SelectTrigger aria-label={`열어 둔 마지막 ${item?.unit ?? '단위'}에 남은 정도`} className="min-w-0 flex-1">
+                        <SelectTrigger aria-label={format(t.openAria, { unit: item?.unit ?? t.unitFallback })} className="min-w-0 flex-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {OPEN_UNIT_OPTIONS.map((o) => (
                             <SelectItem key={o.value} value={o.value}>
-                              {o.value === '0' ? '+ 열린 것 없음' : `+ 마지막 ${item?.unit ?? ''} ${o.label}`}
+                              {o.value === '0' ? t.noneOpen : format(t.lastOpen, { unit: item?.unit ?? '', label: m.store.open[o.key] })}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -239,13 +244,13 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                   </fieldset>
                   <div className="space-y-1">
                     <Label htmlFor={`order-cov-${line.key}`} className="text-xs">
-                      충족 매출 (원)
+                      {t.coverageAmount}
                     </Label>
                     <Input
                       id={`order-cov-${line.key}`}
                       inputMode="numeric"
                       pattern="[0-9,]*"
-                      placeholder={hint ? hint.amount.toLocaleString('ko-KR') : '예: 3,000,000'}
+                      placeholder={hint ? hint.amount.toLocaleString() : t.coveragePlaceholder}
                       value={line.coverage}
                       onChange={(e) => update(line.key, { coverage: e.target.value })}
                       required={!hint}
@@ -258,45 +263,45 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
                     className="size-9 justify-self-end"
                     disabled={lines.length === 1}
                     onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}
-                    aria-label={`품목 ${index + 1} 줄 삭제`}
+                    aria-label={format(t.deleteLine, { index: index + 1 })}
                   >
                     <X className="size-4" />
                   </Button>
                   <div className="col-span-2 space-y-0.5 text-[11px] text-muted-foreground sm:col-span-5">
                     {item && item.estimatedRemainingUnits !== null && (
                       <p>
-                        앱 예상 잔량:{' '}
+                        {t.appEstimate}
                         <strong className="text-foreground">
-                          {item.estimatedRemainingUnits <= 0.05 ? '거의 없음' : describeUnits(Math.round(item.estimatedRemainingUnits * 4) / 4, item.unit)}
+                          {item.estimatedRemainingUnits <= 0.05 ? t.almostNone : describeUnitsText(Math.round(item.estimatedRemainingUnits * 4) / 4, item.unit, m.store)}
                         </strong>{' '}
                         <button type="button" className="underline underline-offset-2" onClick={() => update(line.key, leftoverDraft(item.estimatedRemainingUnits ?? 0))}>
-                          이 값 쓰기
+                          {t.useThis}
                         </button>
-                        <span className="ml-1">· 실제로 세어 적어 주면 다음 예측이 정확해져요</span>
+                        <span className="ml-1">{t.countHelp}</span>
                       </p>
                     )}
                     <p>
                       {hint ? (
                         <>
-                          학습값: {hint.withLeftover ? '남은 양까지 합치면' : '이 수량이면'} 과거 기록상 약{' '}
-                          <strong className="text-foreground">{hint.amount.toLocaleString('ko-KR')}원</strong>
-                          어치 매출을 감당했어요 (발주 {hint.cycles}회 학습).{' '}
+                          {hint.withLeftover ? t.learnedWithLeftover : t.learnedQuantity}
+                          <strong className="text-foreground">{formatMoney(hint.amount, locale)}</strong>
+                          {format(t.learnedAfter, { count: hint.cycles })}
                           <button
                             type="button"
                             className="underline underline-offset-2"
                             onClick={() =>
                               update(line.key, {
-                                coverage: hint.amount.toLocaleString('ko-KR'),
+                                coverage: hint.amount.toLocaleString(),
                               })
                             }
                           >
-                            이 값 쓰기
+                            {t.useThis}
                           </button>
                         </>
                       ) : item && item.orderCount > 0 ? (
-                        '아직 학습 전이에요. 이번 발주로 감당할 매출을 적어 주세요 — 다음 발주부터 실제 값과 비교해 학습해요.'
+                        t.notLearned
                       ) : (
-                        '첫 발주예요. 이 양으로 얼마어치 매출을 감당할지 어림잡아 적어 주세요.'
+                        t.firstOrder
                       )}
                     </p>
                   </div>
@@ -307,35 +312,35 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setLines((prev) => [...prev, newLine(items[0]?.id ?? '')])}>
               <Plus className="size-3.5" />
-              품목 추가
+              {t.addItem}
             </Button>
             <Button type="submit" size="sm" disabled={busy}>
-              발주 기록
+              {t.submit}
             </Button>
           </div>
         </form>
       )}
       <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-        {orders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">아직 발주 기록이 없어요.</li>}
+        {orders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noOrders}</li>}
         {orders.map((o) => (
           <li key={o.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
             <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{o.date}</span>
             <span className="min-w-0 flex-1 truncate">{o.itemName}</span>
             <span className="tabular-nums">
-              {o.quantity.toLocaleString('ko-KR')}
+              {o.quantity.toLocaleString()}
               {o.unit}
             </span>
             <span className="hidden w-40 text-right text-xs text-muted-foreground sm:inline">
-              {o.coverageAmount === null ? '충족 매출 학습값' : `충족 ${formatCurrency(o.coverageAmount)}`}
-              {o.leftoverQuantity !== null && <span className="block">당시 잔량 {o.leftoverQuantity <= 0 ? '없음' : describeUnits(o.leftoverQuantity, o.unit)}</span>}
+              {o.coverageAmount === null ? t.coverageLearned : format(t.coverageValue, { amount: formatMoney(o.coverageAmount, locale) })}
+              {o.leftoverQuantity !== null && <span className="block">{format(t.leftoverThen, { units: o.leftoverQuantity <= 0 ? t.none : describeUnitsText(o.leftoverQuantity, o.unit, m.store) })}</span>}
             </span>
             <Button
               size="icon"
               variant="ghost"
               className="size-7"
               disabled={busy}
-              aria-label={`${o.date} ${o.itemName} 발주 기록 삭제`}
-              onClick={() => confirm('이 발주 기록을 삭제할까요?') && run(() => send(`/api/store/orders/${o.id}`, 'DELETE'), '삭제했어요.')}
+              aria-label={format(t.deleteOrderAria, { date: o.date, item: o.itemName })}
+              onClick={() => confirm(t.deleteOrderConfirm) && run(() => send(`/api/store/orders/${o.id}`, 'DELETE'), t.deleted)}
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -347,6 +352,8 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
 }
 
 function SalesSection({ today, sales, busy, run }: { today: string; sales: SalesEntryRow[]; busy: boolean; run: Run }) {
+  const { locale, m } = useI18n();
+  const t = m.store.records;
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState('');
 
@@ -358,39 +365,39 @@ function SalesSection({ today, sales, busy, run }: { today: string; sales: Sales
           date,
           amount: Number(amount.replace(/,/g, '')),
         }),
-      '매출을 저장했어요.',
+      t.salesSaved,
     );
     if (ok) setAmount('');
   }
 
   return (
-    <SectionPanel title="일 매출" description="매일 한 번, 그날 매출 합계만 적으면 돼요 · 같은 날짜를 다시 저장하면 덮어써요 · 최근 3주">
+    <SectionPanel title={t.salesTitle} description={t.salesDescription}>
       <form onSubmit={submit} className="grid grid-cols-2 gap-3 border-b border-border px-5 py-4 sm:grid-cols-[1fr_1.2fr_auto] sm:items-end">
         <div className="space-y-1.5">
-          <Label htmlFor="sales-date">날짜</Label>
+          <Label htmlFor="sales-date">{t.date}</Label>
           <Input id="sales-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="sales-amount">매출 (원)</Label>
+          <Label htmlFor="sales-amount">{t.salesAmount}</Label>
           <Input id="sales-amount" inputMode="numeric" required pattern="[0-9,]+" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1,250,000" />
         </div>
         <Button type="submit" disabled={busy} className="col-span-2 sm:col-span-1">
-          저장
+          {t.save}
         </Button>
       </form>
       <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-        {sales.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">최근 매출 기록이 없어요.</li>}
+        {sales.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noSales}</li>}
         {sales.map((s) => (
           <li key={s.date} className="flex items-center gap-3 px-5 py-2.5 text-sm">
             <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{s.date}</span>
-            <span className="flex-1 text-right tabular-nums">{formatCurrency(s.amount)}</span>
+            <span className="flex-1 text-right tabular-nums">{formatMoney(s.amount, locale)}</span>
             <Button
               size="icon"
               variant="ghost"
               className="size-7"
               disabled={busy}
-              aria-label={`${s.date} 매출 삭제`}
-              onClick={() => confirm(`${s.date} 매출 기록을 삭제할까요?`) && run(() => send(`/api/store/sales?date=${s.date}`, 'DELETE'), '삭제했어요.')}
+              aria-label={format(t.deleteSalesAria, { date: s.date })}
+              onClick={() => confirm(format(t.deleteSalesConfirm, { date: s.date })) && run(() => send(`/api/store/sales?date=${s.date}`, 'DELETE'), t.deleted)}
             >
               <Trash2 className="size-3.5" />
             </Button>

@@ -154,7 +154,7 @@ export const en: Dictionary<typeof ko> = {
     recount: 'Recount recommended',
     recountDetail: '{days}+ days, running low, or unknown',
     avgDays: 'Avg days since count',
-    avgDaysValue: '{days} days',
+    avgDaysValue: '{days}d',
     tracked: '{count} items tracked',
     queueTitle: 'Count these first',
     queueDescription: 'Most likely to run out or longest uncounted first · click for details',

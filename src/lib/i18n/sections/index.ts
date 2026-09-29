@@ -8,6 +8,7 @@ import * as inventory from './inventory';
 import * as work from './work';
 import * as settingsScreens from './settings-screens';
 import * as periodic from './periodic';
+import * as store from './store';
 
 export const ko = {
   dashboard: dashboard.ko,
@@ -16,6 +17,7 @@ export const ko = {
   work: work.ko,
   settingsScreens: settingsScreens.ko,
   periodic: periodic.ko,
+  store: store.ko,
 };
 
 export const en = {
@@ -25,4 +27,5 @@ export const en = {
   work: work.en,
   settingsScreens: settingsScreens.en,
   periodic: periodic.en,
+  store: store.en,
 };
