@@ -1,10 +1,12 @@
 import type { Locale } from './locales';
+import type { Dictionary } from './dictionary';
+import * as sections from './sections';
 
 /**
  * 화면 문구 사전. 한국어가 기준이고, 영어는 같은 키·같은 자리표시자({name})를 가져야 한다(테스트로 확인).
  * 화면을 손볼 때마다 그 화면의 문구를 여기로 옮긴다 — 아직 옮기지 않은 화면은 한국어로 보인다.
  */
-const ko = {
+const baseKo = {
   common: {
     appName: 'Limenote',
     skipToContent: '본문으로 건너뛰기',
@@ -413,10 +415,10 @@ const ko = {
   },
 };
 
-type Dictionary<T> = { [K in keyof T]: T[K] extends string ? string : Dictionary<T[K]> };
+const ko = { ...baseKo, ...sections.ko };
 export type Messages = Dictionary<typeof ko>;
 
-const en: Messages = {
+const baseEn: Dictionary<typeof baseKo> = {
   common: {
     appName: 'Limenote',
     skipToContent: 'Skip to content',
@@ -834,5 +836,7 @@ const en: Messages = {
     },
   },
 };
+
+const en: Messages = { ...baseEn, ...sections.en };
 
 export const MESSAGES: Record<Locale, Messages> = { ko, en };

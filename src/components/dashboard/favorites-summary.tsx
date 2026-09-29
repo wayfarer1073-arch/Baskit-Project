@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { InventoryTableRow, InventoryTableStaticHeader } from '@/components/inventory-table/inventory-table';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import type { RiskLevel } from '@/domain/inventory/types';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -22,6 +24,8 @@ interface FavoritesSummaryProps {
 }
 
 export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSummaryProps) {
+  const { m } = useI18n();
+  const t = m.dashboard.favorites;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const sortedRows = useMemo(
@@ -36,14 +40,12 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <Star className="size-4 fill-brand-accent text-brand-accent" aria-hidden="true" />
-        <h2 className="text-base font-semibold">즐겨찾기</h2>
-        <span className="text-xs text-sidebar-muted-foreground">{rows.length}개</span>
+        <h2 className="text-base font-semibold">{t.title}</h2>
+        <span className="text-xs text-sidebar-muted-foreground">{format(m.dashboard.unit, { count: rows.length })}</span>
       </div>
       <div className="space-y-3 p-4 sm:p-5">
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          아래 목록에서 상품을 클릭한 뒤 SKU 상세의 별표를 누르면 이곳에 즐겨찾기한 SKU의 KPI 현황이 표시됩니다.
-        </p>
+        <p className="text-xs text-muted-foreground">{t.empty}</p>
       ) : (
         <>
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -60,14 +62,14 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>페이지당 행수</span>
+              <span>{t.pageSize}</span>
               <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                 <SelectTrigger className="h-8 w-[84px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {PAGE_SIZE_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}개</SelectItem>
+                    <SelectItem key={n} value={String(n)}>{format(m.dashboard.unit, { count: n })}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -75,13 +77,13 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
             {totalPages > 1 && (
               <div className="flex items-center gap-2 text-sm">
                 <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-                  이전
+                  {m.dashboard.prev}
                 </Button>
                 <span className="text-xs text-muted-foreground">
                   {currentPage} / {totalPages}
                 </span>
                 <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-                  다음
+                  {m.dashboard.next}
                 </Button>
               </div>
             )}

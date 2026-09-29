@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 interface PaginationProps {
   page: number;
@@ -23,13 +24,14 @@ function getPageNumbers(page: number, totalPages: number): (number | 'ellipsis')
 }
 
 export function Pagination({ page, totalPages, onChange }: PaginationProps) {
+  const { m } = useI18n();
   if (totalPages <= 1) return null;
   const pages = getPageNumbers(page, totalPages);
 
   return (
-    <nav className="flex items-center justify-center gap-1" aria-label="페이지 내비게이션">
+    <nav className="flex items-center justify-center gap-1" aria-label={m.dashboard.ui.pagination}>
       <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
-        이전
+        {m.dashboard.prev}
       </Button>
       {pages.map((p, i) =>
         p === 'ellipsis' ? (
@@ -50,7 +52,7 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
         ),
       )}
       <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
-        다음
+        {m.dashboard.next}
       </Button>
     </nav>
   );

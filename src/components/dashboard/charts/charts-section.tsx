@@ -8,6 +8,8 @@ import { TopDepletionChart } from './top-depletion-chart';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { InventoryRow } from '@/domain/inventory/read-model';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface ChartsSectionProps {
   rows: InventoryRow[];
@@ -20,6 +22,8 @@ interface ChartsSectionProps {
 }
 
 export function ChartsSection({ rows, dailyTotals, warehouses, chartWarehouseId, onChangeChartWarehouse, fromDate, asOfDate }: ChartsSectionProps) {
+  const { m } = useI18n();
+  const t = m.dashboard.charts;
   const filteredRows = useMemo(
     () => (chartWarehouseId === 'ALL' ? rows : rows.filter((r) => r.descriptor.warehouseId === chartWarehouseId)),
     [rows, chartWarehouseId],
@@ -60,12 +64,12 @@ export function ChartsSection({ rows, dailyTotals, warehouses, chartWarehouseId,
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex flex-wrap items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <div>
-          <h2 className="text-base font-semibold">재고 흐름</h2>
-          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">선택한 조회 범위와 창고 필터를 반영합니다.</p>
+          <h2 className="text-base font-semibold">{t.title}</h2>
+          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
         </div>
         <Tabs value={chartWarehouseId} onValueChange={(v) => onChangeChartWarehouse(v)}>
           <TabsList>
-            <TabsTrigger value="ALL" className="border-sidebar-foreground/40 bg-sidebar-hover-bg text-sidebar-foreground data-[state=active]:border-transparent data-[state=active]:bg-brand-accent data-[state=active]:text-brand-accent-foreground">전체</TabsTrigger>
+            <TabsTrigger value="ALL" className="border-sidebar-foreground/40 bg-sidebar-hover-bg text-sidebar-foreground data-[state=active]:border-transparent data-[state=active]:bg-brand-accent data-[state=active]:text-brand-accent-foreground">{t.all}</TabsTrigger>
             {warehouses.map((w) => (
               <TabsTrigger
                 key={w.id}
@@ -79,8 +83,8 @@ export function ChartsSection({ rows, dailyTotals, warehouses, chartWarehouseId,
         </Tabs>
       </div>
       <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x">
-        <TrendLineChart title="전체 재고수량 추이" data={stockSeries} valueFormatter={(v) => `${formatNumber(v)}개`} />
-        <TrendLineChart title="전체 재고자산 추이" data={valueSeries} valueFormatter={(v) => formatCurrency(v)} />
+        <TrendLineChart title={t.stockTrend} data={stockSeries} valueFormatter={(v) => format(m.dashboard.unit, { count: formatNumber(v) })} />
+        <TrendLineChart title={t.valueTrend} data={valueSeries} valueFormatter={(v) => formatCurrency(v)} />
         <RiskDistributionChart {...riskCounts} />
         <TopDepletionChart items={topDepletion} />
       </div>

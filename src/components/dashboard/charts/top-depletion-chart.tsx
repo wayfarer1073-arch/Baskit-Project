@@ -2,6 +2,8 @@
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { BarChart3 } from 'lucide-react';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
 
 interface TopDepletionChartProps {
   items: { productName: string; depletion: number }[];
@@ -36,7 +38,7 @@ function BarTooltip({ active, payload }: BarTooltipProps) {
       }}
     >
       <div style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{fullName}</div>
-      <div style={{ marginTop: 2, color: 'var(--color-muted-foreground)' }}>{value.toLocaleString('ko-KR')}개</div>
+      <div style={{ marginTop: 2, color: 'var(--color-muted-foreground)' }}>{value.toLocaleString()}</div>
     </div>
   );
 }
@@ -70,6 +72,8 @@ const MAX_BARS = 7;
 const LABEL_MAX_CHARS = 11;
 
 export function TopDepletionChart({ items }: TopDepletionChartProps) {
+  const { m } = useI18n();
+  const t = m.dashboard.charts;
   const top = items.slice(0, MAX_BARS);
   const data = top.map((i, index) => ({
     name: i.productName.length > LABEL_MAX_CHARS ? `${i.productName.slice(0, LABEL_MAX_CHARS)}…` : i.productName,
@@ -80,12 +84,12 @@ export function TopDepletionChart({ items }: TopDepletionChartProps) {
 
   return (
     <div className="px-5 py-4">
-      <h3 className="text-sm font-semibold">최근 7일 소진량 TOP {MAX_BARS} SKU</h3>
+      <h3 className="text-sm font-semibold">{format(t.topDepletion, { count: MAX_BARS })}</h3>
       <div className="mt-2 h-64">
         {data.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
             <BarChart3 className="size-5 opacity-40" aria-hidden="true" />
-            <p className="text-sm">데이터 축적 중</p>
+            <p className="text-sm">{t.accumulating}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

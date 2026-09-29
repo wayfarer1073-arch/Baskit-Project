@@ -3,6 +3,7 @@
 import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import { formatKstDate } from '@/lib/date';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 interface TrendLineChartProps {
   title: string;
@@ -12,6 +13,8 @@ interface TrendLineChartProps {
 }
 
 export function TrendLineChart({ title, data, valueFormatter, color = 'var(--color-brand-accent)' }: TrendLineChartProps) {
+  const { m, locale } = useI18n();
+  const compact = new Intl.NumberFormat(locale === 'ko' ? 'ko-KR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 });
   const gradientId = `trend-fill-${title.replace(/[^a-zA-Z0-9가-힣]+/g, '-')}`;
   return (
     <div className="px-5 py-4">
@@ -20,8 +23,8 @@ export function TrendLineChart({ title, data, valueFormatter, color = 'var(--col
         {data.length < 2 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
             <TrendingUp className="size-5 opacity-40" aria-hidden="true" />
-            <p className="text-sm">데이터 축적 중</p>
-            <p className="text-xs">스냅샷 2건 이상 필요</p>
+            <p className="text-sm">{m.dashboard.charts.accumulating}</p>
+            <p className="text-xs">{m.dashboard.charts.needTwo}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -47,7 +50,7 @@ export function TrendLineChart({ title, data, valueFormatter, color = 'var(--col
                 stroke="var(--color-muted-foreground)"
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v: number) => (v >= 100000000 ? `${Math.round(v / 100000000)}억` : v >= 10000 ? `${Math.round(v / 10000)}만` : `${v}`)}
+                tickFormatter={(v: number) => (v >= 10000 ? compact.format(v) : `${v}`)}
               />
               <Tooltip
                 formatter={(value) => [valueFormatter(Number(value)), title]}

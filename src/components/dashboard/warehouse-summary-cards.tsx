@@ -6,6 +6,9 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/format';
 import { formatKstDate, formatKstDateTime } from '@/lib/date';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import type { WarehouseSummary } from '@/domain/inventory/types';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
+import type { Messages } from '@/lib/i18n/messages';
 
 interface LatestUpload {
   warehouseId: string;
@@ -20,33 +23,39 @@ interface WarehouseSummaryCardsProps {
   latestUploads: LatestUpload[];
 }
 
-const ROWS: { label: string; format: (s: WarehouseSummary) => string }[] = [
-  { label: '관리 SKU', format: (s) => `${formatNumber(s.skuCount)}개` },
-  { label: '평가 가능한 재고금액', format: (s) => (s.snapshot.knownInventoryValue === null ? '평가 불가' : formatCurrency(s.snapshot.knownInventoryValue)) },
-  { label: '평가 가능한 SKU 비율', format: (s) => (s.snapshot.valuationCoverageRatio === null ? '산정 불가' : formatPercent(s.snapshot.valuationCoverageRatio)) },
-  { label: '품절 SKU', format: (s) => `${s.snapshot.soldOutSkuCount}개` },
-  { label: '위험 SKU', format: (s) => `${formatNumber(s.dangerSkuCount)}개 (${formatPercent(s.dangerRatio)})` },
-  { label: '설정 기간 내 소진 추정', format: (s) => formatPercent(s.stockoutSoon30dRatio) },
-  { label: '관측상 정체 후보 비율', format: (s) => formatPercent(s.stagnantRatio) },
-  { label: '과잉재고 후보 비율', format: (s) => formatPercent(s.overstockCandidateRatio) },
-];
+type Dict = Messages['dashboard'];
+
+function buildRows(t: Dict['warehouses'], d: Dict): { label: string; format: (s: WarehouseSummary) => string }[] {
+  const unit = (n: number) => format(d.unit, { count: formatNumber(n) });
+  return [
+    { label: t.skuCount, format: (s) => unit(s.skuCount) },
+    { label: t.value, format: (s) => (s.snapshot.knownInventoryValue === null ? d.kpi.valueUnknown : formatCurrency(s.snapshot.knownInventoryValue)) },
+    { label: t.valueRatio, format: (s) => (s.snapshot.valuationCoverageRatio === null ? d.kpi.notComputable : formatPercent(s.snapshot.valuationCoverageRatio)) },
+    { label: t.soldOut, format: (s) => unit(s.snapshot.soldOutSkuCount) },
+    { label: t.danger, format: (s) => format(t.dangerValue, { count: formatNumber(s.dangerSkuCount), ratio: formatPercent(s.dangerRatio) }) },
+    { label: t.stockoutSoon, format: (s) => formatPercent(s.stockoutSoon30dRatio) },
+    { label: t.stagnant, format: (s) => formatPercent(s.stagnantRatio) },
+    { label: t.overstock, format: (s) => formatPercent(s.overstockCandidateRatio) },
+  ];
+}
 
 export function WarehouseSummaryCards({ summaries: summariesInput, activeWarehouseId, onSelect, latestUploads }: WarehouseSummaryCardsProps) {
+  const { m } = useI18n();
+  const t = m.dashboard.warehouses;
+  const ROWS = buildRows(t, m.dashboard);
   const summaries = [...summariesInput].sort((a, b) => a.warehouseCode.localeCompare(b.warehouseCode));
   return (
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex flex-wrap items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
-        <h2 className="text-base font-semibold">창고별 요약</h2>
-        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
-          창고마다 서로 다른 상품을 관리하는 별개의 공간이에요. 어느 창고가 더 잘하고 있는지 비교하는 표가 아닙니다.
-        </InfoTooltip>
+        <h2 className="text-base font-semibold">{t.title}</h2>
+        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">{t.tip}</InfoTooltip>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth: 560 }}>
           <thead>
             <tr className="border-b border-border">
               <th className="px-5 py-2.5 text-left whitespace-nowrap" style={{ width: 190 }} scope="col">
-                <span className="sr-only">지표</span>
+                <span className="sr-only">{t.metric}</span>
               </th>
               {summaries.map((s) => {
                 const active = activeWarehouseId === s.warehouseId;
@@ -83,7 +92,7 @@ export function WarehouseSummaryCards({ summaries: summariesInput, activeWarehou
             ))}
             <tr>
               <th scope="row" className="px-5 py-2.5 text-left text-xs whitespace-nowrap font-normal text-muted-foreground">
-                최근 업로드
+                {t.latestUpload}
               </th>
               {summaries.map((s) => {
                 const upload = latestUploads.find((u) => u.warehouseId === s.warehouseId);
@@ -95,7 +104,7 @@ export function WarehouseSummaryCards({ summaries: summariesInput, activeWarehou
                         {formatKstDate(upload.snapshotDate!)} · {formatKstDateTime(upload.uploadedAt)}
                       </span>
                     ) : (
-                      '업로드 없음'
+                      t.noUpload
                     )}
                   </td>
                 );

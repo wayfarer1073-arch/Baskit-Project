@@ -26,6 +26,7 @@ import { todayKstDateString } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { cn } from '@/lib/utils';
 import { MergedInventoryTable } from '@/components/inventory-table/merged-inventory-table';
+import { format } from '@/lib/i18n/locales';
 
 interface LatestUpload {
   warehouseId: string;
@@ -84,7 +85,7 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
         else revert.add(skuId);
         return revert;
       });
-      toast.error('즐겨찾기 변경에 실패했습니다.');
+      toast.error(m.dashboard.favoriteFailed);
     }
   }
 
@@ -99,8 +100,8 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
       <div className="space-y-7">
         <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">재고 운영 현황</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{asOfDate} 기준 재고 상태입니다.</p>
+            <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">{m.dashboard.title}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{format(m.dashboard.asOf, { date: asOfDate })}</p>
           </div>
           <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
         </div>
@@ -110,12 +111,12 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
               <UploadCloud className="size-6 text-muted-foreground" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">아직 업로드된 재고 데이터가 없습니다</h2>
-              <p className="mt-1 text-sm text-muted-foreground">창고별 Excel을 업로드하면 대시보드가 자동으로 채워집니다.</p>
+              <h2 className="text-lg font-semibold">{m.dashboard.emptyTitle}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{m.dashboard.emptyBody}</p>
             </div>
             <Button asChild>
               <Link href="/upload">
-                <UploadCloud className="size-4" /> 업로드 하러 가기
+                <UploadCloud className="size-4" /> {m.dashboard.goUpload}
               </Link>
             </Button>
           </div>
@@ -128,9 +129,9 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
     <div className="space-y-9">
       <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">재고 운영 현황</h1>
+          <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">{m.dashboard.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {fromDate ? `${fromDate}부터 ${asOfDate}까지의 변화와 현재 상태를 함께 봅니다.` : `${asOfDate} 기준 재고 상태입니다.`}
+            {fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
           </p>
         </div>
         <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />

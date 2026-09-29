@@ -9,6 +9,7 @@ import { format } from '@/lib/i18n/locales';
 import type { TodayAction, TodayActionKind } from '@/domain/inventory/today-actions';
 import type { Messages } from '@/lib/i18n/messages';
 import { cn } from '@/lib/utils';
+import { localizeReason } from '@/lib/status';
 
 const VISIBLE = 8;
 
@@ -20,7 +21,7 @@ const KIND_VARIANT: Record<TodayActionKind, 'danger' | 'warning' | 'secondary' |
   reduce: 'stagnant',
 };
 
-function describe(action: TodayAction, t: Messages['today']): string {
+function describe(action: TodayAction, t: Messages['today'], d: Messages['domain']): string {
   const qty = (action.quantity ?? 0).toLocaleString();
   switch (action.kind) {
     case 'order_now':
@@ -30,7 +31,7 @@ function describe(action: TodayAction, t: Messages['today']): string {
     case 'order_soon':
       return format(t.orderSoon, { date: action.orderDate ?? '', qty });
     case 'check_data':
-      return format(t.checkData, { reason: action.reason ?? '' });
+      return format(t.checkData, { reason: action.reason ? localizeReason(action.reason, d) : '' });
     case 'expiration':
       return format(t.expiration, { days: action.daysUntilExpiration ?? 0 });
     case 'reduce':
@@ -69,7 +70,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{action.productName}</span>
                   <span className={cn('block truncate text-xs', action.stockoutBeforeArrival ? 'text-status-danger' : 'text-muted-foreground')}>
-                    {describe(action, t)}
+                    {describe(action, t, m.domain)}
                     <span className="text-muted-foreground">
                       {' · '}
                       {action.productCode} · {action.warehouseName}

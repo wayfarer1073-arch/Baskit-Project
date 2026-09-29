@@ -6,6 +6,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { LoaderCircle, MoveRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
 
 function shiftDay(date: string, days: number): string {
   return format(addDays(parseISO(date), days), 'yyyy-MM-dd');
@@ -18,6 +19,8 @@ interface DateRangeControlProps {
 }
 
 export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeControlProps) {
+  const { m } = useI18n();
+  const t = m.dashboard.date;
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -53,14 +56,14 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
 
   return (
     <div className="flex flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:justify-end">
-      <div className="inline-flex items-center gap-1 rounded-md p-0.5 text-xs" aria-label="빠른 날짜 선택">
+      <div className="inline-flex items-center gap-1 rounded-md p-0.5 text-xs" aria-label={t.quickPick}>
         <button
           type="button"
           onClick={() => goToDay(maxDate)}
           disabled={pending}
           className={cn('rounded px-2.5 py-1 font-medium transition-colors', isToday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
         >
-          오늘
+          {t.today}
         </button>
         <button
           type="button"
@@ -68,24 +71,24 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
           disabled={pending}
           className={cn('rounded px-2.5 py-1 font-medium transition-colors', isYesterday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
         >
-          어제
+          {t.yesterday}
         </button>
       </div>
 
-      <div className="inline-flex items-center gap-1 rounded-md p-0.5 text-xs" aria-label="조회 방식">
+      <div className="inline-flex items-center gap-1 rounded-md p-0.5 text-xs" aria-label={t.mode}>
         <button
           type="button"
           onClick={() => setMode('day')}
           className={cn('rounded px-2.5 py-1 font-medium transition-colors', mode === 'day' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
         >
-          특정 날짜
+          {t.day}
         </button>
         <button
           type="button"
           onClick={() => setMode('range')}
           className={cn('rounded px-2.5 py-1 font-medium transition-colors', mode === 'range' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
         >
-          기간 비교
+          {t.range}
         </button>
       </div>
 
@@ -93,15 +96,15 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
         <input type="date" value={day} max={maxDate} onChange={(event) => setDay(event.target.value)} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
       ) : (
         <div className="flex items-center gap-1.5">
-          <input type="date" value={start} max={maxDate} onChange={(event) => setStart(event.target.value)} aria-label="비교 시작일" className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          <input type="date" value={start} max={maxDate} onChange={(event) => setStart(event.target.value)} aria-label={t.rangeStart} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           <MoveRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <input type="date" value={end} max={maxDate} onChange={(event) => setEnd(event.target.value)} aria-label="비교 종료일" className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          <input type="date" value={end} max={maxDate} onChange={(event) => setEnd(event.target.value)} aria-label={t.rangeEnd} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
         </div>
       )}
 
       <Button size="sm" onClick={apply} disabled={pending || (mode === 'day' ? !day : !start || !end)}>
         {pending && <LoaderCircle className="size-3.5 animate-spin" />}
-        적용
+        {t.apply}
       </Button>
     </div>
   );

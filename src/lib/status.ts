@@ -119,3 +119,68 @@ export function humanizeTag(tag: string): string {
   };
   return known[tag] ?? tag;
 }
+
+// ─── 화면 언어에 맞춘 표시(원문 한국어는 엑셀 내보내기·필터 매칭에 그대로 쓴다) ───────────────
+
+type DomainMessages = import('@/lib/i18n/messages').Messages['domain'];
+
+const REASON_KEYS: Record<string, keyof DomainMessages['reasons']> = {
+  품절: 'soldOut',
+  'B2B 개별 판단': 'b2b',
+  '자료 갱신 필요': 'stale',
+  '재고 정합성 확인': 'invalid',
+  '입고·조정 확인': 'movement',
+  '관측 무재고': 'noStock',
+  '관측 자료 부족': 'insufficient',
+  '소진 미관측': 'noUsage',
+  '재고 없음': 'empty',
+  '위험수량 이하': 'belowDanger',
+  '경고수량 이하': 'belowWarning',
+};
+
+/** 계산이 돌려준 사유 문구(한국어)를 화면 언어로. 모르는 문구는 그대로. */
+export function localizeReason(reason: string, d: DomainMessages): string {
+  const key = REASON_KEYS[reason];
+  return key ? d.reasons[key] : reason;
+}
+
+export function riskLabelText(level: RiskLevel, d: DomainMessages): string {
+  return d.risk[level];
+}
+
+export function analysisStatusText(analysis: SkuAnalysis, d: DomainMessages): string {
+  return analysis.operating?.reason ? localizeReason(analysis.operating.reason, d) : riskLabelText(analysis.thresholdRisk.level, d);
+}
+
+export function dataReliabilityText(level: DataReliability, d: DomainMessages): string {
+  return d.reliability.label.replace('{level}', d.reliability[level]);
+}
+
+const TAG_KEYS: Record<string, keyof DomainMessages['tags']> = {
+  '[입고 보정 추정·반품/조정 미분리]': 'estimate',
+  '[품절]': 'soldOut',
+  '[B2B 개별 판단]': 'b2b',
+  '[자료 갱신 필요]': 'stale',
+  '[재고 정합성 확인]': 'invalid',
+  '[입고·조정 확인]': 'movement',
+  '[관측 무재고]': 'noStock',
+  '[관측 자료 부족]': 'insufficient',
+  '[소진 미관측]': 'noUsage',
+  '[소비기한 확인 필요]': 'expiry',
+  '[신규 위험]': 'newRisk',
+  '[재고 없음]': 'empty',
+  '[위험수량 이하]': 'belowDanger',
+  '[경고수량 이하]': 'belowWarning',
+};
+
+/** humanizeTag의 화면 언어 버전. 모르는 형태는 원문 그대로. */
+export function humanizeTagText(tag: string, d: DomainMessages): string {
+  const observed = tag.match(/^\[관측 (\d{4}-\d{2}-\d{2})\]$/);
+  if (observed) return d.tags.observed.replace('{date}', observed[1]);
+  const basis = tag.match(/^\[최근 (\d+)일 중 (\d+)출고일\]$/);
+  if (basis) return d.tags.basis.replace('{days}', basis[1]).replace('{observed}', basis[2]);
+  const stagnant = tag.match(/^\[재고 정체 (\d+)(?:출고)?일\]$/);
+  if (stagnant) return d.tags.stagnant.replace('{days}', stagnant[1]);
+  const key = TAG_KEYS[tag];
+  return key ? d.tags[key] : tag;
+}

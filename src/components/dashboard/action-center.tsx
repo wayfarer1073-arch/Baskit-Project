@@ -2,6 +2,9 @@
 
 import { AlertOctagon, ArrowUpRight, CalendarClock, CheckCircle2, Clock, Flame, PackageOpen, PauseCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { format } from '@/lib/i18n/locales';
+import { localizeReason } from '@/lib/status';
 import type { ActionCenterCard, ActionCenterCategory } from '@/domain/inventory/aggregation';
 import type { QuickFilter, TableTab } from '@/lib/inventory-filters';
 
@@ -24,16 +27,24 @@ interface ActionCenterProps {
 }
 
 export function ActionCenter({ cards, onSelect }: ActionCenterProps) {
+  const { m, locale } = useI18n();
+  const t = m.dashboard.actions;
+  const titleOf = (card: ActionCenterCard) => t.categories[card.category];
+  const detailOf = (card: ActionCenterCard, sample: ActionCenterCard['sampleSkus'][number]) => {
+    if (card.category === 'NEW_DANGER') return sample.params.reason ? localizeReason(String(sample.params.reason), m.domain) : t.worsened;
+    return format(t.details[card.category], sample.params);
+  };
+  const count = (n: number) => n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US');
   const byCategory = new Map(cards.map((c) => [c.category, c]));
   const leadCategory = SEVERITY_ORDER.find((cat) => (byCategory.get(cat)?.count ?? 0) > 0) ?? null;
   const lead = leadCategory ? byCategory.get(leadCategory) : undefined;
   const rest = cards.filter((c) => c.category !== leadCategory);
 
   return (
-    <section aria-label="오늘 확인할 재고">
+    <section aria-label={t.title}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold">오늘 확인할 재고</h2>
-        <p className="hidden text-xs text-muted-foreground sm:block">카드를 누르면 전체 재고 목록에 바로 적용됩니다.</p>
+        <h2 className="text-base font-semibold">{t.title}</h2>
+        <p className="hidden text-xs text-muted-foreground sm:block">{t.hint}</p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
         {lead ? (
@@ -49,11 +60,11 @@ export function ActionCenter({ cards, onSelect }: ActionCenterProps) {
               <ArrowUpRight className="size-4 text-sidebar-muted-foreground transition-colors group-hover:text-sidebar-foreground" aria-hidden="true" />
             </div>
             <div>
-              <p className="text-sm text-sidebar-muted-foreground">{lead.title}</p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums">{lead.count.toLocaleString('ko-KR')}</p>
+              <p className="text-sm text-sidebar-muted-foreground">{titleOf(lead)}</p>
+              <p className="mt-1 text-3xl font-semibold tabular-nums">{count(lead.count)}</p>
               {lead.sampleSkus[0] && (
                 <p className="mt-1 truncate text-xs text-sidebar-muted-foreground">
-                  {lead.sampleSkus[0].productName} · {lead.sampleSkus[0].detail}
+                  {lead.sampleSkus[0].productName} · {detailOf(lead, lead.sampleSkus[0])}
                 </p>
               )}
             </div>
@@ -64,8 +75,8 @@ export function ActionCenter({ cards, onSelect }: ActionCenterProps) {
               <CheckCircle2 className="size-[18px]" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm text-sidebar-muted-foreground">오늘 우선 확인이 필요한 재고</p>
-              <p className="mt-1 text-xl font-semibold">없습니다</p>
+              <p className="text-sm text-sidebar-muted-foreground">{t.noneTitle}</p>
+              <p className="mt-1 text-xl font-semibold">{t.none}</p>
             </div>
           </div>
         )}
@@ -91,8 +102,8 @@ export function ActionCenter({ cards, onSelect }: ActionCenterProps) {
                 <ArrowUpRight className="size-3.5 text-muted-foreground/60 transition-colors group-hover:text-foreground" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">{card.title}</p>
-                <p className="mt-0.5 text-xl font-semibold tabular-nums">{card.count.toLocaleString('ko-KR')}</p>
+                <p className="text-xs text-muted-foreground">{titleOf(card)}</p>
+                <p className="mt-0.5 text-xl font-semibold tabular-nums">{count(card.count)}</p>
                 {sample && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{sample.productName}</p>}
               </div>
             </button>

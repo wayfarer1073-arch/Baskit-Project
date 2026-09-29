@@ -213,7 +213,8 @@ export interface ActionCenterCard {
   category: ActionCenterCategory;
   title: string;
   count: number;
-  sampleSkus: { skuId: string; productName: string; productCode: string; warehouseName: string; detail: string }[];
+  /** detail은 한국어 원문, params는 화면 언어로 다시 만들 때 쓰는 값. */
+  sampleSkus: { skuId: string; productName: string; productCode: string; warehouseName: string; detail: string; params: Record<string, string | number> }[];
 }
 
 export function buildActionCenterCards(rows: InventoryRow[], stagnantDaysThreshold: number): ActionCenterCard[] {
@@ -224,13 +225,14 @@ export function buildActionCenterCards(rows: InventoryRow[], stagnantDaysThresho
   const overstock = rows.filter((r) => r.analysis.overstock.isCandidate);
   const expirationRisk = rows.filter((r) => r.analysis.expirationRisk.isAtRisk);
 
-  const toSample = (list: InventoryRow[], detailFn: (r: InventoryRow) => string) =>
+  const toSample = (list: InventoryRow[], detailFn: (r: InventoryRow) => string, paramsFn: (r: InventoryRow) => Record<string, string | number>) =>
     list.slice(0, 3).map((r) => ({
       skuId: r.descriptor.skuId,
       productName: r.descriptor.productName,
       productCode: r.descriptor.productCode,
       warehouseName: r.descriptor.warehouseName,
       detail: detailFn(r),
+      params: paramsFn(r),
     }));
 
   return [
@@ -238,37 +240,61 @@ export function buildActionCenterCards(rows: InventoryRow[], stagnantDaysThresho
       category: 'NEW_DANGER',
       title: '신규 위험 SKU',
       count: newDanger.length,
-      sampleSkus: toSample(newDanger, (r) => (r.analysis.thresholdRisk.reason ? r.analysis.thresholdRisk.reason : '상태 악화')),
+      sampleSkus: toSample(
+        newDanger,
+        (r) => (r.analysis.thresholdRisk.reason ? r.analysis.thresholdRisk.reason : '상태 악화'),
+        (r) => ({ reason: r.analysis.thresholdRisk.reason ?? '' }),
+      ),
     },
     {
       category: 'STOCKOUT_SOON',
       title: '품절 임박 SKU',
       count: stockoutSoon.length,
-      sampleSkus: toSample(stockoutSoon, (r) => `${Math.floor(r.analysis.coverage.coverageDays ?? 0)}출고일분 남음`),
+      sampleSkus: toSample(
+        stockoutSoon,
+        (r) => `${Math.floor(r.analysis.coverage.coverageDays ?? 0)}출고일분 남음`,
+        (r) => ({ days: Math.floor(r.analysis.coverage.coverageDays ?? 0) }),
+      ),
     },
     {
       category: 'ACCELERATING',
       title: '소진 가속 SKU',
       count: accelerating.length,
-      sampleSkus: toSample(accelerating, (r) => `소진속도 +${Math.round(r.analysis.acceleration.accelerationRatePercent ?? 0)}%`),
+      sampleSkus: toSample(
+        accelerating,
+        (r) => `소진속도 +${Math.round(r.analysis.acceleration.accelerationRatePercent ?? 0)}%`,
+        (r) => ({ percent: Math.round(r.analysis.acceleration.accelerationRatePercent ?? 0) }),
+      ),
     },
     {
       category: 'STAGNANT',
       title: '장기 정체 SKU',
       count: stagnant.length,
-      sampleSkus: toSample(stagnant, (r) => `${r.analysis.stagnation.stagnantDays}출고일간 소진 미관측`),
+      sampleSkus: toSample(
+        stagnant,
+        (r) => `${r.analysis.stagnation.stagnantDays}출고일간 소진 미관측`,
+        (r) => ({ days: r.analysis.stagnation.stagnantDays }),
+      ),
     },
     {
       category: 'OVERSTOCK_CANDIDATE',
       title: '과잉재고 후보',
       count: overstock.length,
-      sampleSkus: toSample(overstock, (r) => `${Math.floor(r.analysis.overstock.coverageDays ?? 0)}출고일분 재고`),
+      sampleSkus: toSample(
+        overstock,
+        (r) => `${Math.floor(r.analysis.overstock.coverageDays ?? 0)}출고일분 재고`,
+        (r) => ({ days: Math.floor(r.analysis.overstock.coverageDays ?? 0) }),
+      ),
     },
     {
       category: 'EXPIRATION_RISK',
       title: '소비기한 확인 필요',
       count: expirationRisk.length,
-      sampleSkus: toSample(expirationRisk, (r) => `소비기한 잔여 ${r.analysis.expirationRisk.daysUntilExpiration}달력일 · 로트 잔량 확인 필요`),
+      sampleSkus: toSample(
+        expirationRisk,
+        (r) => `소비기한 잔여 ${r.analysis.expirationRisk.daysUntilExpiration}달력일 · 로트 잔량 확인 필요`,
+        (r) => ({ days: r.analysis.expirationRisk.daysUntilExpiration ?? 0 }),
+      ),
     },
   ];
 }
