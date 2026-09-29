@@ -4,9 +4,26 @@
  * 달라서, 처음 올릴 때 자동으로 추천하고 사용자가 확인한 뒤 템플릿으로 저장해 다음부터 그대로 쓴다.
  * 열은 위치가 아니라 헤더 이름으로 기억한다 — 업체가 열 순서를 바꿔도 그대로 맞는다.
  */
-export const LAYOUT_FIELDS = ['productCode', 'productName', 'normalStock', 'unitCost', 'totalCost', 'snapshotDate'] as const;
+export const LAYOUT_FIELDS = [
+  'productCode',
+  'productName',
+  'normalStock',
+  'unitCost',
+  'totalCost',
+  'expirationDate',
+  'barcode',
+  'eaPerBox',
+  'eaPerPallet',
+  'snapshotDate',
+] as const;
 export type LayoutField = (typeof LAYOUT_FIELDS)[number];
-export const REQUIRED_LAYOUT_FIELDS: LayoutField[] = ['productCode', 'productName', 'normalStock'];
+/** 상품명·정상재고만 꼭 필요하다. 상품코드가 없으면 상품명으로 품목을 구분하고 코드(A0001…)를 자동으로 붙인다. */
+export const REQUIRED_LAYOUT_FIELDS: LayoutField[] = ['productName', 'normalStock'];
+/** 재고 파일에서 함께 읽어 SKU 추가 정보(소비기한·바코드·입수량)로 반영하는 열. */
+export const EXTRA_LAYOUT_FIELDS: LayoutField[] = ['expirationDate', 'barcode', 'eaPerBox', 'eaPerPallet'];
+/** 상품코드 열을 쓰지 않을 때 자동으로 붙이는 코드의 머리글자와 자릿수(A0001, A0002 …). */
+export const AUTO_CODE_PREFIX = 'A';
+export const AUTO_CODE_DIGITS = 4;
 
 export type DuplicateMode = 'sum' | 'skip';
 /** 파일의 재고수량 단위 — 박스·팔레트면 SKU 추가 정보의 입수량으로 낱개(EA)로 바꾼다. */

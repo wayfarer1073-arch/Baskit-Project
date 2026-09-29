@@ -157,9 +157,12 @@ model Sku {
   currentOption      String?
   currentBarcode     String?
   currentLocation    String?
-  currentUnitCost    Decimal @default(0) @db.Decimal(14, 2)
-  currentWarningQty  Int     @default(0)
-  currentDangerQty   Int     @default(0)
+  currentUnitCost    Decimal     @default(0) @db.Decimal(14, 2)
+  // 현재 원가가 어디서 왔는지 — 재고 파일(FILE) 또는 설정에서 직접 입력(MANUAL). 원가가 없으면 null.
+  unitCostSource     CostSource?
+  unitCostUpdatedAt  DateTime?
+  currentWarningQty  Int         @default(0)
+  currentDangerQty   Int         @default(0)
 
   // 관리자가 SKU 상세에서 직접 지정한 위험/경고수량. null이면 소진 속도 기반 자동계산을 쓴다.
   // 업로드로 값이 채워지지 않는 한 스냅샷과 무관하게 SKU 자체에 붙는 값이라 재업로드해도 유지된다.
@@ -669,4 +672,9 @@ model UploadJob {
 
   @@index([organizationId, createdAt])
   @@map("upload_jobs")
+}
+
+enum CostSource {
+  FILE
+  MANUAL
 }

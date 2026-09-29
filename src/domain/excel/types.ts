@@ -56,6 +56,13 @@ export interface ParsedInventoryRow {
   extra: Record<string, unknown>;
   /** 원가 헤더가 없거나 해당 셀이 비어 있어 이전 SKU 원가를 이어받아야 하는지 여부 */
   costMissing: boolean;
+  /** 상품코드 열 없이 올라와 상품명으로 구분한 행 — 창고 기준으로 코드를 붙이기 전까지 productCode는 임시값이다. */
+  autoCode?: boolean;
+  /** 재고 파일에 함께 적힌 소비기한(여러 행이 합쳐지면 모든 날짜). */
+  expirationDates?: string[];
+  /** 재고 파일에 함께 적힌 입수량. */
+  eaPerBox?: number | null;
+  eaPerPallet?: number | null;
 }
 
 export type IssueLevel = 'ERROR' | 'WARNING';

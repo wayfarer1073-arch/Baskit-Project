@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyCodeAliases, convertStockUnit } from './normalize';
+import { applyCodeAliases, assignAutoCodes, convertStockUnit } from './normalize';
 import type { ParsedInventoryRow } from './types';
 
 const row = (productCode: string, normalStock: number, unitCost: number | null = 100): ParsedInventoryRow => ({
@@ -55,5 +55,19 @@ describe('convertStockUnit', () => {
   it('does nothing for EA', () => {
     const input = [row('A', 1)];
     expect(convertStockUnit(input, 'EA', factors).rows).toBe(input);
+  });
+});
+
+describe('assignAutoCodes', () => {
+  const auto = (name: string) => ({ ...row(`\u0000name:${name}`, 1), productName: name, autoCode: true });
+  it('reuses the code of a same-named item and numbers new names after the largest auto code', () => {
+    const { rows, assigned } = assignAutoCodes([auto('사과'), auto('배'), auto('귤')], new Map([['사과', 'P-1']]), new Set(['P-1', 'A0007', 'A12']));
+    expect(rows.map((r) => r.productCode)).toEqual(['P-1', 'A0008', 'A0009']);
+    expect(assigned).toBe(2);
+    expect(rows.every((r) => !r.autoCode)).toBe(true);
+  });
+  it('leaves rows that already have a code alone', () => {
+    const plain = row('X', 1);
+    expect(assignAutoCodes([plain], new Map(), new Set()).rows[0]).toBe(plain);
   });
 });

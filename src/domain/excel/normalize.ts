@@ -1,5 +1,5 @@
 import type { ParsedInventoryRow, ValidationIssue } from './types';
-import type { StockUnit } from './layout-types';
+import { AUTO_CODE_DIGITS, AUTO_CODE_PREFIX, type StockUnit } from './layout-types';
 
 /**
  * 파싱한 재고 행을 창고의 품목 기준으로 맞춘다 — 정규화의 두 번째·세 번째 층(품목 매핑, 단위 환산).
@@ -27,8 +27,51 @@ export function applyCodeAliases(rows: ParsedInventoryRow[], aliasToCode: Readon
       existing.unitCost = row.unitCost;
       existing.costMissing = false;
     }
+    mergeRowExtras(existing, row);
   }
   return { rows: [...byCode.values()], aliased };
+}
+
+function mergeRowExtras(target: ParsedInventoryRow, row: ParsedInventoryRow) {
+  if (!target.barcode && row.barcode) target.barcode = row.barcode;
+  if (row.expirationDates?.length) target.expirationDates = [...new Set([...(target.expirationDates ?? []), ...row.expirationDates])].sort();
+  if (target.eaPerBox == null && row.eaPerBox != null) target.eaPerBox = row.eaPerBox;
+  if (target.eaPerPallet == null && row.eaPerPallet != null) target.eaPerPallet = row.eaPerPallet;
+}
+
+const AUTO_CODE_PATTERN = new RegExp(`^${AUTO_CODE_PREFIX}(\\d{${AUTO_CODE_DIGITS},})$`);
+
+/**
+ * 상품코드 없이 올라온 행(상품명으로 구분)에 코드를 붙인다. 창고에 같은 이름의 품목이 있으면 그 코드를 쓰고,
+ * 없으면 창고에서 쓰인 가장 큰 자동 코드 다음 번호(A0001, A0002 …)를 새로 붙인다 — 다음 업로드에도 같은 이름은 같은 코드가 된다.
+ */
+export function assignAutoCodes(
+  rows: ParsedInventoryRow[],
+  codeByName: ReadonlyMap<string, string>,
+  knownCodes: ReadonlySet<string>,
+): { rows: ParsedInventoryRow[]; assigned: number } {
+  if (!rows.some((r) => r.autoCode)) return { rows, assigned: 0 };
+  let next = 0;
+  for (const code of knownCodes) {
+    const match = code.match(AUTO_CODE_PATTERN);
+    if (match) next = Math.max(next, Number(match[1]));
+  }
+  const taken = new Set(knownCodes);
+  let assigned = 0;
+  const out = rows.map((row) => {
+    if (!row.autoCode) return row;
+    let code = codeByName.get(row.productName);
+    if (!code) {
+      do code = `${AUTO_CODE_PREFIX}${String(++next).padStart(AUTO_CODE_DIGITS, '0')}`;
+      while (taken.has(code));
+      taken.add(code);
+      assigned++;
+    }
+    const { autoCode: _autoCode, ...rest } = row;
+    void _autoCode;
+    return { ...rest, productCode: code };
+  });
+  return { rows: out, assigned };
 }
 
 export interface PackagingFactors {
@@ -50,7 +93,8 @@ export function convertStockUnit(
   const missing: string[] = [];
   for (const row of rows) {
     const f = factors.get(row.productCode);
-    const factor = unit === 'BOX' ? f?.eaPerBox : f?.eaPerPallet;
+    // 같은 파일에 입수량 열이 있으면 그 값을 먼저 쓴다.
+    const factor = unit === 'BOX' ? (row.eaPerBox ?? f?.eaPerBox) : (row.eaPerPallet ?? f?.eaPerPallet);
     if (!factor || factor <= 0) {
       missing.push(row.productCode);
       continue;

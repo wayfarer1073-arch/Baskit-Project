@@ -81,6 +81,34 @@ async function syncSkuExpirationDate(tx: Tx, skuId: string): Promise<void> {
   await tx.sku.update({ where: { id: skuId }, data: { expirationDate: soonest ? soonest.expirationDate : null } });
 }
 
+/**
+ * 재고 파일에 함께 적힌 소비기한으로 품목의 자동 로트를 맞춘다 — 파일에 있는 날짜는 자동 로트로 두고, 파일에 없어진 날짜의
+ * 자동 로트는 지운다(그 로트가 다 나갔다고 본다). 이름을 직접 붙인 로트는 건드리지 않는다. 같은 파일을 다시 올려도 결과가 같다.
+ */
+export async function syncExpirationDatesFromStockFile(datesBySkuId: ReadonlyMap<string, string[]>): Promise<number> {
+  let changed = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const [skuId, dates] of datesBySkuId) {
+      const wanted = new Set(dates);
+      const lots = await tx.skuExpirationLot.findMany({ where: { skuId } });
+      const autoLots = lots.filter((l) => l.isAutoLot);
+      const namedDates = new Set(lots.filter((l) => !l.isAutoLot).map((l) => dateOnlyToString(l.expirationDate)));
+      const stale = autoLots.filter((l) => !wanted.has(dateOnlyToString(l.expirationDate)));
+      const have = new Set(autoLots.map((l) => dateOnlyToString(l.expirationDate)));
+      const missing = [...wanted].filter((d) => !have.has(d) && !namedDates.has(d));
+      if (stale.length === 0 && missing.length === 0) continue;
+      if (stale.length) await tx.skuExpirationLot.deleteMany({ where: { id: { in: stale.map((l) => l.id) } } });
+      for (const date of missing) {
+        await tx.skuExpirationLot.create({ data: { skuId, lot: `__auto_${randomUUID()}`, isAutoLot: true, expirationDate: toDateOnly(date) } });
+      }
+      await relabelAutoLots(tx, skuId);
+      await syncSkuExpirationDate(tx, skuId);
+      changed++;
+    }
+  });
+  return changed;
+}
+
 /** 최신 업로드에 남아 있고 로트가 하나 이상 등록된 SKU의 모든 로트를, 상품코드 순으로 나열한다(같은
  *  상품코드는 창고, 그 다음 소비기한 순으로 정렬). */
 export async function listExpirationLots(orgId: string): Promise<ExpirationLotRow[]> {

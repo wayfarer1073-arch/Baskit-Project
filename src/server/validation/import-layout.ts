@@ -1,12 +1,13 @@
 import { z } from 'zod';
-import type { ImportLayout } from '@/domain/excel/layout';
+import { LAYOUT_FIELDS, type ImportLayout, type LayoutField } from '@/domain/excel/layout-types';
 
 const header = z.string().trim().min(1).max(200).nullable().optional();
 
 export const importLayoutSchema = z.object({
   sheetName: z.string().max(200).nullable(),
   headerRowIndex: z.number().int().min(0).max(50),
-  columns: z.object({ productCode: header, productName: header, normalStock: header, unitCost: header, totalCost: header, snapshotDate: header }),
+  // 필드 목록에서 만들어 새 필드가 생겨도 검증에서 조용히 빠지지 않게 한다.
+  columns: z.object(Object.fromEntries(LAYOUT_FIELDS.map((f) => [f, header])) as Record<LayoutField, typeof header>),
   duplicateMode: z.enum(['sum', 'skip']),
   stockUnit: z.enum(['EA', 'BOX', 'PLT']).optional(),
 });

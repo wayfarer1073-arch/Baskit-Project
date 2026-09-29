@@ -22,6 +22,7 @@ import { ImportTemplateManagement, type ImportTemplateView } from '@/components/
 import { CodeAliasManagement, type CodeAliasView } from '@/components/settings/code-alias-management';
 import { TeamInvitations } from '@/components/settings/team-invitations';
 import { AccountDangerZone } from '@/components/settings/account-danger-zone';
+import { CostManagement, type CostRowView } from '@/components/settings/cost-management';
 import { ReorderSettings, type ReorderDefaults } from '@/components/settings/reorder-settings';
 import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
@@ -70,6 +71,7 @@ export function CommonSettings({
   holidays,
   allowNonWorkingDayUploads,
   importTemplates,
+  costs,
 }: {
   isAdmin: boolean;
   currentUserId: string | null;
@@ -79,6 +81,7 @@ export function CommonSettings({
   holidays: { id: string; date: string; name: string }[];
   allowNonWorkingDayUploads: boolean;
   importTemplates: ImportTemplateView[];
+  costs: CostRowView[];
 }) {
   const [users, setUsers] = useState(initialUsers);
   return (
@@ -87,6 +90,7 @@ export function CommonSettings({
       <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
       <ImportTemplateManagement templates={importTemplates} />
+      <CostManagement costs={costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}

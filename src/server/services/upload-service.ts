@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { autoLayout, parseSheets } from '@/domain/excel/parser';
 import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField } from '@/domain/excel/layout';
-import { applyCodeAliases, convertStockUnit } from '@/domain/excel/normalize';
+import { applyCodeAliases, assignAutoCodes, convertStockUnit } from '@/domain/excel/normalize';
 import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-alias-repository';
 import { findMatchingTemplate, layoutFingerprint, saveImportTemplate, touchImportTemplate } from '@/server/repositories/import-template-repository';
 import { validateAgainstPreviousSnapshot } from '@/domain/excel/validator';
+import { applyStockFileExtras } from '@/server/repositories/stock-extras-repository';
 import type { ParsedInventoryRow, ValidationIssue } from '@/domain/excel/types';
 import { createSnapshot, findActiveSnapshot, getLatestActiveSnapshotBefore, getSnapshotProductCodes, SnapshotConflictError } from '@/server/repositories/snapshot-repository';
 
@@ -54,6 +55,8 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
       unitCostProvided: !r.costMissing,
       totalCost: r.totalCost,
       normalStock: r.normalStock,
+      // 부가 정보는 있을 때만 넣는다 — 부가 열이 없는 파일의 서명은 예전과 같게 유지된다.
+      ext: r.barcode || r.eaPerBox != null || r.eaPerPallet != null || r.expirationDates?.length ? [r.barcode, r.eaPerBox, r.eaPerPallet, r.expirationDates] : undefined,
     }))
     .sort((a, b) => a.productCode.localeCompare(b.productCode));
   return sha256(Buffer.from(JSON.stringify(normalizedRows)));
@@ -64,11 +67,13 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
  * 처음 보는 상품코드도 함께 돌려준다(업로드 뒤 '새 상품' 안내용).
  */
 async function normalizeForWarehouse(warehouseId: string | undefined, rows: ParsedInventoryRow[], layout: ImportLayout) {
-  if (!warehouseId) return { rows, issues: [] as ValidationIssue[], newCodes: [] as string[] };
+  if (!warehouseId) return { rows: assignAutoCodes(rows, new Map(), new Set()).rows, issues: [] as ValidationIssue[], newCodes: [] as string[] };
   const [aliasMap, info] = await Promise.all([loadAliasMap(warehouseId), loadWarehouseSkuInfo(warehouseId)]);
-  const aliased = applyCodeAliases(rows, aliasMap);
+  const coded = assignAutoCodes(rows, info.codeByName, info.knownCodes);
+  const aliased = applyCodeAliases(coded.rows, aliasMap);
   const converted = convertStockUnit(aliased.rows, layout.stockUnit ?? 'EA', info.factors);
   const issues: ValidationIssue[] = [...converted.issues];
+  if (coded.assigned > 0) issues.push({ level: 'WARNING', code: 'AUTO_CODE_ASSIGNED', message: `상품코드 열이 없어 처음 보는 상품 ${coded.assigned}개에 코드를 자동으로 붙였습니다(A0001 형식).` });
   if (aliased.aliased > 0) issues.push({ level: 'WARNING', code: 'CODE_ALIAS_APPLIED', message: `연결된 상품코드 ${aliased.aliased}개를 기존 상품으로 바꿔 저장합니다.` });
   // 창고에 첫 업로드면 전부 새 상품이라 알릴 필요가 없다.
   const newCodes = info.knownCodes.size === 0 ? [] : converted.rows.filter((r) => !info.knownCodes.has(r.productCode)).map((r) => r.productCode);
@@ -237,6 +242,8 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
     }
     throw err;
   }
+
+  await applyStockFileExtras(request.warehouseId, request.snapshotDate, parseResult.rows);
 
   if (request.orgId) {
     const fingerprint = layoutFingerprint(sheets, layout);

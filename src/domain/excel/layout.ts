@@ -33,6 +33,10 @@ export const LAYOUT_ALIASES: Record<LayoutField, string[]> = {
   normalStock: [...HEADER_ALIASES.normalStock, '실재고', '보유재고', '재고량', 'on hand', 'on-hand', 'qty on hand', 'available qty', 'stock', 'quantity', 'qty'],
   unitCost: [...HEADER_ALIASES.unitCost, 'unit cost', 'cost', 'unit price'],
   totalCost: [...HEADER_ALIASES.totalCost, 'total cost', 'stock value', 'inventory value', 'amount'],
+  expirationDate: ['소비기한', '유통기한', '유효기한', '유효일자', '소비기한일자', 'expiry', 'expiry date', 'expiration date', 'exp date', 'best before'],
+  barcode: ['상품바코드', '바코드', '바코드번호', 'barcode', 'ean', 'upc', 'gtin'],
+  eaPerBox: ['EA/BOX', '박스입수', '박스 입수', '입수', '입수량', 'box qty', 'case pack', 'units per case', 'units per box'],
+  eaPerPallet: ['EA/PLT', '팔레트입수', '파렛트입수', '팔레트 입수', 'PLT입수', 'units per pallet', 'pallet qty'],
   snapshotDate: ['기준일', '재고기준일', '기준일자', '재고일자', '조회일', '일자', '날짜', 'date', 'snapshot date', 'as of'],
 };
 

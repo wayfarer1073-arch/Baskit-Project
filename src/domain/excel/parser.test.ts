@@ -78,11 +78,22 @@ describe('parseInventoryWorkbook - 최소 헤더 기반 업로드', () => {
     expect(result.issues.some((issue) => issue.code === 'COST_MISSING' && issue.level === 'WARNING')).toBe(true);
   });
 
-  it('필수 헤더가 없으면 저장하지 않는다', () => {
-    const rows = [['상품명', '정상재고'], ['상품A', '100']];
-    const result = parseInventoryWorkbook(buildXlsxBuffer(rows));
+  it('필수 헤더(상품명·정상재고)가 없으면 저장하지 않는다', () => {
+    const result = parseInventoryWorkbook(buildXlsxBuffer([['상품코드', '상품명'], ['A', '상품A']]));
     expect(result.rows).toHaveLength(0);
-    expect(result.issues.some((issue) => issue.code === 'MISSING_REQUIRED_COLUMN' && issue.column === 'productCode')).toBe(true);
+    expect(result.issues.some((issue) => issue.code === 'MISSING_REQUIRED_COLUMN' && issue.column === 'normalStock')).toBe(true);
+  });
+
+  it('상품코드 열이 없으면 상품명으로 품목을 구분하고 같은 이름은 합친다', () => {
+    const rows = [['상품명', '정상재고', '소비기한', 'EA/BOX'], ['상품A', '100', '2027-01-31', '12'], ['상품A', '5', '2027.02.28', ''], ['상품B', '3', '', '']];
+    const result = parseInventoryWorkbook(buildXlsxBuffer(rows));
+    expect(result.issues.filter((i) => i.level === 'ERROR')).toHaveLength(0);
+    expect(result.rows.map((r) => [r.productName, r.normalStock, r.autoCode])).toEqual([
+      ['상품A', 105, true],
+      ['상품B', 3, true],
+    ]);
+    expect(result.rows[0].expirationDates).toEqual(['2027-01-31', '2027-02-28']);
+    expect(result.rows[0].eaPerBox).toBe(12);
   });
 
   it('상품코드·상품명 누락은 그 행만 제외하고, 상품코드 중복은 합산하며 모두 WARNING이다(파일 전체를 막지 않음, 회귀 테스트)', () => {

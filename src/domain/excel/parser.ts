@@ -36,8 +36,68 @@ const FIELD_LABEL: Record<LayoutField, string> = {
   normalStock: '재고수량',
   unitCost: '단위원가',
   totalCost: '원가합계',
+  expirationDate: '소비기한',
+  barcode: '상품바코드',
+  eaPerBox: 'EA/BOX',
+  eaPerPallet: 'EA/PLT',
   snapshotDate: '기준일',
 };
+
+/** 상품코드 없이 올라온 행의 임시 코드(상품명 기준). 창고의 기존 품목·새 코드로 바꾸기 전까지만 쓴다. */
+export const AUTO_CODE_KEY_PREFIX = '\u0000name:';
+export function autoCodeKey(productName: string): string {
+  return `${AUTO_CODE_KEY_PREFIX}${productName}`;
+}
+
+interface RowExtras {
+  barcode: string | null;
+  expirationDates: string[];
+  eaPerBox: number | null;
+  eaPerPallet: number | null;
+}
+
+/** 재고와 함께 적힌 부가 정보(소비기한·바코드·입수량). 값이 잘못돼도 행은 살리고 그 값만 버린다. */
+function readExtras(get: (field: LayoutField) => string, rowNumber: number, issues: ValidationIssue[]): RowExtras {
+  const barcode = get('barcode') || null;
+  const expirationDates: string[] = [];
+  const rawDate = get('expirationDate');
+  if (rawDate) {
+    const date = parseDateCell(rawDate);
+    if (date) expirationDates.push(date);
+    else
+      issues.push({
+        level: 'WARNING',
+        code: 'EXPIRATION_PARSE_FAILED',
+        message: `${rowNumber}행: 소비기한 '${rawDate}'을(를) 날짜로 읽을 수 없어 소비기한만 건너뜁니다.`,
+        rowNumber,
+        column: 'expirationDate',
+      });
+  }
+  const packQty = (field: 'eaPerBox' | 'eaPerPallet'): number | null => {
+    const raw = get(field);
+    if (!raw) return null;
+    const n = normalizeNumber(raw);
+    if (n === null || !Number.isInteger(n) || n <= 0 || n > 1_000_000) {
+      issues.push({
+        level: 'WARNING',
+        code: 'PACK_QTY_INVALID',
+        message: `${rowNumber}행: ${FIELD_LABEL[field]} '${raw}'은(는) 1 이상의 정수가 아니어서 건너뜁니다.`,
+        rowNumber,
+        column: field,
+      });
+      return null;
+    }
+    return n;
+  };
+  return { barcode, expirationDates, eaPerBox: packQty('eaPerBox'), eaPerPallet: packQty('eaPerPallet') };
+}
+
+function mergeExtras(row: ParsedInventoryRow, extras: RowExtras) {
+  if (!row.barcode && extras.barcode) row.barcode = extras.barcode;
+  if (extras.expirationDates.length) row.expirationDates = [...new Set([...(row.expirationDates ?? []), ...extras.expirationDates])].sort();
+  if (row.eaPerBox == null && extras.eaPerBox !== null) row.eaPerBox = extras.eaPerBox;
+  if (row.eaPerPallet == null && extras.eaPerPallet !== null) row.eaPerPallet = extras.eaPerPallet;
+}
 
 /** 레이아웃을 주지 않으면 첫 시트에서 헤더 행과 열을 자동으로 찾는다(가장 흔한 양식은 확인 없이 바로 들어간다). */
 export function autoLayout(sheets: SheetData[], sheetName?: string | null): ImportLayout {
@@ -75,7 +135,9 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
 
   for (const field of missing) {
     issues.push({
-      level: REQUIRED_LAYOUT_FIELDS.includes(field) ? 'ERROR' : 'WARNING',
+      // 상품코드는 선택이지만, 양식이 상품코드 열을 지정했는데 파일에 없으면 멈춘다 — 조용히 이름 기준 자동 코드로 바뀌면
+      // 기존 품목과 다른 코드로 갈라지기 때문이다.
+      level: REQUIRED_LAYOUT_FIELDS.includes(field) || field === 'productCode' ? 'ERROR' : 'WARNING',
       code: 'TEMPLATE_COLUMN_NOT_FOUND',
       message: `'${FIELD_LABEL[field]}'로 지정한 열 '${layout.columns[field]}'을(를) 파일에서 찾을 수 없습니다.`,
       column: field,
@@ -119,9 +181,15 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
       if (date) fileDates.add(date);
     }
 
-    const productCode = get('productCode');
-    if (productCode === '') {
-      issues.push({ level: 'WARNING', code: 'MISSING_PRODUCT_CODE', message: `${rowNumber}행: 상품코드가 비어 있어 이 행은 건너뜁니다.`, rowNumber, column: 'productCode' });
+    // 상품코드 열을 쓰지 않으면 상품명으로 품목을 구분한다 — 코드는 창고 기준으로 나중에 붙인다(A0001…).
+    const autoCode = indexes.productCode === undefined;
+    const productCode = autoCode ? autoCodeKey(get('productName')) : get('productCode');
+    if (autoCode ? get('productName') === '' : productCode === '') {
+      issues.push(
+        autoCode
+          ? { level: 'WARNING', code: 'MISSING_PRODUCT_NAME', message: `${rowNumber}행: 상품명이 비어 있어 이 행은 건너뜁니다.`, rowNumber, column: 'productName' }
+          : { level: 'WARNING', code: 'MISSING_PRODUCT_CODE', message: `${rowNumber}행: 상품코드가 비어 있어 이 행은 건너뜁니다.`, rowNumber, column: 'productCode' },
+      );
       return;
     }
     const existing = rowByCode.get(productCode);
@@ -192,6 +260,7 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
 
     const normalStock = numericValues.normalStock ?? 0;
     const costMissing = get('unitCost') === '';
+    const extras = readExtras(get, rowNumber, issues);
 
     if (existing) {
       // 로케이션·로트별로 나뉜 행 — 재고와 원가합은 더하고, 단가는 먼저 적힌 값을 쓴다.
@@ -212,7 +281,8 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
         existing.unitCost = numericValues.unitCost ?? 0;
         existing.costMissing = false;
       }
-      if (!mergedCodes.includes(productCode)) mergedCodes.push(productCode);
+      mergeExtras(existing, extras);
+      if (!mergedCodes.includes(productCode)) mergedCodes.push(autoCode ? productName : productCode);
       return;
     }
 
@@ -225,7 +295,7 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
       productCode,
       productName,
       option: null,
-      barcode: null,
+      barcode: extras.barcode,
       unitCost: numericValues.unitCost ?? 0,
       totalCost: numericValues.totalCost ?? null,
       normalStock,
@@ -238,6 +308,10 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
       category: null,
       extra: {},
       costMissing,
+      ...(autoCode ? { autoCode: true } : {}),
+      ...(extras.expirationDates.length ? { expirationDates: extras.expirationDates } : {}),
+      ...(extras.eaPerBox !== null ? { eaPerBox: extras.eaPerBox } : {}),
+      ...(extras.eaPerPallet !== null ? { eaPerPallet: extras.eaPerPallet } : {}),
     };
     rows.push(row);
     rowByCode.set(productCode, row);

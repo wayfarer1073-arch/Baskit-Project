@@ -56,10 +56,20 @@ export async function loadAliasMap(warehouseId: string): Promise<Map<string, str
 }
 
 /** 업로드용 — 창고 SKU의 입수량과 이미 아는 상품코드 목록. */
-export async function loadWarehouseSkuInfo(warehouseId: string): Promise<{ factors: Map<string, PackagingFactors>; knownCodes: Set<string> }> {
-  const skus = await prisma.sku.findMany({ where: { warehouseId }, select: { productCode: true, eaPerBox: true, eaPerPallet: true } });
+export async function loadWarehouseSkuInfo(
+  warehouseId: string,
+): Promise<{ factors: Map<string, PackagingFactors>; knownCodes: Set<string>; codeByName: Map<string, string> }> {
+  const skus = await prisma.sku.findMany({
+    where: { warehouseId },
+    orderBy: [{ isActive: 'desc' }, { lastSeenDate: 'desc' }],
+    select: { productCode: true, currentProductName: true, eaPerBox: true, eaPerPallet: true },
+  });
+  const codeByName = new Map<string, string>();
+  // 같은 이름이 여러 품목이면 지금 쓰이는(최근에 본) 품목을 고른다.
+  for (const s of skus) if (!codeByName.has(s.currentProductName)) codeByName.set(s.currentProductName, s.productCode);
   return {
     factors: new Map(skus.map((s) => [s.productCode, { eaPerBox: s.eaPerBox, eaPerPallet: s.eaPerPallet }])),
     knownCodes: new Set(skus.map((s) => s.productCode)),
+    codeByName,
   };
 }

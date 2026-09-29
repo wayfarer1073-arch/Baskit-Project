@@ -28,7 +28,6 @@ export interface LayoutPreview {
   newCodes: string[];
 }
 
-const NONE = '__none__';
 const colLetter = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : `${String.fromCharCode(64 + Math.floor(i / 26))}${String.fromCharCode(65 + (i % 26))}`);
 
 interface LayoutReviewProps {
@@ -50,6 +49,8 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
   const { m } = useI18n();
   const t = m.layout;
   const [editing, setEditing] = useState(false);
+  // 체크했지만 아직 열을 고르지 않은 항목(열을 고르면 레이아웃에 들어간다).
+  const [opened, setOpened] = useState<Set<LayoutField>>(new Set());
 
   if (!preview) {
     return loading ? (
@@ -64,9 +65,20 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
   const { layout } = preview;
   const errors = preview.issues.filter((i) => i.level === 'ERROR');
   const warnings = preview.issues.filter((i) => i.level === 'WARNING' && i.code !== 'COST_MISSING');
-  const showEditor = editing || !preview.template || errors.length > 0;
+  // 자동 인식이 확실하면 접어 두고, 필요할 때 '양식 설정'으로 연다. 오류가 있으면 항상 연다.
+  const autoConfident = !preview.template && Object.values(preview.confidence).every((c) => c === 'exact');
+  const showEditor = editing ? true : errors.length > 0 || (!preview.template && !autoConfident);
   const set = (patch: Partial<ImportLayout>) => onLayoutChange({ ...layout, ...patch });
   const setColumn = (field: LayoutField, header: string | null) => set({ columns: { ...layout.columns, [field]: header } });
+  const toggleField = (field: LayoutField, on: boolean) => {
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(field);
+      else next.delete(field);
+      return next;
+    });
+    if (!on && layout.columns[field]) setColumn(field, null);
+  };
   const headerOptions = preview.headers.map((h, i) => ({ value: h, label: `${colLetter(i)} · ${h}` })).filter((o) => o.value.trim() !== '');
   const dateNote =
     preview.fileDates.length > 1
@@ -86,9 +98,10 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
           )}
           {preview.template ? format(t.templateApplied, { name: preview.template.name }) : t.autoDetected}
         </p>
-        {preview.template && errors.length === 0 && (
-          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing((v) => !v)} aria-expanded={showEditor}>
-            {showEditor ? t.hideEdit : t.edit}
+        {errors.length === 0 && (
+          <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setEditing((v) => !v)} aria-expanded={showEditor}>
+            <Settings2 className="size-3.5" aria-hidden="true" />
+            {showEditor ? t.hideEdit : t.settingsButton}
           </Button>
         )}
       </div>
@@ -136,40 +149,64 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {LAYOUT_FIELDS.map((field) => {
-              const required = REQUIRED_LAYOUT_FIELDS.includes(field);
-              const value = layout.columns[field] ?? null;
-              const confidence = value ? preview.confidence[field] : undefined;
-              const id = `layout-field-${field}`;
-              return (
-                <div key={field} className="space-y-1">
-                  <Label htmlFor={id} className="flex items-center gap-1.5 text-xs">
-                    {t.fields[field]}
-                    <span className="text-[10px] font-normal text-muted-foreground">{required ? t.required : t.optional}</span>
-                    {confidence && (
-                      <Badge variant={confidence === 'guess' ? 'warning' : 'secondary'} className="h-4 px-1 text-[10px] font-normal">
-                        {t.confidence[confidence]}
-                      </Badge>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-medium">{t.columnsTitle}</legend>
+            <p className="text-[11px] text-muted-foreground">{t.columnsHint}</p>
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {LAYOUT_FIELDS.map((field) => {
+                const required = REQUIRED_LAYOUT_FIELDS.includes(field);
+                const value = layout.columns[field] ?? null;
+                const checked = required || value !== null || opened.has(field);
+                const confidence = value ? preview.confidence[field] : undefined;
+                const id = `layout-field-${field}`;
+                const hint = (t.fieldHints as Partial<Record<LayoutField, string>>)[field];
+                return (
+                  <li key={field} className="grid grid-cols-1 gap-1.5 px-2.5 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:items-center">
+                    <label className="flex items-start gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-3.5 accent-[var(--brand-accent)]"
+                        checked={checked}
+                        disabled={required}
+                        aria-describedby={hint ? `${id}-hint` : undefined}
+                        onChange={(e) => toggleField(field, e.target.checked)}
+                      />
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-1.5 font-medium">
+                          {t.fields[field]}
+                          {required && <span className="text-[10px] font-normal text-muted-foreground">{t.required}</span>}
+                          {confidence && (
+                            <Badge variant={confidence === 'guess' ? 'warning' : 'secondary'} className="h-4 px-1 text-[10px] font-normal">
+                              {t.confidence[confidence]}
+                            </Badge>
+                          )}
+                        </span>
+                        {hint && (
+                          <span id={`${id}-hint`} className="block text-[11px] font-normal text-muted-foreground">
+                            {hint}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                    {checked && (
+                      <Select value={value ?? undefined} onValueChange={(v) => setColumn(field, v)}>
+                        <SelectTrigger id={id} aria-label={t.fields[field]} className={cn('h-8 w-full text-xs', !value && 'border-destructive')}>
+                          <SelectValue placeholder={t.chooseColumn} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {headerOptions.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
-                  </Label>
-                  <Select value={value ?? NONE} onValueChange={(v) => setColumn(field, v === NONE ? null : v)}>
-                    <SelectTrigger id={id} className={cn('h-8 w-full text-xs', required && !value && 'border-destructive')}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>{t.notUsed}</SelectItem>
-                      {headerOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              );
-            })}
-          </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </fieldset>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
@@ -262,6 +299,7 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
 
       {!preview.template && errors.length === 0 && (
         <div className="space-y-1.5 border-t border-border pt-2.5">
+          <p className="text-[11px] text-muted-foreground">{t.templateNameHint}</p>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={saveTemplate} onChange={(e) => onSaveTemplateChange(e.target.checked)} className="accent-[var(--brand-accent)]" />
             {t.saveTemplate}
