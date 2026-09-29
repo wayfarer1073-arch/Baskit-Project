@@ -29,6 +29,8 @@ export interface SkuDescriptor {
   eaPerPallet: number | null;
   packagingBarcode: string | null;
   /** 발주 거래처(없으면 null)와 품목 발주 기준 예외. */
+  /** 창고를 넘어 같은 품목으로 묶는 키(설정에서 직접 묶었을 때만). 없으면 상품코드로 묶는다. */
+  mergeKey?: string | null;
   supplierId?: string | null;
   supplierName?: string | null;
   reorderOverrides?: import('@/domain/reorder/reorder').PolicyLayer;

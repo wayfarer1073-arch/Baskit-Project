@@ -23,6 +23,7 @@ import { CodeAliasManagement, type CodeAliasView } from '@/components/settings/c
 import { TeamInvitations } from '@/components/settings/team-invitations';
 import { AccountDangerZone } from '@/components/settings/account-danger-zone';
 import { CostManagement, type CostRowView } from '@/components/settings/cost-management';
+import { MergeLinkManagement, type MergeLinkView } from '@/components/settings/merge-link-management';
 import { ReorderSettings, type ReorderDefaults } from '@/components/settings/reorder-settings';
 import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
@@ -72,6 +73,7 @@ export function CommonSettings({
   allowNonWorkingDayUploads,
   importTemplates,
   costs,
+  mergeLinks,
 }: {
   isAdmin: boolean;
   currentUserId: string | null;
@@ -82,6 +84,7 @@ export function CommonSettings({
   allowNonWorkingDayUploads: boolean;
   importTemplates: ImportTemplateView[];
   costs: CostRowView[];
+  mergeLinks: MergeLinkView[];
 }) {
   const [users, setUsers] = useState(initialUsers);
   return (
@@ -91,6 +94,7 @@ export function CommonSettings({
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
       <ImportTemplateManagement templates={importTemplates} />
       <CostManagement costs={costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />
+      {warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}

@@ -186,6 +186,9 @@ model Sku {
   // 이후로는 대시보드에 보이지 않는다(품절 목록에도 없음). 다시 재고가 생기면 null로 돌아간다.
   removedDate DateTime? @db.Date
 
+  // 창고를 넘어 같은 품목으로 묶는 키. 비어 있으면 상품코드가 같은 품목끼리 묶인다. 창고마다 코드가 다른 같은 품목을 설정에서 직접 묶을 때 쓴다.
+  mergeKey String?
+
   // true면 대시보드(KPI/차트/재고 테이블/Action Center/리포트)에서 이 SKU를 완전히 제외한다.
   // 데이터 자체는 계속 쌓이며 설정 화면에서 언제든 다시 노출로 되돌릴 수 있다.
   isHiddenFromDashboard Boolean @default(false)

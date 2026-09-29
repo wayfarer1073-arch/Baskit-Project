@@ -129,6 +129,7 @@ const observationSelect = {
 type ObservationItem = Prisma.InventoryItemGetPayload<{ select: typeof observationSelect }>;
 
 type SkuWithSupplier = {
+  mergeKey: string | null;
   supplierId: string | null;
   supplier: { id: string; name: string } | null;
   reorderLeadTimeDays: number | null;
@@ -141,6 +142,7 @@ type SkuWithSupplier = {
 /** 발주 기준 — 품목 예외만 담는다(거래처 값은 서비스에서 거래처 목록으로 합친다). */
 function supplierFields(sku: SkuWithSupplier) {
   return {
+    mergeKey: sku.mergeKey,
     supplierId: sku.supplier?.id ?? null,
     supplierName: sku.supplier?.name ?? null,
     reorderOverrides: {
@@ -314,7 +316,6 @@ export async function loadActiveSkusWithSeries(
         eaPerBox: sku.eaPerBox,
         eaPerPallet: sku.eaPerPallet,
         packagingBarcode: sku.packagingBarcode,
-        ...supplierFields(sku),
         ...supplierFields(sku),
       },
       observations: observationsFromLedger(ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? []), calendarOf(holidays, sku.warehouseId)),

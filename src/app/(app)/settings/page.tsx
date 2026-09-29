@@ -12,6 +12,7 @@ import { listSuppliers } from '@/server/repositories/store-repository';
 import { getReorderDefaults, listSupplierPolicies } from '@/server/repositories/reorder-repository';
 import { getAccountStatus } from '@/server/repositories/account-repository';
 import { listRegisteredCosts } from '@/server/repositories/cost-repository';
+import { listMergeLinks } from '@/server/repositories/merge-repository';
 import { listImportTemplates } from '@/server/repositories/import-template-repository';
 import { listCodeAliases } from '@/server/repositories/code-alias-repository';
 import { getStoreItemLearning } from '@/server/services/store-service';
@@ -45,6 +46,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     supplierPolicies,
     account,
     costs,
+    mergeLinks,
   ] = await Promise.all([
     getOrganization(tenant.orgId),
     listWarehouses(tenant.orgId),
@@ -63,6 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     listSupplierPolicies(tenant.orgId),
     getAccountStatus(tenant.userId),
     listRegisteredCosts(tenant.orgId),
+    listMergeLinks(tenant.orgId),
   ]);
 
   // 탭을 지정하지 않고 들어오면 지금 보고 있는 대시보드의 설정부터 보여준다.
@@ -90,6 +93,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
             importTemplates={importTemplates}
             costs={costs}
+            mergeLinks={mergeLinks}
             account={tenant.actingAs || !account ? null : { email: account.email, verified: !!account.emailVerifiedAt, workspaceName: organization.name }}
           />
         }

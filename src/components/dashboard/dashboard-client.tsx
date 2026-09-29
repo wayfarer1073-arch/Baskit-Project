@@ -23,6 +23,9 @@ import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { QuickFilter, TableTab } from '@/lib/inventory-filters';
 import { DateRangeControl } from '@/components/dashboard/date-range-control';
 import { todayKstDateString } from '@/lib/date';
+import { useI18n } from '@/components/i18n/i18n-provider';
+import { cn } from '@/lib/utils';
+import { MergedInventoryTable } from '@/components/inventory-table/merged-inventory-table';
 
 interface LatestUpload {
   warehouseId: string;
@@ -49,6 +52,8 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
   const [selectedSkuId, setSelectedSkuId] = useState<string | null>(null);
   const [soldOutPanelOpen, setSoldOutPanelOpen] = useState(false);
+  const [combineWarehouses, setCombineWarehouses] = useState(false);
+  const { m } = useI18n();
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set(favoriteSkuIds));
 
   const holidaySet = useMemo(() => new Set(holidays), [holidays]);
@@ -145,23 +150,45 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
         asOfDate={asOfDate}
       />
       <FavoritesSummary rows={favoriteRows} onSelectSku={setSelectedSkuId} fromDate={fromDate} />
-      <div id="inventory-table-section">
-        <InventoryTable
-          rows={tableRows}
-          warehouses={warehouses}
-          warehouseFilter={warehouseFilter}
-          onChangeWarehouseFilter={setWarehouseFilter}
-          tab={tableTab}
-          onChangeTab={(tab) => {
-            setTableTab(tab);
-            setQuickFilter(null);
-          }}
-          quickFilter={quickFilter}
-          onClearQuickFilter={() => setQuickFilter(null)}
-          onSelectSku={setSelectedSkuId}
-          asOfDate={asOfDate}
-          fromDate={fromDate}
-        />
+      <div id="inventory-table-section" className="space-y-3">
+        {warehouses.length > 1 && (
+          <div role="group" aria-label={m.merged.toggleLabel} className="inline-flex rounded-lg border border-border p-0.5 text-xs">
+            {[false, true].map((combined) => (
+              <button
+                key={String(combined)}
+                type="button"
+                aria-pressed={combineWarehouses === combined}
+                onClick={() => setCombineWarehouses(combined)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 font-medium transition-colors',
+                  combineWarehouses === combined ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {combined ? m.merged.combined : m.merged.byWarehouse}
+              </button>
+            ))}
+          </div>
+        )}
+        {combineWarehouses && warehouses.length > 1 ? (
+          <MergedInventoryTable rows={rows} settings={settings} onSelectSku={setSelectedSkuId} />
+        ) : (
+          <InventoryTable
+            rows={tableRows}
+            warehouses={warehouses}
+            warehouseFilter={warehouseFilter}
+            onChangeWarehouseFilter={setWarehouseFilter}
+            tab={tableTab}
+            onChangeTab={(tab) => {
+              setTableTab(tab);
+              setQuickFilter(null);
+            }}
+            quickFilter={quickFilter}
+            onClearQuickFilter={() => setQuickFilter(null)}
+            onSelectSku={setSelectedSkuId}
+            asOfDate={asOfDate}
+            fromDate={fromDate}
+          />
+        )}
       </div>
       <SoldOutSkuSheet
         rows={soldOutRows}

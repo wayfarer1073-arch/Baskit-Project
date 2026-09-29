@@ -13,14 +13,8 @@ import type { SkuAnalysis, StockObservation } from '@/domain/inventory/types';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 
 import type { InventoryRow } from '@/domain/inventory/read-model';
+import { basisRate } from '@/domain/inventory/merge';
 
-/** 예측에 실제로 쓴 소진 속도(추정할 수 없는 사유가 있으면 null). */
-function basisRate(a: SkuAnalysis): number | null {
-  const op = a.operating;
-  if (!op || op.reason !== null || !op.basisWindowDays) return null;
-  const w = op.basisWindowDays === 7 ? a.window7 : op.basisWindowDays === 14 ? a.window14 : a.window30;
-  return w.averageDailyDepletion;
-}
 
 /** 최근 30일 회전율 — 관측이 5회 미만이면 믿기 어려워 계산하지 않는다. */
 function turnover30(observations: StockObservation[], a: SkuAnalysis): InventoryRow['turnover30'] {
