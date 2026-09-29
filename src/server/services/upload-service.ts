@@ -7,6 +7,7 @@ import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-a
 import { findMatchingTemplate, layoutFingerprint, saveImportTemplate, touchImportTemplate } from '@/server/repositories/import-template-repository';
 import { validateAgainstPreviousSnapshot } from '@/domain/excel/validator';
 import { applyStockFileExtras } from '@/server/repositories/stock-extras-repository';
+import { storeUploadFile } from '@/server/repositories/upload-file-repository';
 import type { ParsedInventoryRow, ValidationIssue } from '@/domain/excel/types';
 import { createSnapshot, findActiveSnapshot, getLatestActiveSnapshotBefore, getSnapshotProductCodes, SnapshotConflictError } from '@/server/repositories/snapshot-repository';
 
@@ -245,6 +246,8 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
   }
 
   await applyStockFileExtras(request.warehouseId, request.snapshotDate, parseResult.rows);
+  // 원본 파일을 업로드 버전과 함께 보관한다(검증용 mock 데이터는 제외).
+  if (!request.isMock) await storeUploadFile({ snapshotId: snapshot.id, fileName: request.fileName, buffer: request.fileBuffer });
 
   if (request.orgId) {
     const fingerprint = layoutFingerprint(sheets, layout);

@@ -6,6 +6,7 @@ import { listSchedules } from '@/server/repositories/schedule-repository';
 import { UploadCalendar } from '@/components/upload/upload-calendar';
 import { dateOnlyToString } from '@/lib/date';
 import { requireTenant } from '@/server/tenant';
+import { listUploadFileInfo } from '@/server/repositories/upload-file-repository';
 import { ViewerNotice } from '@/components/auth/viewer-notice';
 import { getMessages } from '@/server/i18n';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
@@ -23,6 +24,7 @@ export default async function UploadPage() {
     await Promise.all(
       warehouses.map(async (w) => {
         const snapshots = await listSnapshotsForWarehouse(w.id);
+        const files = await listUploadFileInfo(snapshots.map((s) => s.id));
         return snapshots.map((s) => {
           const date = dateOnlyToString(s.snapshotDate);
           return {
@@ -34,6 +36,8 @@ export default async function UploadPage() {
             uploadedByName: s.uploadedBy.name,
             uploadedAt: s.uploadedAt.toISOString(),
             inboundCount: inboundCounts.get(`${w.id}|${date}`) ?? 0,
+            snapshotId: s.id,
+            sourceFile: files.get(s.id) ?? null,
           };
         });
       }),

@@ -23,6 +23,9 @@ export interface CalendarEntry {
   uploadedByName: string;
   uploadedAt: string;
   inboundCount: number;
+  snapshotId: string;
+  /** 보관된 원본 파일(없으면 null — 기능 도입 전 업로드 등). */
+  sourceFile: { fileName: string; size: number } | null;
 }
 
 interface UploadCalendarProps {

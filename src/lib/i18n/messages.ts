@@ -70,6 +70,7 @@ const ko = {
     noWarehouse: '아직 창고가 없어요. 설정 > 공통에서 창고를 먼저 추가해 주세요.',
     existingReplace: '해당 일자에 업로드된 재고 데이터가 있습니다. 교체하시겠습니까? ({name}님이 {time}에 올린 {count}건)',
     existingInfo: '{name}님이 {time}에 올린 {count}건이 있습니다.',
+    downloadOriginal: '원본 파일 받기 · {name} ({size})',
     blockedHoliday: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 공통에서 휴무일 업로드를 켤 수 있어요.',
     fileLabel: 'Excel 파일 (.xls, .xlsx)',
     requiredColumns: '업체마다 다른 양식도 열을 자동으로 찾아요. 상품코드·상품명·재고수량만 있으면 되고, 원가·원가합계·기준일은 선택이에요.',
@@ -447,6 +448,7 @@ const en: Messages = {
     noWarehouse: 'There is no warehouse yet. Add one under Settings > General first.',
     existingReplace: 'Stock data already exists for this date. Replace it? ({count} rows uploaded by {name} at {time})',
     existingInfo: '{count} rows were uploaded by {name} at {time}.',
+    downloadOriginal: 'Download original · {name} ({size})',
     blockedHoliday: 'Uploads are closed on non-working days (weekends and registered holidays). You can allow them under Settings > General.',
     fileLabel: 'Excel file (.xls, .xlsx)',
     requiredColumns:

@@ -24,7 +24,7 @@ interface WarehouseDayPanelProps {
   warehouseId: string;
   warehouseName: string;
   date: string;
-  existing: { uploadedByName: string; uploadedAt: string; rowCount: number } | null;
+  existing: { uploadedByName: string; uploadedAt: string; rowCount: number; snapshotId?: string; sourceFile?: { fileName: string; size: number } | null } | null;
   blocked: boolean;
   isAdmin: boolean;
 }
@@ -182,6 +182,17 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
         </p>
       )}
 
+      {existing?.snapshotId && existing.sourceFile && (
+        <a
+          href={`/api/upload/files/${existing.snapshotId}`}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground underline-offset-4 hover:underline"
+          download={existing.sourceFile.fileName}
+        >
+          <Download className="size-3.5" aria-hidden="true" />
+          {format(m.upload.downloadOriginal, { name: existing.sourceFile.fileName, size: formatFileSize(existing.sourceFile.size) })}
+        </a>
+      )}
+
       {blocked && !existing && <p className="text-xs text-muted-foreground">{m.upload.blockedHoliday}</p>}
 
       {!blocked && (
@@ -279,4 +290,10 @@ async function waitForUploadJob(jobId: string): Promise<UploadJobState> {
     if (job.status === 'SUCCEEDED' || job.status === 'FAILED') return job;
   }
   return { status: 'FAILED', result: null, error: null };
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }

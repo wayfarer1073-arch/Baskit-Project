@@ -62,6 +62,8 @@ export function DayDetailDialog({ open, onOpenChange, date, warehouses, entryByW
                         uploadedByName: entryByWarehouseId.get(w.id)!.uploadedByName,
                         uploadedAt: entryByWarehouseId.get(w.id)!.uploadedAt,
                         rowCount: entryByWarehouseId.get(w.id)!.rowCount,
+                        snapshotId: entryByWarehouseId.get(w.id)!.snapshotId,
+                        sourceFile: entryByWarehouseId.get(w.id)!.sourceFile,
                       }
                     : null
                 }

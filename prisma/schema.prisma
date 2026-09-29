@@ -52,6 +52,7 @@ model Organization {
   importTemplates ImportTemplate[]
   dailySales      DailySales[]
   invitations     Invitation[]
+  uploadFiles     UploadFile[]
   uploadJobs      UploadJob[]
 
   @@map("organizations")
@@ -276,7 +277,8 @@ model InventorySnapshot {
   uploadedBy     User           @relation(fields: [uploadedById], references: [id])
   uploadedAt     DateTime       @default(now())
 
-  items InventoryItem[]
+  items      InventoryItem[]
+  sourceFile UploadFile?
 
   @@unique([warehouseId, snapshotDate, version])
   @@index([warehouseId, snapshotDate, status])
@@ -685,4 +687,23 @@ model UploadJob {
 enum CostSource {
   FILE
   MANUAL
+}
+
+/// 재고 업로드의 원본 파일. 업로드 버전(스냅샷)마다 하나씩 보관해 나중에 그대로 내려받을 수 있다.
+/// 스냅샷(자료 초기화)이나 워크스페이스를 지우면 함께 지워진다. 지금은 DB에 두고, 규모가 커지면 객체 저장소로 옮긴다.
+model UploadFile {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  snapshotId     String            @unique
+  snapshot       InventorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  fileName       String
+  contentType    String
+  size           Int
+  sha256         String
+  data           Bytes
+  createdAt      DateTime          @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("upload_files")
 }
