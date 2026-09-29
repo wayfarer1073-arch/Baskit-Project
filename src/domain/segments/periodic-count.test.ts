@@ -77,4 +77,19 @@ describe('estimatePeriodicStock', () => {
     const unknown = estimatePeriodicStock([{ date: '2026-09-01', quantity: 5 }], [], '2026-09-20', opts)!;
     expect([ok, unknown, soon].sort(compareRecountUrgency).map((r) => r.status)).toEqual(['soon', 'unknown', 'ok']);
   });
+
+  it('decays reliability with time since the last count', () => {
+    const counts = [
+      { date: '2026-08-01', quantity: 100 },
+      { date: '2026-08-08', quantity: 90 },
+      { date: '2026-08-15', quantity: 80 },
+      { date: '2026-08-22', quantity: 70 },
+    ];
+    const fresh = estimatePeriodicStock(counts, [], '2026-08-24', { stockoutSoonDays: 7, recountDays: 14 })!;
+    const old = estimatePeriodicStock(counts, [], '2026-09-20', { stockoutSoonDays: 7, recountDays: 14 })!;
+    expect(fresh.confidence).toBe('high');
+    expect(old.reliability!.score).toBeLessThan(fresh.reliability!.score);
+    expect(old.reliability!.notes.some((n) => n.code === 'aging')).toBe(true);
+    expect(old.confidence).toBe('medium');
+  });
 });

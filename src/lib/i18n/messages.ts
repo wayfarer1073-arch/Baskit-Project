@@ -217,6 +217,20 @@ const ko = {
     failed: '저장에 실패했습니다.',
     itemCount: '품목 {count}개',
   },
+  reliability: {
+    score: '신뢰도 {score}점',
+    levels: { HIGH: '상', MEDIUM: '중', LOW: '하' },
+    formula: '출처 × 관측 밀도 × 경과 감쇠로 계산해요.',
+    notes: {
+      blocked: '추정 보류: {reason}',
+      count_source: '직접 센 실사 수량 기준',
+      snapshot_source: '재고 파일 수량 기준',
+      sparse: '근거 기간 {expected}일 중 {observed}일만 관측',
+      long_window: '최근 {windowDays}일로 넓혀 계산(최근 흐름 반영이 늦음)',
+      few_intervals: '속도 계산 구간 {intervals}개(3개 이상 권장)',
+      aging: '마지막 확인 후 {days}일 경과',
+    },
+  },
   settings: {
     tabsLabel: '설정 구분',
     commonTab: '공통',
@@ -459,6 +473,20 @@ const en: Messages = {
     saved: 'Saved.',
     failed: 'Could not save.',
     itemCount: '{count} items',
+  },
+  reliability: {
+    score: 'Reliability {score}',
+    levels: { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' },
+    formula: 'Source × observation density × time decay.',
+    notes: {
+      blocked: 'Estimate on hold: {reason}',
+      count_source: 'Based on a manual count',
+      snapshot_source: 'Based on the stock file',
+      sparse: 'Observed on {observed} of {expected} days',
+      long_window: 'Widened to the last {windowDays} days (slower to reflect recent change)',
+      few_intervals: '{intervals} intervals for the usage rate (3+ recommended)',
+      aging: '{days} days since the last check',
+    },
   },
   settings: {
     tabsLabel: 'Settings sections',

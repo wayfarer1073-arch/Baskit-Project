@@ -23,6 +23,7 @@ import { eventTypeLabel } from '@/lib/event-types';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import type { ReorderSuggestion } from '@/domain/reorder/reorder';
 import { ReorderPanel, type Turnover30 } from './reorder-panel';
+import { ReliabilityInfo } from '@/components/ui/reliability-info';
 
 interface SkuDetailResponse {
   descriptor: SkuDescriptor;
@@ -301,6 +302,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 <span className={`rounded-md bg-muted px-2 py-0.5 text-xs font-medium ${dataReliabilityClassName(dataReliabilityLevel(detail.analysis))}`}>
                   신뢰도 {dataReliabilityLabel(dataReliabilityLevel(detail.analysis))}
                 </span>
+                <ReliabilityInfo reliability={detail.analysis.reliability} className="ml-1 align-middle" />
               </SheetDescription>
             </SheetHeader>
 

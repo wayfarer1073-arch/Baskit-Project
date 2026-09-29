@@ -1,4 +1,5 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { assessReliability, type Reliability } from '@/domain/reliability/reliability';
 
 /** 비정기 실사: 마지막 실사 이후 이 일수가 지나면 다시 세어보길 권한다. */
 export const DEFAULT_RECOUNT_DAYS = 14;
@@ -32,6 +33,8 @@ export interface PeriodicEstimate {
   estimatedStockoutDate: string | null;
   status: PeriodicStatus;
   confidence: EstimateConfidence;
+  /** 실사 출처 × 구간 수 × 마지막 실사 후 경과 감쇠. 소진 속도를 모르면 null. */
+  reliability: Reliability | null;
   recountReasons: string[];
 }
 
@@ -100,11 +103,22 @@ export function estimatePeriodicStock(
   else if (daysUntilStockout !== null && daysUntilStockout <= options.stockoutSoonDays) status = 'soon';
   else status = 'ok';
 
-  let confidence: EstimateConfidence;
-  if (dailyUsage === null) confidence = 'none';
-  else if (usableIntervals >= 3 && daysSinceCount <= recountDays) confidence = 'high';
-  else if (usableIntervals >= 2 && daysSinceCount <= recountDays * 2) confidence = 'medium';
-  else confidence = 'low';
+  // 반감기를 실사 주기의 3배로 두면 주기 안에서는 '상'을 유지하고, 두 주기를 넘기면 '중' 아래로 내려간다.
+  const reliability =
+    dailyUsage === null
+      ? null
+      : assessReliability({
+          source: 'COUNT',
+          expectedDays: 1,
+          observedDays: 1,
+          windowDays: null,
+          intervals: usableIntervals,
+          minIntervals: 3,
+          daysSinceLevel: daysSinceCount,
+          halfLifeDays: recountDays * 3,
+          blockingReason: null,
+        });
+  const confidence: EstimateConfidence = reliability === null ? 'none' : reliability.level === 'HIGH' ? 'high' : reliability.level === 'MEDIUM' ? 'medium' : 'low';
 
   const recountReasons: string[] = [];
   if (daysSinceCount >= recountDays) recountReasons.push(`마지막 실사 후 ${daysSinceCount}일 경과`);
@@ -123,6 +137,7 @@ export function estimatePeriodicStock(
     estimatedStockoutDate,
     status,
     confidence,
+    reliability,
     recountReasons,
   };
 }

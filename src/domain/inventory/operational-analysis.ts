@@ -3,6 +3,10 @@ import { analyzeSku, buildDailyDeltas, calculateCoverage, calculateThresholdRisk
 import { demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
 import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalysis, StockObservation, WindowDepletion } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
+import { assessReliability } from '@/domain/reliability/reliability';
+
+/** 매일 받는 재고 파일은 출고일 3일만 밀려도 믿기 어려워진다. */
+const DAILY_HALF_LIFE_SHIPPING_DAYS = 3;
 
 export interface OperatingContext {
   holidays?: ReadonlySet<string>;
@@ -98,9 +102,20 @@ export function analyzeOperationalSku(
                   ? '소진 미관측'
                   : null;
   const canEstimate = reason === null;
-  // Mirrors dataReliabilityLevel in src/lib/status.ts: a disqualifying reason always wins over
-  // window size, even when an older basis window still looks superficially valid.
-  const confidence: 'HIGH' | 'MEDIUM' | 'LOW' = reason !== null ? 'LOW' : basis!.windowDays === 7 ? 'HIGH' : basis!.windowDays === 14 ? 'MEDIUM' : 'LOW';
+  // 추정을 막는 사유가 있으면 예전 근거 기간이 멀쩡해 보여도 무조건 '하'다(assessReliability가 보장).
+  const reliabilityWindow = basis ?? w7;
+  const reliability = assessReliability({
+    source: sorted[sorted.length - 1]?.source === 'COUNT' ? 'COUNT' : 'SNAPSHOT',
+    expectedDays: demandDaysBetween(shiftDate(latest.date, -reliabilityWindow.windowDays), latest.date, holidays),
+    observedDays: reliabilityWindow.observedIntervalDays,
+    windowDays: reliabilityWindow.windowDays,
+    intervals: reliabilityWindow.intervalCount,
+    minIntervals: 3,
+    daysSinceLevel: staleDays,
+    halfLifeDays: DAILY_HALF_LIFE_SHIPPING_DAYS,
+    blockingReason: reason,
+  });
+  const confidence = reliability.level;
   const rate = canEstimate ? basis!.averageDailyDepletion : null;
   const coverage = calculateCoverage(latest.normalStock, rate, settings);
   // 커버리지는 수요일(평일, 휴무 포함) 단위이므로 앞으로의 휴무일도 주문이 쌓이는 날로 센다 — 연휴 직후 품절을 놓치지 않도록.
@@ -207,6 +222,7 @@ export function analyzeOperationalSku(
     expirationRisk,
     newlyAtRisk,
     tags,
+    reliability,
     operating: {
       reason,
       isB2B: !!context.isB2B,

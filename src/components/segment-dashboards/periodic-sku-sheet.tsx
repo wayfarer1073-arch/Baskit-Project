@@ -8,11 +8,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CONFIDENCE_LABEL, STATUS_BADGE } from '@/components/segment-dashboards/periodic-parts';
 import type { PeriodicSkuDetail } from '@/domain/segments/read-model';
 import { formatCurrency, formatNumber } from '@/lib/format';
+import { ReliabilityInfo } from '@/components/ui/reliability-info';
 
-function Row({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+function Row({ label, value, hint, info }: { label: string; value: React.ReactNode; hint?: string; info?: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {info}
+      </span>
       <span className="text-right text-sm tabular-nums">
         {value}
         {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
@@ -101,7 +105,12 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
                     hint={e.dailyUsage === null ? '같은 상품을 한 번 더 세면 계산돼요' : `실사 구간 ${e.usableIntervals}개로 계산`}
                   />
                   <Row label="예상 품절일" value={e.estimatedStockoutDate ?? '—'} hint={e.status === 'soon' ? `${d.stockoutSoonDays}일 안 — 발주를 검토하세요` : undefined} />
-                  <Row label="추정 신뢰도" value={CONFIDENCE_LABEL[e.confidence]} hint={`실사 권장 주기 ${d.recountDays}일 기준`} />
+                  <Row
+                    label="추정 신뢰도"
+                    value={e.reliability ? `${CONFIDENCE_LABEL[e.confidence]} · ${e.reliability.score}점` : CONFIDENCE_LABEL[e.confidence]}
+                    hint={`실사 권장 주기 ${d.recountDays}일 기준`}
+                    info={<ReliabilityInfo reliability={e.reliability} />}
+                  />
                   {d.unitCost !== null && e.estimatedStock !== null && (
                     <Row label="추정 재고 금액" value={formatCurrency(Math.round(e.estimatedStock * d.unitCost))} hint={`단위원가 ${formatCurrency(d.unitCost)}`} />
                   )}
