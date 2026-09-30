@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { AppNav, useActiveSegment, type NavRecentPost } from '@/components/layout/segment-nav';
 import type { Segment } from '@/lib/segments';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { cn } from '@/lib/utils';
 
 interface MobileNavProps {
   userName: string;
@@ -18,10 +19,12 @@ interface MobileNavProps {
   enabledSegments: Segment[];
   isPlatformAdmin?: boolean;
   recentPosts?: NavRecentPost[];
+  /** 메뉴 버튼 색 — 어두운 머리글 위에 놓일 때 밝게. */
+  triggerClassName?: string;
 }
 
 /** sm 미만 화면 전용 — 좁은 폭에서 가로 탭 4개+사용자 정보가 글자 단위로 줄바꿈되며 깨지는 문제를 드로어로 해결한다. */
-export function MobileNav({ userName, userRole, defaultSegment, enabledSegments, isPlatformAdmin, recentPosts }: MobileNavProps) {
+export function MobileNav({ userName, userRole, defaultSegment, enabledSegments, isPlatformAdmin, recentPosts, triggerClassName }: MobileNavProps) {
   const segment = useActiveSegment(defaultSegment, enabledSegments);
   const router = useRouter();
   const { m } = useI18n();
@@ -44,7 +47,7 @@ export function MobileNav({ userName, userRole, defaultSegment, enabledSegments,
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setOpen(true)} aria-label={m.nav.openMenu}>
+      <Button variant="ghost" size="icon" className={cn('sm:hidden', triggerClassName)} onClick={() => setOpen(true)} aria-label={m.nav.openMenu}>
         <Menu className="size-5" />
       </Button>
       <SheetContent side="left" className="w-72 max-w-[85vw] p-0">
