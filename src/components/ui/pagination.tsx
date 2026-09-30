@@ -32,7 +32,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
 
   return (
     <nav className={cn('flex flex-wrap items-center justify-center gap-1', className)} aria-label={m.dashboard.ui.pagination}>
-      <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
+      <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         {m.dashboard.prev}
       </Button>
       {pages.map((p, i) =>
@@ -42,6 +42,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
           </span>
         ) : (
           <Button
+            type="button"
             key={p}
             variant={p === page ? 'default' : 'outline'}
             size="sm"
@@ -53,7 +54,7 @@ export function Pagination({ page, totalPages, onChange, className }: Pagination
           </Button>
         ),
       )}
-      <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
+      <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
         {m.dashboard.next}
       </Button>
     </nav>

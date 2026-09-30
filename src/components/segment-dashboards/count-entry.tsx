@@ -233,7 +233,15 @@ export function CountEntry({
               )}
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input aria-label={t.searchAria} placeholder={t.searchPlaceholder} value={query} onChange={(e) => setQuery(e.target.value)} className="h-8 w-48 pl-8 text-sm" />
+                <Input
+                  aria-label={t.searchAria}
+                  placeholder={t.searchPlaceholder}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  // 검색칸에서 Enter는 저장이 아니라 검색이다.
+                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                  className="h-8 w-48 pl-8 text-sm"
+                />
               </div>
             </>
           }
