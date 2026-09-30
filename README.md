@@ -129,7 +129,7 @@ SKU와 재고 항목을 1,000행 단위로 저장합니다. 일별 추이는 Pos
 - **원본 파일은 객체 저장소에**: `FILE_STORAGE_*`(`.env.example` 참고)를 설정하면 업로드 원본 파일을 Cloudflare R2·S3 등에 둡니다.
   이미 DB에 있는 파일은 `npm run db:move-files`로 옮깁니다. 설정하지 않으면 DB에 저장합니다.
 - **보관 기한 정리**: 하루 한 번 `/api/cron/maintenance`를 `Authorization: Bearer <CRON_SECRET>` 헤더로 호출하면
-  오래된 원본 파일(기본 180일)·끝난 업로드 작업 기록·만료된 토큰과 초대·오래된 운영 기록을 지웁니다. 재고·메모·발주·매출 데이터는 지우지 않습니다.
+  업로드 후 60일이 지난 원본 파일·끝난 업로드 작업 기록(30일)·만료된 토큰과 초대·180일이 지난 운영 기록을 지웁니다. 재고·메모·발주·매출 데이터는 지우지 않습니다.
   Render Cron Job, GitHub Actions `schedule`, cron-job.org 같은 외부 스케줄러를 쓰거나 서버에서 `npm run db:maintenance`를 실행하세요.
 
 ### Render로 배포하기

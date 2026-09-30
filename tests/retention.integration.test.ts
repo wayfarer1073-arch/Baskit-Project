@@ -30,6 +30,11 @@ async function fileFor(date: string, createdAt: Date) {
   return snapshot.id;
 }
 
+it('uses 60 days for original upload files and 180 days for operator audit logs by default', () => {
+  expect(DEFAULT_RETENTION.uploadFileDays).toBe(60);
+  expect(DEFAULT_RETENTION.auditLogDays).toBe(180);
+});
+
 it('removes only by-products past their retention period and keeps inventory data', async () => {
   const oldFile = await fileFor('2026-01-01', daysAgo(DEFAULT_RETENTION.uploadFileDays + 1));
   const newFile = await fileFor('2026-09-01', daysAgo(1));
@@ -46,6 +51,9 @@ it('removes only by-products past their retention period and keeps inventory dat
     prisma.invitation.create({ data: { organizationId: f.org.id, email: `${days}@test.invalid`, tokenHash: `${f.org.id}-inv-${days}`, expiresAt: daysAgo(days) } });
   const oldInvite = await invite(40);
   const pendingInvite = await invite(-3);
+  const audit = (days: number) => prisma.platformAuditLog.create({ data: { actorId: f.user.id, action: 'TEST', organizationId: f.org.id, createdAt: daysAgo(days) } });
+  const oldAudit = await audit(DEFAULT_RETENTION.auditLogDays + 1);
+  const recentAudit = await audit(DEFAULT_RETENTION.auditLogDays - 10);
 
   await runRetention();
 
@@ -59,6 +67,9 @@ it('removes only by-products past their retention period and keeps inventory dat
   expect(await prisma.authToken.findUnique({ where: { id: liveToken.id } })).not.toBeNull();
   expect(await prisma.invitation.findUnique({ where: { id: oldInvite.id } })).toBeNull();
   expect(await prisma.invitation.findUnique({ where: { id: pendingInvite.id } })).not.toBeNull();
+  expect(await prisma.platformAuditLog.findUnique({ where: { id: oldAudit.id } })).toBeNull();
+  expect(await prisma.platformAuditLog.findUnique({ where: { id: recentAudit.id } })).not.toBeNull();
+  await prisma.platformAuditLog.deleteMany({ where: { id: recentAudit.id } });
 });
 
 it('keeps everything for an item whose retention is set to 0', async () => {

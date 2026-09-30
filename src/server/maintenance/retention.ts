@@ -7,7 +7,7 @@ import { removeStoredFile } from '@/server/repositories/upload-file-repository';
  * 각 기한은 환경변수로 바꿀 수 있고, 0이면 그 항목은 지우지 않는다.
  */
 export interface RetentionPolicy {
-  /** 업로드 원본 파일(분석에는 쓰지 않고 내려받기용). */
+  /** 업로드 원본 파일 — 업로드한 날(파일 보관 시각)부터 센다. 분석에는 쓰지 않고 내려받기용이다. */
   uploadFileDays: number;
   /** 끝난 백그라운드 업로드 작업 기록. */
   uploadJobDays: number;
@@ -20,11 +20,11 @@ export interface RetentionPolicy {
 }
 
 export const DEFAULT_RETENTION: RetentionPolicy = {
-  uploadFileDays: 180,
+  uploadFileDays: 60,
   uploadJobDays: 30,
   authTokenDays: 7,
   invitationDays: 30,
-  auditLogDays: 730,
+  auditLogDays: 180,
 };
 
 function envDays(name: string, fallback: number) {
