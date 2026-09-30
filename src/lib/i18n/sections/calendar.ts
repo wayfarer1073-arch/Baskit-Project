@@ -10,6 +10,14 @@ export const ko = {
     sales: '{amount} ₩',
     orders: '발주 {count}',
   },
+  mobile: {
+    legend: { DAILY_SYNC: '일일 업로드', PERIODIC_COUNT: '비정기 실사', ORDER_CYCLE: '매장 매출' },
+    dayListLabel: '고른 날짜의 기록',
+    dayTitle: '{month}월 {day}일 ({weekday})',
+    noWarehouse: '등록된 창고가 없어요',
+    uploaded: '업로드함',
+    missing: '미업로드',
+  },
   panel: {
     title: '{date}',
     chooseMode: '어떤 기록을 할까요?',
@@ -113,6 +121,14 @@ export const en: Dictionary<typeof ko> = {
     skus: '{count} SKU',
     sales: '{amount} ₩',
     orders: '{count} orders',
+  },
+  mobile: {
+    legend: { DAILY_SYNC: 'Daily upload', PERIODIC_COUNT: 'Periodic count', ORDER_CYCLE: 'Store sales' },
+    dayListLabel: 'Records for the selected date',
+    dayTitle: '{weekday}, {month}/{day}',
+    noWarehouse: 'No warehouses yet',
+    uploaded: 'Uploaded',
+    missing: 'missing',
   },
   panel: {
     title: '{date}',

@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns';
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarDayDialog } from '@/components/calendar/calendar-day-dialog';
+import { MobileCalendar } from '@/components/calendar/mobile-calendar';
 import { ScheduleFormDialog } from '@/components/calendar/schedule-form-dialog';
 import type { OrderEntryRow, SalesEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
 import type { Segment } from '@/lib/segments';
@@ -104,33 +105,54 @@ export function UploadCalendar({
   const { m, locale } = useI18n();
   const t = m.work;
   const c = m.calendar;
-  const [month, setMonth] = useState(() => (initialDate ? new Date(`${initialDate}T00:00:00`) : new Date()));
+  const [month, setMonth] = useState(() => new Date(`${initialDate ?? todayKstDateString()}T00:00:00`));
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate ?? null);
   const [selectedMode, setSelectedMode] = useState<Segment | null>(initialMode ?? null);
   const [scheduleForm, setScheduleForm] = useState<{ schedule: ScheduleRow | null; date: string } | null>(null);
+  // 모바일: 달력 아래 목록에 보여 줄 날짜(처음엔 오늘).
+  const [agendaDate, setAgendaDate] = useState<string>(() => initialDate ?? todayKstDateString());
   const showDaily = enabledSegments.includes('DAILY_SYNC');
   const showPeriodic = enabledSegments.includes('PERIODIC_COUNT');
   const showStore = enabledSegments.includes('ORDER_CYCLE');
   const salesByDate = useMemo(() => new Map(sales.map((s) => [s.date, s.amount])), [sales]);
   const dailyWarehouses = useMemo(() => warehouses.filter((w) => w.segment === 'DAILY_SYNC'), [warehouses]);
-  // 비정기 실사 표시는 비정기 실사 창고의 기록만 본다(일일 업로드 창고의 파일과 섞이지 않게) — 그날 실사한 창고 코드(PA, PB …).
-  const periodicCodesByDate = useMemo(() => {
+  // 비정기 실사 표시는 비정기 실사 창고의 기록만 본다(일일 업로드 창고의 파일과 섞이지 않게) — 그날 실사한 창고 코드(PA, PB …)와 SKU 수.
+  const { periodicCodesByDate, periodicSkusByDate } = useMemo(() => {
     const periodic = warehouses.filter((w) => w.segment === 'PERIODIC_COUNT');
+    const periodicIds = new Set(periodic.map((w) => w.id));
     const counted = new Set(entries.map((e) => `${e.warehouseId}|${e.date}`));
-    const map = new Map<string, string[]>();
+    const codes = new Map<string, string[]>();
+    const skus = new Map<string, number>();
     for (const e of entries) {
-      if (map.has(e.date)) continue;
-      const codes = periodic.filter((w) => counted.has(`${w.id}|${e.date}`)).map((w) => w.code);
-      if (codes.length) map.set(e.date, codes);
+      if (!periodicIds.has(e.warehouseId)) continue;
+      skus.set(e.date, (skus.get(e.date) ?? 0) + e.rowCount);
+      if (!codes.has(e.date))
+        codes.set(
+          e.date,
+          periodic.filter((w) => counted.has(`${w.id}|${e.date}`)).map((w) => w.code),
+        );
     }
-    return map;
+    return { periodicCodesByDate: codes, periodicSkusByDate: skus };
   }, [entries, warehouses]);
+  const orderCountByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const o of orders) map.set(o.date, (map.get(o.date) ?? 0) + 1);
+    return map;
+  }, [orders]);
   const [colorOverrides, setColorOverrides] = useState<Record<string, ScheduleColor>>({});
   // 저장 후 새로고침되면 서버가 준 최신 일정을 그대로 쓰고, 색상만 바로 반영되도록 덧씌운다.
   const scheduleList = useMemo(() => schedules.map((s) => (colorOverrides[s.id] ? { ...s, color: colorOverrides[s.id] } : s)), [schedules, colorOverrides]);
   const [openScheduleId, setOpenScheduleId] = useState<string | null>(null);
 
   const today = todayKstDateString();
+
+  /** 달을 옮긴다. 모바일 목록은 그 달에 오늘이 있으면 오늘, 아니면 1일로. */
+  function shiftMonth(delta: number) {
+    const next = addMonths(month, delta);
+    setMonth(next);
+    const first = format(startOfMonth(next), 'yyyy-MM-dd');
+    setAgendaDate(today.slice(0, 7) === first.slice(0, 7) ? today : first);
+  }
 
   const entryByKey = useMemo(() => {
     const map = new Map<string, CalendarEntry>();
@@ -190,31 +212,19 @@ export function UploadCalendar({
           <InfoTooltip tone="header">{c.description}</InfoTooltip>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="text-foreground hover:text-brand-accent"
-            onClick={() => setMonth((m) => subMonths(m, 1))}
-            aria-label={t.calendar.prevMonth}
-          >
+          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => shiftMonth(-1)} aria-label={t.calendar.prevMonth}>
             <ChevronLeft className="size-4" />
           </Button>
           <span className="w-24 text-center text-sm font-semibold tabular-nums">{format(month, t.calendar.monthFormat)}</span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="text-foreground hover:text-brand-accent"
-            onClick={() => setMonth((m) => addMonths(m, 1))}
-            aria-label={t.calendar.nextMonth}
-          >
+          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => shiftMonth(1)} aria-label={t.calendar.nextMonth}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
       </div>
 
       <div className="p-4 sm:p-5">
-        <div className="mb-4 flex flex-wrap items-center gap-2" role="list" aria-label={c.todo.title}>
-          <span className="text-xs font-semibold text-muted-foreground">{c.todo.title}</span>
+        <div className="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="list" aria-label={c.todo.title}>
+          <span className="shrink-0 text-xs font-semibold text-muted-foreground">{c.todo.title}</span>
           {todos.length === 0 && <span className="text-xs text-muted-foreground">{c.todo.allDone}</span>}
           {todos.map((todo) => (
             <button
@@ -223,10 +233,11 @@ export function UploadCalendar({
               role="listitem"
               onClick={() => {
                 setMonth(new Date(`${todo.date}T00:00:00`));
+                setAgendaDate(todo.date);
                 setSelectedMode(todo.mode);
                 setSelectedDate(todo.date);
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-status-warning/40 bg-status-warning-bg px-3 py-1 text-xs font-medium text-status-warning transition-colors hover:border-status-warning"
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-status-warning/40 bg-status-warning-bg px-3 py-1 text-xs font-medium text-status-warning transition-colors hover:border-status-warning"
             >
               <span className="size-1.5 rounded-full bg-status-warning" aria-hidden="true" />
               {fill(c.todo[todo.kind], { count: todo.count })}
@@ -234,7 +245,7 @@ export function UploadCalendar({
             </button>
           ))}
         </div>
-        <div className="border-t border-l border-border">
+        <div className="hidden border-t border-l border-border sm:block">
           <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground">
             {t.calendar.weekdays.map((d) => (
               <div key={d} className="border-r border-b border-border py-1">
@@ -389,6 +400,35 @@ export function UploadCalendar({
             })}
           </div>
         </div>
+        <div className="sm:hidden">
+          <MobileCalendar
+            weeks={weeks}
+            month={month}
+            today={today}
+            selectedDate={agendaDate}
+            onSelectDate={(date) => {
+              setAgendaDate(date);
+              if (!isSameMonth(new Date(`${date}T00:00:00`), month)) setMonth(new Date(`${date}T00:00:00`));
+            }}
+            onPrevMonth={() => shiftMonth(-1)}
+            onNextMonth={() => shiftMonth(1)}
+            enabledSegments={enabledSegments}
+            holidayByDate={holidayByDate}
+            dailyWarehouses={dailyWarehouses}
+            hasDailyEntry={(warehouseId, date) => entryByKey.has(`${warehouseId}|${date}`)}
+            periodicCodesByDate={periodicCodesByDate}
+            periodicSkusByDate={periodicSkusByDate}
+            salesByDate={salesByDate}
+            orderCountByDate={orderCountByDate}
+            schedules={monthSchedules}
+            onOpen={(date, mode) => {
+              setSelectedMode(mode);
+              setSelectedDate(date);
+            }}
+            onOpenSchedule={setOpenScheduleId}
+            onAddSchedule={(date) => setScheduleForm({ schedule: null, date })}
+          />
+        </div>
       </div>
 
       {selectedDate && (
@@ -409,6 +449,7 @@ export function UploadCalendar({
           onClose={() => setSelectedDate(null)}
           onChangeDate={(date, mode) => {
             setMonth(new Date(`${date}T00:00:00`));
+            setAgendaDate(date);
             setSelectedMode(mode);
             setSelectedDate(date);
           }}

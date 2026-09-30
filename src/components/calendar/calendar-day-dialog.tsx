@@ -57,12 +57,12 @@ export function CalendarDayDialog(props: CalendarDayDialogProps) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && props.onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader className="pr-40">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl max-sm:inset-0 max-sm:top-0 max-sm:left-0 max-sm:h-[100dvh] max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:content-start max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:pt-14">
+        <DialogHeader className="sm:pr-40">
           <DialogTitle>{format(t.title, { date: formatKstDate(date) })}</DialogTitle>
           <DialogDescription>{mode ? m.segments[mode].label : t.chooseMode}</DialogDescription>
         </DialogHeader>
-        <Button size="sm" variant="outline" className="absolute top-3 right-12 gap-1.5" onClick={() => props.onAddSchedule(date)}>
+        <Button size="sm" variant="outline" className="absolute top-3 right-12 gap-1.5 max-sm:left-4 max-sm:right-auto" onClick={() => props.onAddSchedule(date)}>
           <CalendarPlus className="size-4" aria-hidden="true" />
           {t.addSchedule}
         </Button>
