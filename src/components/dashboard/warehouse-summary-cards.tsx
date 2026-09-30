@@ -48,7 +48,7 @@ export function WarehouseSummaryCards({ summaries: summariesInput, activeWarehou
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex flex-wrap items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <h2 className="text-base font-semibold">{t.title}</h2>
-        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">{t.tip}</InfoTooltip>
+        <InfoTooltip tone="header">{t.tip}</InfoTooltip>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" style={{ minWidth: 560 }}>

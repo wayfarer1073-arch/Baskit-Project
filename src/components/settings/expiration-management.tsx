@@ -326,7 +326,7 @@ export function ExpirationManagement({ isAdmin, warehouses, initialEntries }: Ex
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{tx.title}</CardTitle>
-          <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          <InfoTooltip tone="header">
             {tx.description}
             <br />
             <br />

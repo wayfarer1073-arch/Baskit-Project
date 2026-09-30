@@ -1,20 +1,26 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { InfoTooltip } from '@/components/ui/info-tooltip';
 
 function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="card" className={cn('overflow-hidden rounded-xl border border-border bg-card text-card-foreground', className)} {...props} />;
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-header" className={cn('flex flex-col gap-1 bg-sidebar px-5 py-3.5 text-sidebar-foreground', className)} {...props} />;
+  return <div data-slot="card-header" className={cn('flex flex-row flex-wrap items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground', className)} {...props} />;
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="card-title" className={cn('text-base font-semibold leading-none', className)} {...props} />;
 }
 
-function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-description" className={cn('text-xs text-sidebar-muted-foreground', className)} {...props} />;
+/** 카드 설명은 머리글에 문장으로 늘어놓지 않고 제목 옆 라임색 느낌표(툴팁)로 보여준다. */
+function CardDescription({ children }: { children?: React.ReactNode; className?: string }) {
+  return (
+    <span data-slot="card-description" className="inline-flex">
+      <InfoTooltip tone="header">{children}</InfoTooltip>
+    </span>
+  );
 }
 
 function CardAction({ className, ...props }: React.ComponentProps<'div'>) {

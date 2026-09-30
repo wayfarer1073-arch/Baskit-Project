@@ -13,6 +13,7 @@ import type { TodayAction, TodayActionKind } from '@/domain/inventory/today-acti
 import type { Messages } from '@/lib/i18n/messages';
 import { cn } from '@/lib/utils';
 import { localizeReason } from '@/lib/status';
+import { InfoTooltip } from '@/components/ui/info-tooltip';
 
 const KIND_VARIANT: Record<TodayActionKind, 'danger' | 'warning' | 'secondary' | 'stagnant' | 'increase'> = {
   order_now: 'danger',
@@ -129,8 +130,8 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
             <span className="inline-flex items-center rounded-full bg-brand-accent px-2.5 py-0.5 text-xs font-semibold text-black tabular-nums">
               {format(t.skuCount, { count: actions.length.toLocaleString() })}
             </span>
+            <InfoTooltip tone="header">{t.subtitle}</InfoTooltip>
           </div>
-          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
         </div>
         <Button
           type="button"

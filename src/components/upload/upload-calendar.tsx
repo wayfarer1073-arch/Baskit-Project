@@ -178,7 +178,7 @@ export function UploadCalendar({
       <div className="flex items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <div className="flex items-center gap-1.5">
           <h2 className="text-base font-semibold">{c.title}</h2>
-          <InfoTooltip className="text-lime-400 hover:text-lime-300">{c.description}</InfoTooltip>
+          <InfoTooltip tone="header">{c.description}</InfoTooltip>
         </div>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label={t.calendar.prevMonth}>

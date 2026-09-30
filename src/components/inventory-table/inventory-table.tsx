@@ -209,9 +209,9 @@ export function InventoryTable({
   return (
     <section className="scroll-mt-20 overflow-hidden rounded-xl border border-border">
       <div className="flex flex-col gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="text-base font-semibold">{t.title}</h2>
-          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
+          <InfoTooltip tone="header">{t.subtitle}</InfoTooltip>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs text-sidebar-muted-foreground">{format(t.count, { count: sorted.length.toLocaleString() })}</span>

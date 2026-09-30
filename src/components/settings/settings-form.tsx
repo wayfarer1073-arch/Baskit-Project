@@ -167,7 +167,7 @@ export function DailySettings({
         <CardHeader>
           <div className="flex items-center gap-1.5">
             <CardTitle>{t.thresholds.title}</CardTitle>
-            <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+            <InfoTooltip tone="header">
               {t.thresholds.description}
             </InfoTooltip>
           </div>
@@ -304,7 +304,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{t.visibility.title}</CardTitle>
-          <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          <InfoTooltip tone="header">
             {t.visibility.description}
           </InfoTooltip>
         </div>

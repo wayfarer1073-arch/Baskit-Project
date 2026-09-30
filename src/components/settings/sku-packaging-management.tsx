@@ -74,7 +74,7 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{t.packaging.title}</CardTitle>
-          <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          <InfoTooltip tone="header">
             {t.packaging.description}
           </InfoTooltip>
         </div>

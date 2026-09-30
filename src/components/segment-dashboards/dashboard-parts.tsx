@@ -19,7 +19,7 @@ export function SummaryPanel({ title, tooltip, children, footer }: { title: stri
     <section className="overflow-hidden rounded-xl border border-border" aria-label={title}>
       <div className="flex items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <h2 className="text-base font-semibold">{title}</h2>
-        {tooltip && <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">{tooltip}</InfoTooltip>}
+        {tooltip && <InfoTooltip tone="header">{tooltip}</InfoTooltip>}
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-5 px-5 py-5 sm:grid-cols-4">{children}</div>
       {footer && <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{footer}</div>}
@@ -61,9 +61,9 @@ export function SectionPanel({
 }) {
   return (
     <section id={id} className="scroll-mt-20 rounded-xl border border-border bg-card" aria-label={title}>
-      <div className="rounded-t-[11px] bg-sidebar px-5 py-3.5 text-sidebar-foreground">
+      <div className="flex items-center gap-1.5 rounded-t-[11px] bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <h2 className="text-base font-semibold">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{description}</p>}
+        {description && <InfoTooltip tone="header">{description}</InfoTooltip>}
       </div>
       {/* 검색·필터 같은 조작은 어두운 머리글 대신 바로 아래 줄에 둬서 입력칸이 제 색으로 보이게 한다. */}
       {action && <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-5 py-2.5">{action}</div>}

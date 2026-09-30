@@ -34,7 +34,7 @@ export function KpiCards({ kpis, fromDate, asOfDate, onOpenSoldOutList }: KpiCar
     <section className="overflow-hidden rounded-xl border border-border" aria-label={t.aria}>
       <div className="flex items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <h2 className="text-base font-semibold">{t.title}</h2>
-        <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">{t.titleTip}</InfoTooltip>
+        <InfoTooltip tone="header">{t.titleTip}</InfoTooltip>
       </div>
       <div className="grid gap-6 px-5 py-5 lg:grid-cols-[1fr_2fr]">
         <div>

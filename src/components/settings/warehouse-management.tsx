@@ -86,7 +86,7 @@ export function WarehouseManagement({ isAdmin, warehouses }: WarehouseManagement
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{t.warehouses.title}</CardTitle>
-          <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          <InfoTooltip tone="header">
             {t.warehouses.description}
           </InfoTooltip>
         </div>

@@ -55,7 +55,7 @@ export function SpecialStockSummary({ rows, schedules, asOfDate, onSelectSku }: 
           {t.title}
         </h2>
         <span className="text-xs text-sidebar-muted-foreground">{format(m.dashboard.unit, { count: rows.length })}</span>
-        <InfoTooltip>{t.tip}</InfoTooltip>
+        <InfoTooltip tone="header">{t.tip}</InfoTooltip>
       </div>
       <div className="space-y-3 p-4 sm:p-5">
         {rows.length === 0 ? (

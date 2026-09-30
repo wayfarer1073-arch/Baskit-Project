@@ -10,6 +10,7 @@ import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { InfoTooltip } from '@/components/ui/info-tooltip';
 
 interface ChartsSectionProps {
   rows: InventoryRow[];
@@ -63,9 +64,9 @@ export function ChartsSection({ rows, dailyTotals, warehouses, chartWarehouseId,
   return (
     <section className="overflow-hidden rounded-xl border border-border">
       <div className="flex flex-wrap items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="text-base font-semibold">{t.title}</h2>
-          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
+          <InfoTooltip tone="header">{t.subtitle}</InfoTooltip>
         </div>
         <Tabs value={chartWarehouseId} onValueChange={(v) => onChangeChartWarehouse(v)}>
           <TabsList>

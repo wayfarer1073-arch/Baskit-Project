@@ -84,7 +84,7 @@ export function HolidayManagement({ isAdmin, initialHolidays }: HolidayManagemen
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{t.holidays.title}</CardTitle>
-          <InfoTooltip className="text-brand-accent hover:text-brand-accent/80">
+          <InfoTooltip tone="header">
             {t.holidays.description}
           </InfoTooltip>
         </div>
