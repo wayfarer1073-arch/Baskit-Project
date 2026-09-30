@@ -12,10 +12,14 @@ export interface RegisteredCostRow {
   updatedAt: string | null;
 }
 
-/** 원가가 한 번이라도 등록된(현재 원가 > 0) 품목. 보관한 창고는 뺀다. */
+/** 원가가 한 번이라도 등록된(현재 원가 > 0) 품목. 보관한 창고는 뺀다. 매장 품목(가상 창고)도 함께 보여 준다. */
 export async function listRegisteredCosts(orgId: string): Promise<RegisteredCostRow[]> {
   const skus = await prisma.sku.findMany({
-    where: { currentUnitCost: { gt: 0 }, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } },
+    where: {
+      currentUnitCost: { gt: 0 },
+      warehouse: { organizationId: orgId, isArchived: false },
+      NOT: { isActive: false, warehouse: { kind: 'STORE' } }, // 보관한 매장 품목은 뺀다
+    },
     orderBy: [{ warehouse: { sortOrder: 'asc' } }, { productCode: 'asc' }],
     select: {
       id: true,

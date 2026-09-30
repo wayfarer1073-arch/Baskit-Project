@@ -10,6 +10,8 @@ import { CoverageBar, CoverageStatusBadge, remainingText, remainingUnitsText } f
 import { StoreItemSheet } from '@/components/segment-dashboards/store-item-sheet';
 import type { StoreDashboardData, StoreCoverageRow } from '@/domain/segments/read-model';
 import { formatMoney } from '@/lib/format';
+import { formatExpirationDday } from '@/lib/status';
+import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
@@ -33,6 +35,19 @@ const STORE_SORT: Record<'item' | 'lastOrder' | 'coverage' | 'sales' | 'progress
 
 function qty(value: number, unit: string, template: string) {
   return format(template, { qty: Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1), unit });
+}
+
+/** 소비기한이 임박 기준 안에 든 품목 옆의 작은 경고 표시. */
+function ExpiringTag({ row, label, className }: { row: StoreCoverageRow; label: string; className?: string }) {
+  if (!row.expiringSoon) return null;
+  return (
+    <span
+      title={row.expiringSoon.date}
+      className={cn('inline-flex shrink-0 rounded bg-status-danger-bg px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-status-danger', className)}
+    >
+      {format(label, { dday: formatExpirationDday(row.expiringSoon.daysLeft) })}
+    </span>
+  );
 }
 
 function growthLabel(rate: number | null, notComparable: string) {
@@ -137,7 +152,10 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
                 <li key={r.itemId}>
                   <button type="button" onClick={() => setOpenItemId(r.itemId)} className="w-full px-5 py-3 text-left transition-colors hover:bg-muted/50">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="truncate text-sm font-medium">{r.name}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{r.name}</span>
+                        <ExpiringTag row={r} label={t.expiring} />
+                      </span>
                       <CoverageStatusBadge status={r.analysis.status} />
                     </div>
                     <CoverageBar analysis={r.analysis} checkPct={checkRemainingPct} className="mt-2" />
@@ -188,6 +206,7 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
                         {r.supplierName ? `${r.supplierName} · ` : ''}
                         {format(t.leadTime, { days: r.leadTimeDays })}
                         {a.learnedCycles > 0 ? format(t.learned, { count: a.learnedCycles }) : ''}
+                        <ExpiringTag row={r} label={t.expiring} className="ml-1.5" />
                       </p>
                     </TableCell>
                     <TableCell className="text-sm whitespace-nowrap">

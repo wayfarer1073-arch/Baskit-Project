@@ -2,17 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Plus, Trash2 } from 'lucide-react';
+import { Archive, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { StoreItemLearning, SupplierRow } from '@/domain/segments/read-model';
+import type { StoreItemExtras, StoreItemLearning, SupplierRow } from '@/domain/segments/read-model';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
+import { StoreItemExtrasPanel, StoreItemExtrasSummary } from '@/components/settings/store-item-extras';
+import { cn } from '@/lib/utils';
 
 async function send(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -157,11 +159,13 @@ export function StoreSettings({
   checkRemainingPct,
   suppliers,
   items,
+  extras,
 }: {
   isAdmin: boolean;
   checkRemainingPct: number;
   suppliers: SupplierRow[];
   items: StoreItemLearning[];
+  extras: Record<string, StoreItemExtras>;
 }) {
   const { m, locale } = useI18n();
   const t = m.settingsScreens.segment;
@@ -181,7 +185,7 @@ export function StoreSettings({
         hint={(v) => format(t.orderHint, { amount: hintAmount(Math.round(300 * (1 - v / 100))) })}
       />
       <SupplierManagement suppliers={suppliers} />
-      <StoreItemManagement items={items} suppliers={suppliers} />
+      <StoreItemManagement items={items} suppliers={suppliers} extras={extras} isAdmin={isAdmin} />
     </div>
   );
 }
@@ -359,9 +363,20 @@ function ItemFields({ draft, onChange, suppliers, idPrefix }: { draft: ItemDraft
   );
 }
 
-function StoreItemManagement({ items, suppliers }: { items: StoreItemLearning[]; suppliers: SupplierRow[] }) {
+function StoreItemManagement({
+  items,
+  suppliers,
+  extras,
+  isAdmin,
+}: {
+  items: StoreItemLearning[];
+  suppliers: SupplierRow[];
+  extras: Record<string, StoreItemExtras>;
+  isAdmin: boolean;
+}) {
   const t = useI18n().m.settingsScreens;
   const { busy, run } = useRunner();
+  const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(Object.fromEntries(items.map((i) => [i.id, toDraft(i)])));
   const empty: ItemDraft = { name: '', unit: t.items.defaultUnit, supplierId: NO_SUPPLIER, lead: '1' };
   const [draft, setDraft] = useState(empty);
@@ -407,10 +422,27 @@ function StoreItemManagement({ items, suppliers }: { items: StoreItemLearning[];
                         <Archive className="size-4" />
                       </Button>
                     </div>
-                    <p className="col-span-2 text-[11px] text-muted-foreground sm:col-span-5">
-                      {format(t.items.orders, { count: i.orderCount })}
-                      {i.learnedCycles > 0 ? format(t.items.learned, { count: i.learnedCycles }) : t.items.notLearned}
-                    </p>
+                    <div className="col-span-2 flex flex-wrap items-center justify-between gap-2 sm:col-span-5">
+                      <p className="text-[11px] text-muted-foreground">
+                        {format(t.items.orders, { count: i.orderCount })}
+                        {i.learnedCycles > 0 ? format(t.items.learned, { count: i.learnedCycles }) : t.items.notLearned}
+                        {extras[i.id] && <StoreItemExtrasSummary extras={extras[i.id]} unit={i.unit} />}
+                      </p>
+                      {extras[i.id] && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          aria-expanded={openId === i.id}
+                          onClick={() => setOpenId((cur) => (cur === i.id ? null : i.id))}
+                        >
+                          {t.items.extras.toggle}
+                          <ChevronDown className={cn('size-3.5 transition-transform', openId === i.id && 'rotate-180')} />
+                        </Button>
+                      )}
+                    </div>
+                    {openId === i.id && extras[i.id] && <StoreItemExtrasPanel itemName={i.name} unit={i.unit} extras={extras[i.id]} isAdmin={isAdmin} />}
                   </div>
                 );
               })}

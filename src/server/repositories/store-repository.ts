@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
-import type { OrderEntryRow, SalesEntryRow } from '@/domain/segments/read-model';
+import type { OrderEntryRow, SalesEntryRow, StoreItemExtras } from '@/domain/segments/read-model';
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
@@ -20,6 +20,8 @@ export interface StoreItemRow {
   itemLeadTimeDays: number;
   supplierId: string | null;
   supplierName: string | null;
+  soonestExpiration: string | null;
+  expirationRiskDays: number | null;
   orders: { date: string; quantity: number; coverageAmount: number | null; leftoverQuantity: number | null }[];
 }
 
@@ -77,6 +79,8 @@ export async function listStoreItemsWithOrders(orgId: string, asOfDate?: string)
       itemLeadTimeDays,
       supplierId: item.supplier?.id ?? null,
       supplierName: item.supplier?.name ?? null,
+      soonestExpiration: item.expirationDate ? dateOnlyToString(item.expirationDate) : null,
+      expirationRiskDays: item.expirationRiskDays,
       orders: item.purchaseOrders.map((o) => ({
         date: dateOnlyToString(o.orderDate),
         quantity: Number(o.quantity),
@@ -146,6 +150,78 @@ export async function updateStoreItem(orgId: string, id: string, input: Partial<
 export async function archiveStoreItem(orgId: string, id: string) {
   const result = await prisma.sku.updateMany({ where: { id, ...storeItemWhere(orgId) }, data: { isActive: false } });
   return result.count > 0;
+}
+
+const extrasSelect = {
+  id: true,
+  currentUnitCost: true,
+  currentOption: true,
+  currentLocation: true,
+  currentBarcode: true,
+  eaPerBox: true,
+  specialNote: true,
+  expirationRiskDays: true,
+  expirationLots: { orderBy: [{ expirationDate: 'asc' }, { lot: 'asc' }], select: { id: true, lot: true, isAutoLot: true, expirationDate: true } },
+} satisfies Prisma.SkuSelect;
+
+function toExtras(s: Prisma.SkuGetPayload<{ select: typeof extrasSelect }>): StoreItemExtras {
+  const cost = Number(s.currentUnitCost);
+  return {
+    itemId: s.id,
+    unitCost: cost > 0 ? cost : null,
+    spec: s.currentOption ?? '',
+    storage: s.currentLocation ?? '',
+    barcode: s.currentBarcode ?? '',
+    packSize: s.eaPerBox,
+    note: s.specialNote,
+    expirationRiskDays: s.expirationRiskDays,
+    lots: s.expirationLots.map((l) => ({ lotId: l.id, lot: l.lot, isAutoLot: l.isAutoLot, expirationDate: dateOnlyToString(l.expirationDate) })),
+  };
+}
+
+/** 매장 품목별 원가·소비기한·참고 정보(품목 id → 정보). */
+export async function listStoreItemExtras(orgId: string): Promise<Record<string, StoreItemExtras>> {
+  const skus = await prisma.sku.findMany({ where: storeItemWhere(orgId), select: extrasSelect });
+  return Object.fromEntries(skus.map((s) => [s.id, toExtras(s)]));
+}
+
+export async function getStoreItemExtras(orgId: string, itemId: string): Promise<StoreItemExtras | null> {
+  const sku = await prisma.sku.findFirst({ where: { id: itemId, ...storeItemWhere(orgId) }, select: extrasSelect });
+  return sku ? toExtras(sku) : null;
+}
+
+export interface StoreItemExtrasInput {
+  unitCost: number | null;
+  spec: string;
+  storage: string;
+  barcode: string;
+  packSize: number | null;
+  note: string;
+  expirationRiskDays: number | null;
+}
+
+/**
+ * 매장 품목의 원가·참고 정보를 저장한다. 재고 SKU와 같은 칸을 쓴다 — 규격은 옵션, 보관 방법은 위치, 입수량은 박스당 낱개 수.
+ * 매장 품목은 재고 파일이 없으니 원가는 늘 직접 입력(MANUAL)이다.
+ */
+export async function updateStoreItemExtras(orgId: string, itemId: string, input: StoreItemExtrasInput): Promise<boolean> {
+  const sku = await prisma.sku.findFirst({ where: { id: itemId, ...storeItemWhere(orgId) }, select: { id: true, currentUnitCost: true } });
+  if (!sku) return false;
+  const cost = input.unitCost ?? 0;
+  const costChanged = Number(sku.currentUnitCost) !== cost;
+  await prisma.sku.update({
+    where: { id: itemId },
+    data: {
+      currentOption: input.spec || null,
+      currentLocation: input.storage || null,
+      currentBarcode: input.barcode || null,
+      eaPerBox: input.packSize,
+      specialNote: input.note,
+      expirationRiskDays: input.expirationRiskDays,
+      ...(costChanged ? { currentUnitCost: cost, unitCostSource: cost > 0 ? 'MANUAL' : null, unitCostUpdatedAt: new Date() } : {}),
+    },
+  });
+  return true;
 }
 
 export async function listRecentOrders(orgId: string, limit = 40, itemId?: string): Promise<OrderEntryRow[]> {

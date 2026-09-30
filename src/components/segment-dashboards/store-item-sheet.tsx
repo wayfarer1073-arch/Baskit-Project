@@ -13,6 +13,9 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
 import { SkuEventsSection } from '@/components/events/sku-events-section';
+import { daysUntilDate, isExpirationNear } from '@/lib/expiration-days';
+import { formatExpirationDday } from '@/lib/status';
+import type { StoreItemExtras } from '@/domain/segments/read-model';
 
 function pct(v: number | null) {
   if (v === null) return '—';
@@ -29,6 +32,53 @@ function Row({ label, value, hint }: { label: string; value: React.ReactNode; hi
         {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
       </span>
     </div>
+  );
+}
+
+/** 설정에서 입력한 원가·소비기한·규격 등. 적은 것만 보여 주고, 아무것도 없으면 설정으로 가는 길을 안내한다. */
+function StoreItemInfo({ extras, unit, lastOrderQty }: { extras: StoreItemExtras; unit: string; lastOrderQty: number | null }) {
+  const { m, locale } = useI18n();
+  const t = m.store.item.info;
+  const soonest = extras.lots[0];
+  const hasAny = extras.unitCost !== null || soonest || extras.spec || extras.storage || extras.barcode || extras.packSize !== null || extras.note;
+  return (
+    <section aria-label={t.title}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">{t.title}</h3>
+        <Link href="/settings?tab=store" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          {t.edit}
+        </Link>
+      </div>
+      {!hasAny ? (
+        <p className="mt-2 text-xs text-muted-foreground">{t.empty}</p>
+      ) : (
+        <div className="mt-2 divide-y divide-border rounded-lg border border-border px-4 py-1">
+          {extras.unitCost !== null && (
+            <Row
+              label={t.unitCost}
+              value={format(t.unitCostValue, { unit, cost: formatMoney(extras.unitCost, locale) })}
+              hint={lastOrderQty ? format(t.orderValue, { amount: formatMoney(extras.unitCost * lastOrderQty, locale) }) : undefined}
+            />
+          )}
+          {soonest && (
+            <Row
+              label={t.expiration}
+              value={
+                <span className={cn(isExpirationNear(soonest.expirationDate, extras.expirationRiskDays) && 'font-semibold text-destructive')}>
+                  {soonest.expirationDate} {formatExpirationDday(daysUntilDate(soonest.expirationDate))}
+                </span>
+              }
+              hint={extras.lots.length > 1 ? format(t.lots, { count: extras.lots.length }) : undefined}
+            />
+          )}
+          {extras.spec && <Row label={t.spec} value={extras.spec} />}
+          {extras.storage && <Row label={t.storage} value={extras.storage} />}
+          {extras.packSize !== null && <Row label={t.packSize} value={format(t.packSizeValue, { unit, count: extras.packSize.toLocaleString() })} />}
+          {extras.barcode && <Row label={t.barcode} value={extras.barcode} />}
+          {extras.note && <Row label={t.note} value={<span className="whitespace-pre-wrap">{extras.note}</span>} />}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -212,6 +262,8 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                   <p className="mt-3 text-xs text-muted-foreground">{t.firstLearning}</p>
                 )}
               </section>
+
+              <StoreItemInfo extras={d.extras} unit={unit} lastOrderQty={a.lastOrder?.quantity ?? null} />
 
               <SkuEventsSection warehouseId={d.warehouseId} skuId={d.itemId} skuLabel={d.name} />
 

@@ -65,6 +65,8 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
     };
   }, [warehouseId, query, target]);
 
+  // 창고가 하나여도 매장 품목(창고 목록에 없는 가상 창고)이 섞여 있으면 어느 쪽 품목인지 보여 준다.
+  const showWarehouse = warehouses.length > 1 || costs.some((c) => !warehouses.some((w) => w.id === c.warehouseId));
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     return q ? costs.filter((c) => c.productCode.toLowerCase().includes(q) || c.productName.toLowerCase().includes(q)) : costs;
@@ -122,7 +124,7 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
                           <span className="block truncate">
                             <code className="text-xs">{c.productCode}</code> {c.productName}
                           </span>
-                          {warehouses.length > 1 && <span className="text-xs text-muted-foreground">{c.warehouseName}</span>}
+                          {showWarehouse && <span className="text-xs text-muted-foreground">{c.warehouseName}</span>}
                         </span>
                         {c.source && <Badge variant={c.source === 'MANUAL' ? 'notice' : 'secondary'}>{t.source[c.source]}</Badge>}
                         {isAdmin ? (

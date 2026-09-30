@@ -67,6 +67,31 @@ export interface StoreCoverageRow {
   leadTimeDays: number;
   supplierName: string | null;
   analysis: CoverageAnalysis;
+  /** 가장 이른 소비기한이 임박 기준 안에 들어왔을 때만 채운다(기준일 대비 남은 일수, 지났으면 음수). */
+  expiringSoon: { date: string; daysLeft: number } | null;
+}
+
+/** 매장 품목의 원가·소비기한·참고 정보 — 설정의 매장 발주 예측 탭에서 고치고, 품목 상세에서 본다. */
+export interface StoreItemExtras {
+  itemId: string;
+  /** 발주 단위 하나의 원가. 등록하지 않았으면 null. */
+  unitCost: number | null;
+  spec: string;
+  storage: string;
+  barcode: string;
+  /** 발주 단위 하나에 든 낱개 수(입수량). */
+  packSize: number | null;
+  note: string;
+  /** 소비기한 임박으로 볼 남은 일수. null이면 앱 기본값. */
+  expirationRiskDays: number | null;
+  lots: StoreItemLot[];
+}
+
+export interface StoreItemLot {
+  lotId: string;
+  lot: string;
+  isAutoLot: boolean;
+  expirationDate: string;
 }
 
 export interface StoreDashboardData {
@@ -81,6 +106,7 @@ export interface StoreDashboardData {
 export interface StoreItemDetail extends StoreCoverageRow {
   /** 매장 품목 가상 창고 id — 메모/이벤트를 이 창고의 SKU 기록으로 남긴다. */
   warehouseId: string;
+  extras: StoreItemExtras;
   orders: OrderEntryRow[];
   checkRemainingPct: number;
 }

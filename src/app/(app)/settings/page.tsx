@@ -7,7 +7,7 @@ import { listExpirationLots } from '@/server/repositories/expiration-repository'
 import { listHolidays } from '@/server/repositories/holiday-repository';
 import { listPackagingUploadStatus } from '@/server/repositories/packaging-repository';
 import { getOrganization } from '@/server/repositories/organization-repository';
-import { listSuppliers } from '@/server/repositories/store-repository';
+import { listStoreItemExtras, listSuppliers } from '@/server/repositories/store-repository';
 import { getReorderDefaults, listSupplierPolicies } from '@/server/repositories/reorder-repository';
 import { getAccountStatus } from '@/server/repositories/account-repository';
 import { listRegisteredCosts } from '@/server/repositories/cost-repository';
@@ -48,6 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     account,
     costs,
     mergeLinks,
+    storeExtras,
   ] = await Promise.all([
     getOrganization(tenant.orgId),
     listWarehouses(tenant.orgId),
@@ -67,6 +68,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getAccountStatus(tenant.userId),
     listRegisteredCosts(tenant.orgId),
     listMergeLinks(tenant.orgId),
+    listStoreItemExtras(tenant.orgId),
   ]);
 
   // 탭을 지정하지 않고 들어오면 지금 보고 있는 대시보드의 설정부터 보여준다.
@@ -116,7 +118,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           />
         }
         periodic={<PeriodicSettings isAdmin={isAdmin} recountDays={segmentSettings.periodicRecountDays} stockoutSoonDays={settings.stockoutSoonDays} />}
-        store={<StoreSettings isAdmin={isAdmin} checkRemainingPct={segmentSettings.storeCheckRemainingPct} suppliers={suppliers} items={storeItems} />}
+        store={<StoreSettings isAdmin={isAdmin} checkRemainingPct={segmentSettings.storeCheckRemainingPct} suppliers={suppliers} items={storeItems} extras={storeExtras} />}
       />
     </div>
   );
