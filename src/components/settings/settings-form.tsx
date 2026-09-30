@@ -18,6 +18,8 @@ import { SkuPackagingManagement } from '@/components/settings/sku-packaging-mana
 import { HolidayManagement } from '@/components/settings/holiday-management';
 import { WarehouseManagement } from '@/components/settings/warehouse-management';
 import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
+import { EnabledSegments } from '@/components/settings/enabled-segments';
+import type { Segment } from '@/lib/segments';
 import { ImportTemplateManagement, type ImportTemplateView } from '@/components/settings/import-template-management';
 import { CodeAliasManagement, type CodeAliasView } from '@/components/settings/code-alias-management';
 import { TeamInvitations } from '@/components/settings/team-invitations';
@@ -67,6 +69,7 @@ type UserRow = { id: string; email: string; name: string; role: 'VIEWER' | 'MEMB
 /** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 휴무일, 업로드 양식, 사용자). */
 export function CommonSettings({
   isAdmin,
+  enabledSegments,
   currentUserId,
   warehouses,
   users: initialUsers,
@@ -78,6 +81,7 @@ export function CommonSettings({
   mergeLinks,
 }: {
   isAdmin: boolean;
+  enabledSegments: Segment[];
   currentUserId: string | null;
   warehouses: { id: string; code: string; name: string }[];
   users: UserRow[];
@@ -89,14 +93,18 @@ export function CommonSettings({
   mergeLinks: MergeLinkView[];
 }) {
   const [users, setUsers] = useState(initialUsers);
+  // 끈 방식에만 쓰이는 카드는 숨긴다(데이터는 그대로). 창고·업로드 양식·원가는 재고 파일을 쓰는 두 방식 공용.
+  const usesStock = enabledSegments.includes('DAILY_SYNC') || enabledSegments.includes('PERIODIC_COUNT');
+  const usesDaily = enabledSegments.includes('DAILY_SYNC');
   return (
     <div className="space-y-6">
-      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />
-      <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />
+      <EnabledSegments isAdmin={isAdmin} enabled={enabledSegments} />
+      {usesStock && <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />}
+      {usesStock && <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />}
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
-      <ImportTemplateManagement templates={importTemplates} />
-      <CostManagement costs={costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />
-      {warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
+      {usesStock && <ImportTemplateManagement templates={importTemplates} />}
+      {usesStock && <CostManagement costs={costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
+      {usesDaily && warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}

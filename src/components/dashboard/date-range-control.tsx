@@ -7,6 +7,7 @@ import { LoaderCircle, MoveRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { startNavigationFeedback } from '@/lib/navigation-feedback';
 
 function shiftDay(date: string, days: number): string {
   return format(addDays(parseISO(date), days), 'yyyy-MM-dd');
@@ -40,6 +41,7 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
       query.set('from', start <= end ? start : end);
       query.set('to', start <= end ? end : start);
     }
+    startNavigationFeedback();
     startTransition(() => router.push(`${pathname}?${query.toString()}`));
   }
 
@@ -48,6 +50,7 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
     setDay(date);
     const query = new URLSearchParams();
     query.set('date', date);
+    startNavigationFeedback();
     startTransition(() => router.push(`${pathname}?${query.toString()}`));
   }
 

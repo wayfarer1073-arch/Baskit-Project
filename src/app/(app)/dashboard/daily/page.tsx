@@ -8,6 +8,7 @@ import { listFavoriteSkuIds } from '@/server/repositories/favorite-repository';
 import { todayKstDateString, dateOnlyToString, isDateString } from '@/lib/date';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
 import { requireTenant } from '@/server/tenant';
+import { requireEnabledSegment } from '@/server/segments';
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
@@ -18,6 +19,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const requestedFrom = isDateString(params.from) ? params.from : asOfDate;
   const fromDate = requestedFrom > asOfDate ? asOfDate : requestedFrom;
   const tenant = await requireTenant();
+  await requireEnabledSegment(tenant.orgId, 'DAILY_SYNC');
   const settings = await getSettings(tenant.orgId);
   const [warehouses, rows, dailyTotals, holidays, favoriteSkuIds] = await Promise.all([
     listWarehouses(tenant.orgId),

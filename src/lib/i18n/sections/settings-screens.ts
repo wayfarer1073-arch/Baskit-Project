@@ -7,6 +7,14 @@ export const ko = {
     intro: '대시보드마다 필요한 설정을 나눠 두었어요.',
     adminOnly: ' 판단 기준 변경은 관리자만 할 수 있어요.',
   },
+  segmentsToggle: {
+    title: '사용하는 대시보드',
+    description: '실제로 쓰는 관리 방식만 켜 두세요. 끈 방식은 메뉴·설정 탭·캘린더 입력에서 사라지지만, 입력했던 데이터는 지워지지 않아 다시 켜면 그대로 돌아와요.',
+    needOne: '대시보드는 하나 이상 켜 두어야 해요.',
+    turnedOn: '{name}을(를) 켰어요.',
+    turnedOff: '{name}을(를) 껐어요. 데이터는 그대로 보관돼요.',
+    failed: '변경하지 못했어요.',
+  },
   common: {
     saved: '저장했어요.',
     saveFailed: '저장에 실패했습니다.',
@@ -232,6 +240,15 @@ export const en: Dictionary<typeof ko> = {
     title: 'Settings',
     intro: 'Settings are grouped by dashboard.',
     adminOnly: ' Only admins can change the judgment criteria.',
+  },
+  segmentsToggle: {
+    title: 'Dashboards in use',
+    description:
+      'Keep only the management types you actually use turned on. Turned-off types disappear from the menu, settings tabs and calendar entry, but their data is never deleted — turn them back on and everything returns.',
+    needOne: 'Keep at least one dashboard turned on.',
+    turnedOn: '{name} turned on.',
+    turnedOff: '{name} turned off. Its data is kept.',
+    failed: 'Could not change it.',
   },
   common: {
     saved: 'Saved.',

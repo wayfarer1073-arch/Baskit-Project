@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SEGMENT_META, SEGMENT_ORDER, type Segment } from '@/lib/segments';
+import { SEGMENT_META, type Segment } from '@/lib/segments';
 import { SEGMENT_TAB, type SettingsTab } from '@/lib/settings-tabs';
 import { useI18n } from '@/components/i18n/i18n-provider';
 
@@ -31,6 +31,7 @@ function ScopeNote({ segment }: { segment: Segment }) {
 export function SettingsTabs({
   initialTab,
   activeSegment,
+  enabledSegments,
   common,
   daily,
   periodic,
@@ -38,6 +39,7 @@ export function SettingsTabs({
 }: {
   initialTab: SettingsTab;
   activeSegment: Segment;
+  enabledSegments: Segment[];
   common: React.ReactNode;
   daily: React.ReactNode;
   periodic: React.ReactNode;
@@ -52,7 +54,7 @@ export function SettingsTabs({
     <Tabs defaultValue={initialTab} onValueChange={(v) => router.replace(`${pathname}?tab=${v}`, { scroll: false })} className="gap-5">
       <TabsList aria-label={m.settings.tabsLabel} className="h-auto flex-wrap justify-start">
         <TabsTrigger value="common">{m.settings.commonTab}</TabsTrigger>
-        {SEGMENT_ORDER.map((segment) => (
+        {enabledSegments.map((segment) => (
           <TabsTrigger key={segment} value={SEGMENT_TAB[segment]}>
             {m.segments[segment].label}
             {segment === activeSegment && <span className="size-1.5 rounded-full bg-brand-accent" aria-label={m.settings.activeDashboard} title={m.settings.activeDashboard} />}
@@ -64,7 +66,7 @@ export function SettingsTabs({
         <p className="text-sm text-muted-foreground">{m.settings.commonIntro}</p>
         {panels.common}
       </TabsContent>
-      {SEGMENT_ORDER.map((segment) => (
+      {enabledSegments.map((segment) => (
         <TabsContent key={segment} value={SEGMENT_TAB[segment]} className="space-y-4">
           <ScopeNote segment={segment} />
           {panels[SEGMENT_TAB[segment]]}

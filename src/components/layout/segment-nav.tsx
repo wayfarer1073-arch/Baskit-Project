@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { CalendarDays, ClipboardList, LayoutDashboard, MessagesSquare, Settings, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SEGMENT_COOKIE, SEGMENT_META, SEGMENT_ORDER, isSegment, segmentForPath, type NavItem, type Segment } from '@/lib/segments';
+import { SEGMENT_COOKIE, SEGMENT_META, isSegment, segmentForPath, type NavItem, type Segment } from '@/lib/segments';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { startNavigationFeedback } from '@/lib/navigation-feedback';
 
 const NAV_ICONS: Record<NavItem['icon'], typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
@@ -27,9 +28,10 @@ function writeSegmentCookie(segment: Segment) {
  * 현재 방식으로 본다. 대시보드 URL로 바로 들어온 경우에도 쿠키를 맞춰서, 공용 화면으로 이동해도
  * 사이드바 메뉴가 바뀌지 않게 한다.
  */
-export function useActiveSegment(fallback: Segment): Segment {
+export function useActiveSegment(fallback: Segment, enabled: readonly Segment[]): Segment {
   const pathname = usePathname();
-  const fromPath = segmentForPath(pathname);
+  const candidate = segmentForPath(pathname);
+  const fromPath = candidate && enabled.includes(candidate) ? candidate : null;
   useEffect(() => {
     if (fromPath && fromPath !== fallback) writeSegmentCookie(fromPath);
   }, [fromPath, fallback]);
@@ -38,12 +40,14 @@ export function useActiveSegment(fallback: Segment): Segment {
 
 interface SegmentSwitcherProps {
   segment: Segment;
+  /** 설정에서 켜 둔 방식만 고를 수 있다. 하나뿐이면 고르는 칸 없이 이름만 보인다. */
+  enabled: readonly Segment[];
   variant?: 'sidebar' | 'drawer';
   onNavigate?: () => void;
   className?: string;
 }
 
-export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, className }: SegmentSwitcherProps) {
+export function SegmentSwitcher({ segment, enabled, variant = 'sidebar', onNavigate, className }: SegmentSwitcherProps) {
   const labelId = `segment-switcher-label-${variant}`;
   const router = useRouter();
   const { m } = useI18n();
@@ -52,6 +56,7 @@ export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, clas
     if (!isSegment(value)) return;
     writeSegmentCookie(value);
     onNavigate?.();
+    startNavigationFeedback();
     router.push(SEGMENT_META[value].dashboardHref);
     router.refresh();
   }
@@ -61,6 +66,11 @@ export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, clas
       <p className={cn('px-3 text-[11px] font-medium tracking-wide', variant === 'sidebar' ? 'text-sidebar-muted-foreground' : 'text-muted-foreground')} id={labelId}>
         {m.nav.dashboardType}
       </p>
+      {enabled.length <= 1 ? (
+        <p className={cn('rounded-md border px-3 py-2 text-sm font-medium', variant === 'sidebar' ? 'border-sidebar-border bg-sidebar-hover-bg text-sidebar-foreground' : 'border-border')}>
+          {m.segments[segment].label}
+        </p>
+      ) : (
       <Select value={segment} onValueChange={change}>
         <SelectTrigger
           aria-labelledby={labelId}
@@ -69,7 +79,7 @@ export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, clas
           <SelectValue>{m.segments[segment].label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {SEGMENT_ORDER.map((value) => (
+          {enabled.map((value) => (
             <SelectItem key={value} value={value} className="py-2">
               <span className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">{m.segments[value].label}</span>
@@ -79,6 +89,7 @@ export function SegmentSwitcher({ segment, variant = 'sidebar', onNavigate, clas
           ))}
         </SelectContent>
       </Select>
+      )}
     </div>
   );
 }

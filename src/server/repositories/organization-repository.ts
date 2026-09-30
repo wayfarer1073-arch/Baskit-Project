@@ -37,5 +37,10 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
 }
 
 export function getOrganization(orgId: string) {
-  return prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { id: true, name: true, segment: true } });
+  return prisma.organization.findUniqueOrThrow({ where: { id: orgId }, select: { id: true, name: true, segment: true, disabledSegments: true } });
+}
+
+/** 쓰는 대시보드 방식 목록을 바꾼다. 끈 방식의 데이터는 건드리지 않는다(화면에서만 숨김). */
+export async function setDisabledSegments(orgId: string, disabled: BusinessSegment[]) {
+  return prisma.organization.update({ where: { id: orgId }, data: { disabledSegments: [...new Set(disabled)] }, select: { disabledSegments: true } });
 }

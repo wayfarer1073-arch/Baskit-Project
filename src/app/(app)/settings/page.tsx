@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { requireTenant } from '@/server/tenant';
 import { listWarehouses } from '@/server/repositories/warehouse-repository';
 import { getSegmentSettings, getSettings } from '@/server/repositories/settings-repository';
@@ -20,9 +19,9 @@ import { CommonSettings, DailySettings } from '@/components/settings/settings-fo
 import { PeriodicSettings, StoreSettings } from '@/components/settings/segment-settings';
 import { SettingsTabs } from '@/components/settings/settings-tabs';
 import { isSettingsTab, SEGMENT_TAB } from '@/lib/settings-tabs';
-import { SEGMENT_COOKIE, isSegment } from '@/lib/segments';
 import { todayKstDateString } from '@/lib/date';
 import { getMessages } from '@/server/i18n';
+import { getSegmentContext } from '@/server/segments';
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const tenant = await requireTenant();
@@ -71,9 +70,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
 
   // 탭을 지정하지 않고 들어오면 지금 보고 있는 대시보드의 설정부터 보여준다.
-  const remembered = (await cookies()).get(SEGMENT_COOKIE)?.value;
-  const activeSegment = isSegment(remembered) ? remembered : organization.segment;
-  const initialTab = isSettingsTab(params.tab) ? params.tab : SEGMENT_TAB[activeSegment];
+  const { enabled: enabledSegments, active: activeSegment } = await getSegmentContext(tenant.orgId);
+  const requestedTab = isSettingsTab(params.tab) ? params.tab : SEGMENT_TAB[activeSegment];
+  // 꺼 둔 방식의 탭은 없으므로, 그 탭을 주소로 요청해도 공통 탭을 연다.
+  const initialTab = requestedTab === 'common' || enabledSegments.some((s) => SEGMENT_TAB[s] === requestedTab) ? requestedTab : 'common';
   const warehouseRows = warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name }));
 
   return (
@@ -86,9 +86,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <SettingsTabs
         initialTab={initialTab}
         activeSegment={activeSegment}
+        enabledSegments={enabledSegments}
         common={
           <CommonSettings
             isAdmin={isAdmin}
+            enabledSegments={enabledSegments}
             currentUserId={tenant.userId}
             warehouses={warehouseRows}
             users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}

@@ -14,6 +14,7 @@ import { postTagBadgeVariant, POST_TAG_OPTIONS, type PostTagValue } from '@/lib/
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { startNavigationFeedback } from '@/lib/navigation-feedback';
 
 export interface BoardPost {
   id: string;
@@ -66,6 +67,7 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
   const hasActiveFilter = filter.keyword !== '' || filter.tags.length > 0 || filter.fromDate !== '' || filter.toDate !== '';
 
   function goToPage(next: number) {
+    startNavigationFeedback();
     router.push(buildBoardUrl(next, filter));
   }
 
@@ -76,11 +78,13 @@ export function BoardClient({ posts, page, totalPages, totalCount, currentUserId
       fromDate: draft.fromDate && draft.toDate && draft.fromDate > draft.toDate ? draft.toDate : draft.fromDate,
       toDate: draft.fromDate && draft.toDate && draft.fromDate > draft.toDate ? draft.fromDate : draft.toDate,
     };
+    startNavigationFeedback();
     router.push(buildBoardUrl(1, normalized));
   }
 
   function resetFilter() {
     setDraft(EMPTY_FILTER);
+    startNavigationFeedback();
     router.push('/board');
   }
 

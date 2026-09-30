@@ -34,6 +34,8 @@ model Organization {
   id          String          @id @default(cuid())
   name        String
   segment     BusinessSegment @default(DAILY_SYNC)
+  // 설정에서 끈 대시보드 유형. 비어 있으면 모두 사용. 끄면 화면에서만 숨기고 데이터는 그대로 둔다.
+  disabledSegments BusinessSegment[] @default([])
   // 운영자가 정지하면 소속 사용자는 로그인·이용이 막힌다(데이터는 그대로). null이면 정상.
   suspendedAt DateTime?
   // 운영자 콘솔에서 만든 샘플 데이터용 워크스페이스. 가입 통계에서 제외한다.

@@ -21,7 +21,11 @@ export interface SegmentMeta {
   nav: NavItem[];
 }
 
+/** 캘린더는 모든 방식이 함께 쓴다 — 날짜를 누르면 방식별 업로드·입력 패널이 열린다. */
+export const CALENDAR_HREF = '/upload';
+
 const COMMON_TAIL: NavItem[] = [
+  { href: CALENDAR_HREF, key: 'calendar', label: '캘린더', icon: 'calendar' },
   { href: '/board', key: 'board', label: '게시판', icon: 'board' },
   { href: '/settings', key: 'settings', label: '설정', icon: 'settings' },
 ];
@@ -36,7 +40,6 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     dashboardHref: '/dashboard/daily',
     nav: [
       { href: '/dashboard/daily', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
-      { href: '/upload', key: 'calendar', label: '캘린더', icon: 'calendar' },
       ...COMMON_TAIL,
     ],
   },
@@ -47,8 +50,6 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     dashboardHref: '/dashboard/periodic',
     nav: [
       { href: '/dashboard/periodic', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
-      { href: '/count', key: 'periodicCount', label: '실사 입력', icon: 'records' },
-      { href: '/upload', key: 'periodicExcel', label: '엑셀 실사', icon: 'calendar' },
       ...COMMON_TAIL,
     ],
   },
@@ -59,7 +60,6 @@ export const SEGMENT_META: Record<Segment, SegmentMeta> = {
     dashboardHref: '/dashboard/store',
     nav: [
       { href: '/dashboard/store', key: 'dashboard', label: '대시보드', icon: 'dashboard' },
-      { href: '/store/records', key: 'storeRecords', label: '발주·매출 기록', icon: 'records' },
       ...COMMON_TAIL,
     ],
   },
@@ -80,4 +80,17 @@ export function segmentForPath(pathname: string): Segment | null {
   if (pathname.startsWith('/store/')) return 'ORDER_CYCLE';
   if (pathname === '/count') return 'PERIODIC_COUNT';
   return null;
+}
+
+/** 설정에서 끈 방식을 뺀, 이 워크스페이스가 쓰는 방식들(순서 고정). 모두 꺼져 있으면 기본 방식 하나는 남긴다. */
+export function enabledSegmentsOf(disabled: readonly Segment[], fallback: Segment): Segment[] {
+  const enabled = SEGMENT_ORDER.filter((s) => !disabled.includes(s));
+  return enabled.length > 0 ? enabled : [fallback];
+}
+
+/** 원하는 방식(쿠키·경로)이 꺼져 있으면 기본 방식, 그것도 꺼져 있으면 쓰는 방식 중 첫 번째로. */
+export function resolveSegment(wanted: Segment | null | undefined, enabled: readonly Segment[], orgDefault: Segment): Segment {
+  if (wanted && enabled.includes(wanted)) return wanted;
+  if (enabled.includes(orgDefault)) return orgDefault;
+  return enabled[0] ?? orgDefault;
 }

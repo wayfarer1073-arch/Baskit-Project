@@ -20,13 +20,14 @@ interface AppSidebarProps {
   userRole: string;
   workspaceName: string;
   defaultSegment: Segment;
+  enabledSegments: Segment[];
   recentPosts?: SidebarRecentPost[];
   isPlatformAdmin?: boolean;
   className?: string;
 }
 
-export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, recentPosts, isPlatformAdmin, className }: AppSidebarProps) {
-  const segment = useActiveSegment(defaultSegment);
+export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, enabledSegments, recentPosts, isPlatformAdmin, className }: AppSidebarProps) {
+  const segment = useActiveSegment(defaultSegment, enabledSegments);
   const { m } = useI18n();
 
   return (
@@ -42,7 +43,7 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
         </span>
       </div>
 
-      <SegmentSwitcher segment={segment} className="px-3 pb-3" />
+      <SegmentSwitcher segment={segment} enabled={enabledSegments} className="px-3 pb-3" />
 
       <nav className="flex flex-col gap-1 px-3 py-2">
         <p className="px-3 pb-1.5 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground">{m.nav.menu}</p>

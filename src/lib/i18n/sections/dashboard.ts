@@ -154,6 +154,7 @@ export const ko = {
     pagination: '페이지 내비게이션',
     close: '닫기',
     moreInfo: '자세히 보기',
+    loading: '불러오는 중…',
   },
 };
 
@@ -312,5 +313,6 @@ export const en: Dictionary<typeof ko> = {
     pagination: 'Pagination',
     close: 'Close',
     moreInfo: 'More info',
+    loading: 'Loading…',
   },
 };
