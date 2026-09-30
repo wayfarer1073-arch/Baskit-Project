@@ -20,16 +20,24 @@ export function getWarehouseInOrg(orgId: string, id: string, options: { includeS
   });
 }
 
-/** A, B, …, Z, AA, AB … (엑셀 열 이름 방식) — 조직 안에서 아직 안 쓴 첫 코드. 보관된 창고의 코드도 재사용하지 않는다. */
-export function nextWarehouseCode(usedCodes: ReadonlySet<string>): string {
+/** 방식별 창고 코드 머리글자 — 일일 재고 연동은 D(Daily), 비정기 실사는 P(Periodic). */
+export const WAREHOUSE_CODE_PREFIX: Record<StockSegment, string> = { DAILY_SYNC: 'D', PERIODIC_COUNT: 'P' };
+
+/**
+ * 머리글자 + A, B, …, Z, AA, AB … (엑셀 열 이름 방식) — 조직 안에서 아직 안 쓴 첫 코드(DA, DB … / PA, PB …).
+ * 보관된 창고의 코드도 재사용하지 않는다.
+ */
+export function nextWarehouseCode(usedCodes: ReadonlySet<string>, segment: StockSegment = 'DAILY_SYNC'): string {
+  const prefix = WAREHOUSE_CODE_PREFIX[segment];
   for (let n = 1; ; n++) {
     let num = n;
-    let code = '';
+    let letters = '';
     while (num > 0) {
       num -= 1;
-      code = String.fromCharCode(65 + (num % 26)) + code;
+      letters = String.fromCharCode(65 + (num % 26)) + letters;
       num = Math.floor(num / 26);
     }
+    const code = `${prefix}${letters}`;
     if (!usedCodes.has(code)) return code;
   }
 }
@@ -39,7 +47,7 @@ export async function createWarehouse(orgId: string, name: string, segment: Stoc
     // 같은 조직에서 동시에 창고를 추가해도 코드가 겹치지 않도록 조직 행을 잠근다.
     await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
     const existing = await tx.warehouse.findMany({ where: { organizationId: orgId }, select: { code: true, sortOrder: true, kind: true } });
-    const code = nextWarehouseCode(new Set(existing.map((w) => w.code)));
+    const code = nextWarehouseCode(new Set(existing.map((w) => w.code)), segment);
     const sortOrder = existing.reduce((max, w) => (w.kind === 'STOCK' ? Math.max(max, w.sortOrder) : max), 0) + 1;
     return tx.warehouse.create({ data: { organizationId: orgId, code, name, sortOrder, segment } });
   });

@@ -2,6 +2,7 @@ import { hashPassword } from '@/lib/password';
 import { Prisma, type BusinessSegment } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_RISK_SETTINGS } from '@/domain/inventory/types';
+import { nextWarehouseCode } from '@/server/repositories/warehouse-repository';
 
 export class EmailTakenError extends Error {}
 
@@ -28,7 +29,9 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
       });
       // 기본 창고는 가입 때 고른 방식의 창고로 만든다(매장 발주 예측만 쓰면 일일 재고 연동 창고로 두고, 나중에 켜면 그대로 쓴다).
       const segment = input.segment === 'PERIODIC_COUNT' ? 'PERIODIC_COUNT' : 'DAILY_SYNC';
-      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: input.defaultWarehouseName ?? '기본 창고', sortOrder: 1, segment } });
+      await tx.warehouse.create({
+        data: { organizationId: organization.id, code: nextWarehouseCode(new Set(), segment), name: input.defaultWarehouseName ?? '기본 창고', sortOrder: 1, segment },
+      });
       await tx.settings.create({ data: { organizationId: organization.id, ...DEFAULT_RISK_SETTINGS } });
       return { organization, user };
     });

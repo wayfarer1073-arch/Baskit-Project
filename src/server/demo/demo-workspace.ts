@@ -23,7 +23,20 @@ function utcToday(): Date {
 const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
 const isWeekend = (d: Date) => d.getUTCDay() === 0 || d.getUTCDay() === 6;
 
-const PRODUCT_WORDS = ['유기농 그래놀라', '콜드브루 원액', '단백질 바', '비건 쿠키', '저당 잼', '곤약 젤리', '현미 누룽지', '견과 믹스', '말차 라떼 파우더', '올리브 오일', '트러플 소금', '수제 그릭요거트'];
+const PRODUCT_WORDS = [
+  '유기농 그래놀라',
+  '콜드브루 원액',
+  '단백질 바',
+  '비건 쿠키',
+  '저당 잼',
+  '곤약 젤리',
+  '현미 누룽지',
+  '견과 믹스',
+  '말차 라떼 파우더',
+  '올리브 오일',
+  '트러플 소금',
+  '수제 그릭요거트',
+];
 const SIZES = ['200g', '500g', '1kg', '12입', '24입', '500ml', '1L'];
 
 interface SkuPlan {
@@ -99,7 +112,14 @@ async function seedWarehouseSeries(
     }
     if (!countDates.has(day)) continue;
     const snapshot = await tx.inventorySnapshot.create({
-      data: { warehouseId, snapshotDate: new Date(`${day}T00:00:00.000Z`), sourceFileName: 'demo.xlsx', fileHash: `demo-${warehouseId}-${day}`, rowCount: plans.length, uploadedById: uploaderId },
+      data: {
+        warehouseId,
+        snapshotDate: new Date(`${day}T00:00:00.000Z`),
+        sourceFileName: 'demo.xlsx',
+        fileHash: `demo-${warehouseId}-${day}`,
+        rowCount: plans.length,
+        uploadedById: uploaderId,
+      },
     });
     await tx.inventoryItem.createMany({
       data: plans.map((p) => ({
@@ -127,7 +147,7 @@ async function seedDaily(tx: Prisma.TransactionClient, orgId: string, uploaderId
   const countDates = new Set<string>();
   for (let d = start; d <= end; d = addDays(d, 1)) if (!isWeekend(d)) countDates.add(ymd(d));
   for (const [i, name] of ['서울 3PL센터', '부산 3PL센터'].entries()) {
-    const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: String.fromCharCode(65 + i), name, sortOrder: i + 1 } });
+    const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: `D${String.fromCharCode(65 + i)}`, name, sortOrder: i + 1 } });
     await seedWarehouseSeries(tx, { warehouseId: wh.id, uploaderId, plans: planSkus(rand, 30, `D${i}`), start, end, countDates, rand, recordAllInbound: false });
   }
 }
@@ -138,7 +158,7 @@ async function seedPeriodic(tx: Prisma.TransactionClient, orgId: string, uploade
   const countDates = new Set<string>();
   // 7~12일 간격으로 실사, 마지막 실사는 며칠 전.
   for (let d = addDays(start, 2); d <= addDays(end, -4); d = addDays(d, 7 + Math.floor(rand() * 6))) countDates.add(ymd(d));
-  const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: 'A', name: '본사 창고', sortOrder: 1, segment: 'PERIODIC_COUNT' } });
+  const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: 'PA', name: '본사 창고', sortOrder: 1, segment: 'PERIODIC_COUNT' } });
   await seedWarehouseSeries(tx, { warehouseId: wh.id, uploaderId, plans: planSkus(rand, 35, 'P'), start, end: addDays(end, -1), countDates, rand, recordAllInbound: true });
 }
 
@@ -250,7 +270,7 @@ export async function createDemoWorkspace(segment: BusinessSegment, actorId: str
       if (segment === 'DAILY_SYNC') await seedDaily(tx, org.id, actorId, rand);
       else if (segment === 'PERIODIC_COUNT') await seedPeriodic(tx, org.id, actorId, rand);
       else {
-        await tx.warehouse.create({ data: { organizationId: org.id, code: 'A', name: '기본 창고', sortOrder: 1 } });
+        await tx.warehouse.create({ data: { organizationId: org.id, code: 'DA', name: '기본 창고', sortOrder: 1 } });
         await seedStoreData(tx, org.id, actorId, rand);
       }
       return org;

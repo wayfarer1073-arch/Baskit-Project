@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, requireTestDatabase, row } from './db-fixtures';
 import { createSnapshot } from '../src/server/repositories/snapshot-repository';
-import { createWarehouse, ensureSegmentWarehouse, listWarehouses } from '../src/server/repositories/warehouse-repository';
+import { createWarehouse, ensureSegmentWarehouse, listWarehouses, nextWarehouseCode } from '../src/server/repositories/warehouse-repository';
 import { loadActiveSkusWithSeries } from '../src/server/repositories/inventory-repository';
 import { loadCountedSkus } from '../src/server/repositories/count-repository';
 import { listRegisteredCosts } from '../src/server/repositories/cost-repository';
@@ -17,7 +17,14 @@ afterEach(() => cleanupFixture(f));
 afterAll(() => prisma.$disconnect());
 
 const upload = (warehouseId: string, code: string) =>
-  createSnapshot({ warehouseId, snapshotDate: new Date('2026-09-29T00:00:00.000Z'), sourceFileName: 'a.xlsx', fileHash: code, uploadedById: f.user.id, rows: [row(code, 10, { unitCost: 500 })] });
+  createSnapshot({
+    warehouseId,
+    snapshotDate: new Date('2026-09-29T00:00:00.000Z'),
+    sourceFileName: 'a.xlsx',
+    fileHash: code,
+    uploadedById: f.user.id,
+    rows: [row(code, 10, { unitCost: 500 })],
+  });
 
 it('keeps daily-sync and periodic-count warehouses, their stock and costs apart', async () => {
   const periodic = await createWarehouse(f.org.id, '본사 창고', 'PERIODIC_COUNT');
@@ -42,4 +49,14 @@ it('creates a default warehouse for a mode that has none, only once', async () =
   expect(await listWarehouses(f.org.id, 'PERIODIC_COUNT')).toHaveLength(1);
   await ensureSegmentWarehouse(f.org.id, 'DAILY_SYNC', '기본 창고');
   expect(await listWarehouses(f.org.id, 'DAILY_SYNC')).toHaveLength(1);
+});
+
+it('numbers warehouses per mode: DA, DB … for daily sync and PA, PB … for periodic counts', async () => {
+  const daily = await createWarehouse(f.org.id, '서울 창고', 'DAILY_SYNC');
+  const periodic1 = await createWarehouse(f.org.id, '본사 창고', 'PERIODIC_COUNT');
+  const periodic2 = await createWarehouse(f.org.id, '부산 창고', 'PERIODIC_COUNT');
+  expect(daily.code).toMatch(/^D[A-Z]+$/);
+  expect([periodic1.code, periodic2.code]).toEqual(['PA', 'PB']);
+  expect(nextWarehouseCode(new Set(['DA', 'DB']), 'DAILY_SYNC')).toBe('DC');
+  expect(nextWarehouseCode(new Set(Array.from({ length: 26 }, (_, i) => `P${String.fromCharCode(65 + i)}`)), 'PERIODIC_COUNT')).toBe('PAA');
 });
