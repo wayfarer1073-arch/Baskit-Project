@@ -76,11 +76,20 @@ function StoreItemInfo({
             <Row
               label={t.expiration}
               value={
-                <span className={cn(expiration.near && 'font-semibold text-destructive')}>
-                  {expiration.date} {formatExpirationDday(expiration.daysLeft)}
+                <span className="flex flex-col items-end gap-1">
+                  {expiration.lots.map((lot) => (
+                    <span key={lot.role} className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-normal text-muted-foreground">
+                        {lot.role === 'latest' ? m.store.expiry.lotLatest : m.store.expiry.lotPrevious} ·{' '}
+                        {format(t.expirationFrom, { date: lot.orderDate, qty: format(m.store.units.qty, { qty: lot.quantity.toLocaleString(), unit }) })}
+                      </span>
+                      <span className={cn(lot.near && 'font-semibold text-destructive')}>
+                        {lot.date} {formatExpirationDday(lot.daysLeft)}
+                      </span>
+                    </span>
+                  ))}
                 </span>
               }
-              hint={format(t.expirationFrom, { date: expiration.orderDate, qty: format(m.store.units.qty, { qty: expiration.quantity.toLocaleString(), unit }) })}
             />
           )}
           {extras.spec && <Row label={t.spec} value={extras.spec} />}
@@ -137,9 +146,7 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                 <SheetTitle>{d.name}</SheetTitle>
                 <CoverageStatusBadge status={a.status} />
               </div>
-              <SheetDescription>
-                {format(t.subtitle, { unit, supplier: d.supplierName ? `${d.supplierName} ` : '', days: d.leadTimeDays, date: asOfDate })}
-              </SheetDescription>
+              <SheetDescription>{format(t.subtitle, { unit, supplier: d.supplierName ? `${d.supplierName} ` : '', days: d.leadTimeDays, date: asOfDate })}</SheetDescription>
             </SheetHeader>
 
             <div className="space-y-6 px-4 pb-8">
@@ -153,17 +160,9 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                       <Row
                         label={t.lastOrder}
                         value={`${a.lastOrder.date} · ${format(m.store.units.qty, { qty: a.lastOrder.quantity.toLocaleString(), unit })}`}
-                        hint={
-                          a.lastOrder.leftoverQuantity
-                            ? format(t.openingHint, { leftover: du(a.lastOrder.leftoverQuantity), opening: du(a.openingUnits ?? 0) })
-                            : undefined
-                        }
+                        hint={a.lastOrder.leftoverQuantity ? format(t.openingHint, { leftover: du(a.lastOrder.leftoverQuantity), opening: du(a.openingUnits ?? 0) }) : undefined}
                       />
-                      <Row
-                        label={t.leftNow}
-                        value={remainingUnitsText(a, unit, m.store) ?? '—'}
-                        hint={a.salesPerUnit === null ? t.leftRatio : format(t.leftLearned, { unit })}
-                      />
+                      <Row label={t.leftNow} value={remainingUnitsText(a, unit, m.store) ?? '—'} hint={a.salesPerUnit === null ? t.leftRatio : format(t.leftLearned, { unit })} />
                       <Row
                         label={t.coverage}
                         value={a.estimate.amount === null ? '—' : money(a.estimate.amount)}
@@ -205,17 +204,13 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    {format(t.habitFooter, { count: a.cycles.slice(-6).length })}
-                  </p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{format(t.habitFooter, { count: a.cycles.slice(-6).length })}</p>
                 </section>
               )}
 
               <section aria-label={t.learnTitle}>
                 <h3 className="text-sm font-semibold">{t.learnTitle}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {format(t.learnBody, { unit, cycles: INPUT_PRIOR_CYCLES })}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{format(t.learnBody, { unit, cycles: INPUT_PRIOR_CYCLES })}</p>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-muted/60 px-3 py-2.5">
                     <p className="text-[11px] text-muted-foreground">{format(t.perUnit, { unit })}</p>
@@ -230,45 +225,43 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                   <div className="mt-3 overflow-x-auto">
                     <Paged items={[...a.cycles].reverse()}>
                       {(pageItems) => (
-                      <table className="w-full text-xs">
-                        <thead className="text-muted-foreground">
-                          <tr className="border-b border-border">
-                            <th className="py-1.5 text-left font-medium">{t.colCycle}</th>
-                            <th className="py-1.5 text-right font-medium">{t.colRealized}</th>
-                            <th className="py-1.5 text-right font-medium">{t.colOverrun}</th>
-                            <th className="py-1.5 text-right font-medium">{t.colLeftover}</th>
-                            <th className="py-1.5 text-right font-medium">{t.colError}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pageItems.map((c) => (
-                            <tr key={c.orderDate} className="border-b border-border/60">
-                              <td className="py-1.5">
-                                {c.orderDate.slice(5)} → {c.nextOrderDate.slice(5)}
-                                <span className="ml-1 text-muted-foreground">
-                                  {format(m.store.units.qty, { qty: c.quantity.toLocaleString(), unit })}·{format(t.cycleDays, { days: c.days })}
-                                </span>
-                              </td>
-                              <td className="py-1.5 text-right tabular-nums">{c.realizedSales === null ? t.notEnoughSales : money(c.realizedSales)}</td>
-                              <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                                {c.overrunSales === null ? '—' : `${c.overrunSales >= 0 ? '+' : '−'}${money(Math.abs(c.overrunSales))}`}
-                                {c.daysAfterCross !== null && <span className="block text-[10px]">{format(t.daysAfter, { days: c.daysAfterCross })}</span>}
-                              </td>
-                              <td className="py-1.5 text-right text-muted-foreground">
-                                {c.leftoverAtNext === null ? t.leftoverMissing : c.leftoverAtNext <= 0 ? t.usedUp : du(c.leftoverAtNext)}
-                              </td>
-                              <td className={cn('py-1.5 text-right tabular-nums', c.systemError !== null && Math.abs(c.systemError) <= 0.1 && 'font-medium text-status-normal')}>
-                                {pct(c.systemError)}
-                              </td>
+                        <table className="w-full text-xs">
+                          <thead className="text-muted-foreground">
+                            <tr className="border-b border-border">
+                              <th className="py-1.5 text-left font-medium">{t.colCycle}</th>
+                              <th className="py-1.5 text-right font-medium">{t.colRealized}</th>
+                              <th className="py-1.5 text-right font-medium">{t.colOverrun}</th>
+                              <th className="py-1.5 text-right font-medium">{t.colLeftover}</th>
+                              <th className="py-1.5 text-right font-medium">{t.colError}</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {pageItems.map((c) => (
+                              <tr key={c.orderDate} className="border-b border-border/60">
+                                <td className="py-1.5">
+                                  {c.orderDate.slice(5)} → {c.nextOrderDate.slice(5)}
+                                  <span className="ml-1 text-muted-foreground">
+                                    {format(m.store.units.qty, { qty: c.quantity.toLocaleString(), unit })}·{format(t.cycleDays, { days: c.days })}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 text-right tabular-nums">{c.realizedSales === null ? t.notEnoughSales : money(c.realizedSales)}</td>
+                                <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                                  {c.overrunSales === null ? '—' : `${c.overrunSales >= 0 ? '+' : '−'}${money(Math.abs(c.overrunSales))}`}
+                                  {c.daysAfterCross !== null && <span className="block text-[10px]">{format(t.daysAfter, { days: c.daysAfterCross })}</span>}
+                                </td>
+                                <td className="py-1.5 text-right text-muted-foreground">
+                                  {c.leftoverAtNext === null ? t.leftoverMissing : c.leftoverAtNext <= 0 ? t.usedUp : du(c.leftoverAtNext)}
+                                </td>
+                                <td className={cn('py-1.5 text-right tabular-nums', c.systemError !== null && Math.abs(c.systemError) <= 0.1 && 'font-medium text-status-normal')}>
+                                  {pct(c.systemError)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       )}
                     </Paged>
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      {t.tableHelp}
-                    </p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">{t.tableHelp}</p>
                   </div>
                 ) : (
                   <p className="mt-3 text-xs text-muted-foreground">{t.firstLearning}</p>
@@ -293,13 +286,15 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                       {pageItems.map((o) => (
                         <li key={o.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                           <span className="tabular-nums text-muted-foreground">{o.date}</span>
-                          <span className="tabular-nums">
-                            {format(m.store.units.qty, { qty: o.quantity.toLocaleString(), unit })}
-                          </span>
+                          <span className="tabular-nums">{format(m.store.units.qty, { qty: o.quantity.toLocaleString(), unit })}</span>
                           {o.expirationDate && <ExpiryBadge date={o.expirationDate} riskDays={d.extras.expirationRiskDays} asOf={asOfDate} />}
                           <span className="ml-auto text-right text-xs text-muted-foreground">
                             {o.coverageAmount === null ? t.coverageMissing : format(m.store.records.coverageValue, { amount: money(o.coverageAmount) })}
-                            {o.leftoverQuantity !== null && <span className="block">{format(m.store.records.leftoverThen, { units: o.leftoverQuantity <= 0 ? m.store.records.none : du(o.leftoverQuantity) })}</span>}
+                            {o.leftoverQuantity !== null && (
+                              <span className="block">
+                                {format(m.store.records.leftoverThen, { units: o.leftoverQuantity <= 0 ? m.store.records.none : du(o.leftoverQuantity) })}
+                              </span>
+                            )}
                           </span>
                         </li>
                       ))}

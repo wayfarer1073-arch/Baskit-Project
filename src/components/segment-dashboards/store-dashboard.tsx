@@ -55,7 +55,8 @@ function ExpiringTag({ row, label, className }: { row: StoreCoverageRow; label: 
 }
 
 /**
- * 소비기한을 적은 발주분이 있는 품목만 모아 임박 순으로 따라가는 표. 적은 품목이 하나도 없으면 그리지 않는다.
+ * 소비기한을 적은 발주분이 있는 품목만 모아 임박 순으로 따라가는 표. 같은 품목도 발주마다 소비기한이 다르므로
+ * 최근 발주분과 직전 발주분을 롯트별 줄로 나눠 보여 준다. 적은 품목이 하나도 없으면 그리지 않는다.
  */
 function ExpiryFollowUp({ rows, onOpen }: { rows: StoreCoverageRow[]; onOpen: (itemId: string) => void }) {
   const { m } = useI18n();
@@ -83,35 +84,50 @@ function ExpiryFollowUp({ rows, onOpen }: { rows: StoreCoverageRow[]; onOpen: (i
           <TableHeader>
             <TableRow>
               <TableHead>{t.colItem}</TableHead>
+              <TableHead>{t.colLot}</TableHead>
               <TableHead>{t.colOrder}</TableHead>
               <TableHead>{t.colExpiration}</TableHead>
               <TableHead className="text-right">{t.colLeft}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paged.pageItems.map((r) => (
-              <TableRow key={r.itemId} className="cursor-pointer" onClick={() => onOpen(r.itemId)}>
-                <TableCell>
-                  <button type="button" className="text-left text-sm font-medium underline-offset-4 hover:underline" onClick={() => onOpen(r.itemId)}>
-                    {r.name}
-                  </button>
-                </TableCell>
-                <TableCell className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">
-                  {format(t.orderValue, { date: r.expiration.orderDate, qty: qty(r.expiration.quantity, r.unit, m.store.units.qty) })}
-                </TableCell>
-                <TableCell className="text-sm whitespace-nowrap tabular-nums">{r.expiration.date}</TableCell>
-                <TableCell className="text-right">
-                  <span
-                    className={cn(
-                      'inline-flex rounded px-1.5 py-0.5 text-xs whitespace-nowrap tabular-nums',
-                      r.expiration.near ? 'bg-status-danger-bg font-semibold text-status-danger' : 'text-muted-foreground',
-                    )}
-                  >
-                    {left(r.expiration.daysLeft)}
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
+            {paged.pageItems.flatMap((r) =>
+              r.expiration.lots.map((lot, i) => (
+                <TableRow key={`${r.itemId}-${lot.role}`} className={cn('cursor-pointer', i > 0 && 'border-t-0')} onClick={() => onOpen(r.itemId)}>
+                  {i === 0 && (
+                    <TableCell rowSpan={r.expiration.lots.length} className="align-top">
+                      <button type="button" className="text-left text-sm font-medium underline-offset-4 hover:underline" onClick={() => onOpen(r.itemId)}>
+                        {r.name}
+                      </button>
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <span
+                      className={cn(
+                        'inline-flex rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
+                        lot.role === 'latest' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {lot.role === 'latest' ? t.lotLatest : t.lotPrevious}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">
+                    {format(t.orderValue, { date: lot.orderDate, qty: qty(lot.quantity, r.unit, m.store.units.qty) })}
+                  </TableCell>
+                  <TableCell className="text-sm whitespace-nowrap tabular-nums">{lot.date}</TableCell>
+                  <TableCell className="text-right">
+                    <span
+                      className={cn(
+                        'inline-flex rounded px-1.5 py-0.5 text-xs whitespace-nowrap tabular-nums',
+                        lot.near ? 'bg-status-danger-bg font-semibold text-status-danger' : 'text-muted-foreground',
+                      )}
+                    >
+                      {left(lot.daysLeft)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              )),
+            )}
           </TableBody>
         </Table>
       </div>
