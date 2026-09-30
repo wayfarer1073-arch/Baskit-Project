@@ -120,6 +120,7 @@ model User {
   authTokens        AuthToken[]
   sentInvites       Invitation[]
   uploadJobs        UploadJob[]
+  storeItemMemos    StoreItemMemo[]
 
   @@index([organizationId])
   @@map("users")
@@ -510,6 +511,7 @@ model StoreItem {
 
   orders        PurchaseOrder[]
   scheduleLinks ScheduleStoreItem[]
+  memos         StoreItemMemo[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -734,4 +736,24 @@ model ScheduleStoreItem {
   @@unique([scheduleId, storeItemId])
   @@index([storeItemId])
   @@map("schedule_store_items")
+}
+
+/// 매장 품목 상세의 메모 — 제목 없이 남기는 메모만 여기에 둔다. 제목을 붙인 메모는 캘린더 일정(EventSchedule)이 되고
+/// ScheduleStoreItem으로 품목과 이어진다(일일 재고 SKU의 메모/일정과 같은 규칙).
+model StoreItemMemo {
+  id          String    @id @default(cuid())
+  storeItemId String
+  storeItem   StoreItem @relation(fields: [storeItemId], references: [id], onDelete: Cascade)
+  eventType   EventType
+  note        String
+  startDate   DateTime  @db.Date
+  endDate     DateTime? @db.Date
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([storeItemId, startDate])
+  @@map("store_item_memos")
 }

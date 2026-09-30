@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
+import { StoreItemNotes } from '@/components/segment-dashboards/store-item-notes';
 
 function pct(v: number | null) {
   if (v === null) return '—';
@@ -211,6 +212,8 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                   <p className="mt-3 text-xs text-muted-foreground">{t.firstLearning}</p>
                 )}
               </section>
+
+              <StoreItemNotes itemId={d.itemId} itemName={d.name} />
 
               <section aria-label={t.orders}>
                 <div className="flex items-center justify-between">

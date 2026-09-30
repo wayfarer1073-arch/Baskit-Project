@@ -201,6 +201,43 @@ export async function updateEvent(orgId: string, id: string, changedById: string
       },
     });
 
+    // 캘린더 일정에 묶인 메모에서 제목·유형·기간을 고치면 일정 자체를 고친다 — 캘린더와 같은 일정의 다른 SKU 메모도
+    // 함께 바뀐다(양방향). 같은 유형·제목·기간의 다른 일정이 이미 있으면 예전처럼 그 일정으로 옮긴다.
+    const trimmed = patch.title?.trim();
+    if (existing.scheduleId && trimmed && !patch.attachToScheduleId) {
+      const { startDate, endDate } = rangeDateOnly(patch.eventDate, patch.endDate);
+      const clash = await tx.eventSchedule.findFirst({
+        where: { organizationId: orgId, eventType: patch.eventType, title: trimmed, startDate, endDate, NOT: { id: existing.scheduleId } },
+        select: { id: true },
+      });
+      if (!clash) {
+        await tx.eventSchedule.update({ where: { id: existing.scheduleId }, data: { eventType: patch.eventType, title: trimmed, startDate, endDate } });
+        const others = await tx.inventoryEvent.findMany({ where: { scheduleId: existing.scheduleId, isDeleted: false, id: { not: id } } });
+        for (const other of others) {
+          await tx.eventHistory.create({
+            data: {
+              eventId: other.id,
+              changeType: 'UPDATE',
+              previousData: {
+                eventType: other.eventType,
+                quantity: other.quantity,
+                note: other.note,
+                eventDate: other.eventDate.toISOString(),
+                endDate: other.endDate ? other.endDate.toISOString() : null,
+                title: other.title,
+              },
+              changedById,
+            },
+          });
+          await tx.inventoryEvent.update({ where: { id: other.id }, data: { eventType: patch.eventType, title: trimmed, eventDate: patch.eventDate, endDate: patch.endDate ?? null } });
+        }
+        return tx.inventoryEvent.update({
+          where: { id },
+          data: { eventType: patch.eventType, quantity: patch.quantity, note: patch.note, eventDate: patch.eventDate, endDate: patch.endDate ?? null, title: trimmed },
+        });
+      }
+    }
+
     const { scheduleId, resolvedTitle } = await resolveScheduleLink(tx, {
       orgId,
       eventType: patch.eventType,

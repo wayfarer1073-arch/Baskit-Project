@@ -13,6 +13,7 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
 import { usePaged } from '@/lib/use-paged';
+import { SkuEventsSection } from '@/components/events/sku-events-section';
 
 function Row({ label, value, hint, info }: { label: string; value: React.ReactNode; hint?: string; info?: React.ReactNode }) {
   return (
@@ -201,6 +202,8 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
                   <InboundHistory inbounds={d.inbounds} />
                 </section>
               )}
+
+              <SkuEventsSection warehouseId={d.warehouseId} skuId={d.skuId} skuLabel={d.productName} />
             </div>
           </>
         )}
