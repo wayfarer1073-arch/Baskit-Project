@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,43 @@ function describe(action: TodayAction, t: Messages['today'], d: Messages['domain
   }
 }
 
+// 접힘 상태는 이 브라우저에 기억한다(사람마다 다른 화면 취향). 저장소를 못 쓰는 환경에서도 이번 방문 동안은 동작하도록
+// 메모리 값을 함께 둔다. 서버 렌더링 때는 펼친 상태로 그린 뒤, 브라우저에서 저장된 값으로 맞춘다.
+const OPEN_KEY = 'limenote_today_actions_open';
+const openListeners = new Set<() => void>();
+let openInMemory = true;
+
+function readOpen(): boolean {
+  try {
+    const saved = window.localStorage.getItem(OPEN_KEY);
+    return saved === null ? openInMemory : saved !== '0';
+  } catch {
+    return openInMemory;
+  }
+}
+
+function writeOpen(next: boolean) {
+  openInMemory = next;
+  try {
+    window.localStorage.setItem(OPEN_KEY, next ? '1' : '0');
+  } catch {
+    // 저장할 수 없으면 메모리 값만 쓴다.
+  }
+  openListeners.forEach((listener) => listener());
+}
+
+function subscribeOpen(listener: () => void) {
+  openListeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === OPEN_KEY) listener();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    openListeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
 const KIND_ORDER: TodayActionKind[] = ['order_now', 'order_soon', 'check_data', 'expiration', 'reduce'];
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -49,7 +86,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
   const t = m.today;
   const [kind, setKind] = useState<TodayActionKind | 'all'>('all');
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const [open, setOpen] = useState(true);
+  const open = useSyncExternalStore(subscribeOpen, readOpen, () => true);
   const counts = useMemo(() => {
     const map = new Map<TodayActionKind, number>();
     for (const a of actions) map.set(a.kind, (map.get(a.kind) ?? 0) + 1);
@@ -102,7 +139,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
           className="text-foreground hover:text-brand-accent"
           aria-expanded={open}
           aria-controls="today-actions-body"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => writeOpen(!open)}
         >
           {open ? <ChevronUp className="size-3.5" aria-hidden="true" /> : <ChevronDown className="size-3.5" aria-hidden="true" />}
           {open ? t.hide : t.show}
