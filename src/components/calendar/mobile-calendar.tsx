@@ -159,13 +159,16 @@ export function MobileCalendar(props: MobileCalendarProps) {
         </div>
       </div>
 
-      <section className="mt-4 rounded-xl border border-border" aria-label={c.mobile.dayListLabel}>
-        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <section className="mt-4 overflow-hidden rounded-xl border border-border" aria-label={c.mobile.dayListLabel}>
+        {/* 다른 패널 머리글과 같은 매트 블랙 바탕. */}
+        <div className="flex items-center justify-between gap-2 bg-sidebar px-4 py-3 text-sidebar-foreground">
           <div className="min-w-0">
-            <p className="text-sm font-semibold">{fill(c.mobile.dayTitle, { month: format(selected, 'M'), day: format(selected, 'd'), weekday: t.weekdays[getDay(selected)] })}</p>
-            {selectedHoliday && <p className="truncate text-xs text-status-danger">{selectedHoliday}</p>}
+            <p className="text-base font-semibold">
+              {fill(c.mobile.dayTitle, { month: format(selected, 'M'), day: format(selected, 'd'), weekday: t.weekdays[getDay(selected)] })}
+            </p>
+            {selectedHoliday && <p className="truncate text-xs text-red-300">{selectedHoliday}</p>}
           </div>
-          <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => props.onAddSchedule(selectedDate)}>
+          <Button size="sm" variant="outline" className="shrink-0 gap-1.5 text-foreground hover:text-brand-accent" onClick={() => props.onAddSchedule(selectedDate)}>
             <CalendarPlus className="size-4" aria-hidden="true" />
             {c.panel.addSchedule}
           </Button>
