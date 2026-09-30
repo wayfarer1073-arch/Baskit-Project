@@ -37,6 +37,8 @@ export const ko = {
     manual: '직접 입력',
     file: '엑셀',
     skus: '{count} SKU',
+    inbound: '입고 기록',
+    inboundHint: '실사와 실사 사이에 들어온 입고를 적어 두면 추정 재고와 소진 속도가 정확해져요. 엑셀·직접 입력을 다시 해도 지워지지 않아요.',
   },
   sales: {
     title: '일 매출',
@@ -139,6 +141,8 @@ export const en: Dictionary<typeof ko> = {
     manual: 'Manual',
     file: 'Excel',
     skus: '{count} SKUs',
+    inbound: 'Inbound',
+    inboundHint: 'Recording stock that arrived between counts keeps the estimated stock and usage rate accurate. It isn’t removed when you upload or enter counts again.',
   },
   sales: {
     title: 'Daily sales',

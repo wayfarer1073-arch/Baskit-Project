@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WarehouseDayPanel } from '@/components/upload/warehouse-day-panel';
+import { InboundManager } from '@/components/upload/inbound-manager';
 import { CountEntry } from '@/components/segment-dashboards/count-entry';
 import { OrderSection, useStoreRunner } from '@/components/segment-dashboards/store-records';
 import type { CalendarEntry } from '@/components/upload/upload-calendar';
@@ -74,7 +75,7 @@ function WarehouseUploadTabs({
       </TabsList>
       {warehouses.map((w) => (
         <TabsContent key={w.id} value={w.id}>
-          <WarehouseDayPanel warehouseId={w.id} warehouseName={w.name} date={date} existing={toExisting(entryByWarehouseId.get(w.id))} blocked={blocked} isAdmin={isAdmin} checkMissing={checkMissing} />
+          <WarehouseDayPanel warehouseId={w.id} warehouseName={w.name} date={date} existing={toExisting(entryByWarehouseId.get(w.id))} blocked={blocked} isAdmin={isAdmin} checkMissing={checkMissing} showInbound={!checkMissing} />
         </TabsContent>
       ))}
     </Tabs>
@@ -137,6 +138,7 @@ export function PeriodicDayPanel({
         <TabsList>
           <TabsTrigger value="direct">{t.direct}</TabsTrigger>
           <TabsTrigger value="excel">{t.excel}</TabsTrigger>
+          <TabsTrigger value="inbound">{t.inbound}</TabsTrigger>
         </TabsList>
         <TabsContent value="direct" className="pt-2">
           {blocked ? (
@@ -149,6 +151,29 @@ export function PeriodicDayPanel({
         </TabsContent>
         <TabsContent value="excel" className="pt-2">
           <WarehouseUploadTabs date={date} warehouses={warehouses} entryByWarehouseId={entryByWarehouseId} blocked={blocked} isAdmin={isAdmin} checkMissing />
+        </TabsContent>
+        <TabsContent value="inbound" className="space-y-3 pt-2">
+          <p className="text-xs text-muted-foreground">{t.inboundHint}</p>
+          {!canEdit ? (
+            <p className="rounded-md bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">{m.calendar.panel.viewer}</p>
+          ) : warehouses.length === 1 ? (
+            <InboundManager warehouseId={warehouses[0].id} date={date} />
+          ) : (
+            <Tabs defaultValue={warehouses[0]?.id}>
+              <TabsList>
+                {warehouses.map((w) => (
+                  <TabsTrigger key={w.id} value={w.id}>
+                    {w.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {warehouses.map((w) => (
+                <TabsContent key={w.id} value={w.id}>
+                  <InboundManager warehouseId={w.id} date={date} />
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
         </TabsContent>
       </Tabs>
     </div>

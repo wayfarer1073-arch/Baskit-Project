@@ -29,10 +29,12 @@ interface WarehouseDayPanelProps {
   isAdmin: boolean;
   /** 미리보기에서 이 파일로 품절 처리될 기존 SKU를 함께 받는다(비정기 실사). */
   checkMissing?: boolean;
+  /** 입고 특이사항을 이 패널 아래에 함께 보여줄지(비정기 실사는 별도 '입고 기록' 탭에서 받는다). */
+  showInbound?: boolean;
 }
 
 /** 하루·한 창고 분량의 업로드 폼 + 입고 특이사항. 날짜 패널(DayDetailDialog)의 탭 하나의 내용이다. */
-export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, blocked, isAdmin, checkMissing }: WarehouseDayPanelProps) {
+export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, blocked, isAdmin, checkMissing, showInbound = true }: WarehouseDayPanelProps) {
   const router = useRouter();
   const { m } = useI18n();
   const [file, setFile] = useState<File | null>(null);
@@ -271,7 +273,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
         </Button>
       )}
 
-      <InboundManager warehouseId={warehouseId} date={date} />
+      {showInbound && <InboundManager warehouseId={warehouseId} date={date} />}
     </div>
   );
 }
