@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel, SegmentDashboardHeader, SegmentEmptyState, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { compareRecountUrgency, type PeriodicStatus } from '@/domain/segments/periodic-count';
 import { STATUS_VARIANT, recountReasonText } from '@/components/segment-dashboards/periodic-parts';
@@ -19,6 +19,7 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
 import { usePaged } from '@/lib/use-paged';
+import { SortHead, useColumnSort, type SortValue } from '@/components/ui/sort-head';
 import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-select';
 
 interface PeriodicDashboardProps {
@@ -28,6 +29,22 @@ interface PeriodicDashboardProps {
   rows: PeriodicRow[];
   warehouses: { id: string; name: string }[];
 }
+
+const STATUS_RANK: Record<PeriodicStatus, number> = { estimated_out: 0, soon: 1, unknown: 2, ok: 3 };
+const CONFIDENCE_RANK: Record<string, number | null> = { high: 3, medium: 2, low: 1, none: null };
+
+/** 전체 품목 표의 열별 정렬 값. 상태는 급한 순(추정 품절 → 임박 → 판단 불가 → 여유), 신뢰도는 낮음 → 높음이 오름차순이다. */
+const PERIODIC_SORT: Record<'product' | 'lastCount' | 'countQty' | 'inbound' | 'dailyUsage' | 'estimate' | 'stockout' | 'confidence' | 'status', (r: PeriodicRow) => SortValue> = {
+  product: (r) => r.productName,
+  lastCount: (r) => r.estimate.lastCountDate,
+  countQty: (r) => r.estimate.lastCountQuantity,
+  inbound: (r) => r.estimate.inboundSinceCount ?? 0,
+  dailyUsage: (r) => r.estimate.dailyUsage,
+  estimate: (r) => r.estimate.estimatedStock,
+  stockout: (r) => r.estimate.estimatedStockoutDate,
+  confidence: (r) => CONFIDENCE_RANK[r.estimate.confidence] ?? null,
+  status: (r) => STATUS_RANK[r.estimate.status],
+};
 
 function quantity(value: number | null) {
   return value === null ? '—' : `${formatNumber(value)}`;
@@ -67,7 +84,8 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
 
   const queuePaged = usePaged(recountQueue);
   const [tablePageSize, setTablePageSize] = useState<number>(WIDE_PAGE_SIZES[0]);
-  const tablePaged = usePaged(filtered, `${query}|${warehouseId}|${recountOnly}|${tablePageSize}`, tablePageSize);
+  const tableSort = useColumnSort(filtered, PERIODIC_SORT);
+  const tablePaged = usePaged(tableSort.sorted, `${query}|${warehouseId}|${recountOnly}|${tablePageSize}|${tableSort.sortKey}`, tablePageSize);
 
   const header = (
     <SegmentDashboardHeader
@@ -210,15 +228,15 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t.cols.product}</TableHead>
-                <TableHead>{t.cols.lastCount}</TableHead>
-                <TableHead className="text-right">{t.cols.countQty}</TableHead>
-                <TableHead className="text-right">{t.cols.inbound}</TableHead>
-                <TableHead className="text-right">{t.cols.dailyUsage}</TableHead>
-                <TableHead className="text-right">{t.cols.estimate}</TableHead>
-                <TableHead>{t.cols.stockout}</TableHead>
-                <TableHead>{t.cols.confidence}</TableHead>
-                <TableHead>{t.cols.status}</TableHead>
+                <SortHead label={t.cols.product} dir={tableSort.dirOf('product')} onClick={() => tableSort.toggle('product')} />
+                <SortHead label={t.cols.lastCount} dir={tableSort.dirOf('lastCount')} onClick={() => tableSort.toggle('lastCount')} />
+                <SortHead label={t.cols.countQty} dir={tableSort.dirOf('countQty')} onClick={() => tableSort.toggle('countQty')} className="text-right" />
+                <SortHead label={t.cols.inbound} dir={tableSort.dirOf('inbound')} onClick={() => tableSort.toggle('inbound')} className="text-right" />
+                <SortHead label={t.cols.dailyUsage} dir={tableSort.dirOf('dailyUsage')} onClick={() => tableSort.toggle('dailyUsage')} className="text-right" />
+                <SortHead label={t.cols.estimate} dir={tableSort.dirOf('estimate')} onClick={() => tableSort.toggle('estimate')} className="text-right" />
+                <SortHead label={t.cols.stockout} dir={tableSort.dirOf('stockout')} onClick={() => tableSort.toggle('stockout')} />
+                <SortHead label={t.cols.confidence} dir={tableSort.dirOf('confidence')} onClick={() => tableSort.toggle('confidence')} />
+                <SortHead label={t.cols.status} dir={tableSort.dirOf('status')} onClick={() => tableSort.toggle('status')} />
               </TableRow>
             </TableHeader>
             <TableBody>

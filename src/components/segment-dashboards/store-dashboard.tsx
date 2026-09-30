@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel, SegmentDashboardHeader, SegmentEmptyState, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { WeeklySalesChart } from '@/components/segment-dashboards/weekly-sales-chart';
 import { CoverageBar, CoverageStatusBadge, remainingText, remainingUnitsText } from '@/components/segment-dashboards/coverage-parts';
@@ -14,7 +14,22 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
 import { usePaged } from '@/lib/use-paged';
+import { SortHead, useColumnSort, type SortValue } from '@/components/ui/sort-head';
 import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-select';
+
+const STATUS_RANK: Record<StoreCoverageRow['analysis']['status'], number> = { order_needed: 0, check_needed: 1, needs_coverage: 2, ok: 3, no_orders: 4, dormant: 5 };
+
+/** 품목별 발주 현황 표의 열별 정렬 값. 상태는 급한 순(발주 필요 → 확인 필요 → …)이 오름차순, '확인 시점'은 지금 확인할 품목이 가장 앞이다. */
+const STORE_SORT: Record<'item' | 'lastOrder' | 'coverage' | 'sales' | 'progress' | 'left' | 'checkDate' | 'status', (r: StoreCoverageRow) => SortValue> = {
+  item: (r) => r.name,
+  lastOrder: (r) => r.analysis.lastOrder?.date ?? null,
+  coverage: (r) => r.analysis.estimate.amount,
+  sales: (r) => (r.analysis.lastOrder ? r.analysis.consumedSales : null),
+  progress: (r) => r.analysis.progress,
+  left: (r) => r.analysis.estimatedRemainingUnits,
+  checkDate: (r) => (r.analysis.status === 'order_needed' || r.analysis.status === 'check_needed' ? '0000-00-00' : r.analysis.status === 'ok' ? r.analysis.expectedCheckDate : null),
+  status: (r) => STATUS_RANK[r.analysis.status],
+};
 
 function qty(value: number, unit: string, template: string) {
   return format(template, { qty: Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1), unit });
@@ -41,7 +56,8 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
   const checklist = rows.filter((r) => ['order_needed', 'check_needed', 'needs_coverage'].includes(r.analysis.status));
   const checklistPaged = usePaged(checklist);
   const [tablePageSize, setTablePageSize] = useState<number>(WIDE_PAGE_SIZES[0]);
-  const tablePaged = usePaged(rows, String(tablePageSize), tablePageSize);
+  const tableSort = useColumnSort(rows, STORE_SORT);
+  const tablePaged = usePaged(tableSort.sorted, `${tablePageSize}|${tableSort.sortKey}`, tablePageSize);
 
   const header = (
     <SegmentDashboardHeader
@@ -149,14 +165,14 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t.cols.item}</TableHead>
-                <TableHead>{t.cols.lastOrder}</TableHead>
-                <TableHead className="text-right">{t.cols.coverage}</TableHead>
-                <TableHead className="text-right">{t.cols.sales}</TableHead>
-                <TableHead className="min-w-40">{t.cols.progress}</TableHead>
-                <TableHead>{t.cols.left}</TableHead>
-                <TableHead>{t.cols.checkDate}</TableHead>
-                <TableHead>{t.cols.status}</TableHead>
+                <SortHead label={t.cols.item} dir={tableSort.dirOf('item')} onClick={() => tableSort.toggle('item')} />
+                <SortHead label={t.cols.lastOrder} dir={tableSort.dirOf('lastOrder')} onClick={() => tableSort.toggle('lastOrder')} />
+                <SortHead label={t.cols.coverage} dir={tableSort.dirOf('coverage')} onClick={() => tableSort.toggle('coverage')} className="text-right" />
+                <SortHead label={t.cols.sales} dir={tableSort.dirOf('sales')} onClick={() => tableSort.toggle('sales')} className="text-right" />
+                <SortHead label={t.cols.progress} dir={tableSort.dirOf('progress')} onClick={() => tableSort.toggle('progress')} className="min-w-40" />
+                <SortHead label={t.cols.left} dir={tableSort.dirOf('left')} onClick={() => tableSort.toggle('left')} />
+                <SortHead label={t.cols.checkDate} dir={tableSort.dirOf('checkDate')} onClick={() => tableSort.toggle('checkDate')} />
+                <SortHead label={t.cols.status} dir={tableSort.dirOf('status')} onClick={() => tableSort.toggle('status')} />
               </TableRow>
             </TableHeader>
             <TableBody>
