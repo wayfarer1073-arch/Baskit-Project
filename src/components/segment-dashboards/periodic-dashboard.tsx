@@ -19,6 +19,7 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
 import { usePaged } from '@/lib/use-paged';
+import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-select';
 
 interface PeriodicDashboardProps {
   asOfDate: string;
@@ -65,7 +66,8 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
   }, [rows, query, warehouseId, recountOnly]);
 
   const queuePaged = usePaged(recountQueue);
-  const tablePaged = usePaged(filtered, `${query}|${warehouseId}|${recountOnly}`);
+  const [tablePageSize, setTablePageSize] = useState<number>(WIDE_PAGE_SIZES[0]);
+  const tablePaged = usePaged(filtered, `${query}|${warehouseId}|${recountOnly}|${tablePageSize}`, tablePageSize);
 
   const header = (
     <SegmentDashboardHeader
@@ -253,8 +255,9 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
             </TableBody>
           </Table>
           {filtered.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted-foreground">{t.noMatch}</p>}
-          {tablePaged.totalPages > 1 && (
-            <div className="border-t border-border px-5 py-2.5">
+          {filtered.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border px-5 py-2.5">
+              <PageSizeSelect value={tablePageSize} onChange={setTablePageSize} />
               <Pagination page={tablePaged.page} totalPages={tablePaged.totalPages} onChange={tablePaged.setPage} />
             </div>
           )}

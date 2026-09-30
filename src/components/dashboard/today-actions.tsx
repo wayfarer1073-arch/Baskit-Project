@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Pagination } from '@/components/ui/pagination';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-select';
 import { usePaged } from '@/lib/use-paged';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
@@ -79,14 +79,13 @@ function subscribeOpen(listener: () => void) {
 }
 
 const KIND_ORDER: TodayActionKind[] = ['order_now', 'order_soon', 'check_data', 'expiration', 'reduce'];
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 /** 홈 최상단 — 오늘 해야 할 일을 급한 순서로. 그래프·KPI보다 먼저 본다. 유형 태그로 거르고 10/20/50/100개씩 본다. */
 export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; onSelect: (skuId: string) => void }) {
   const { m } = useI18n();
   const t = m.today;
   const [kind, setKind] = useState<TodayActionKind | 'all'>('all');
-  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [pageSize, setPageSize] = useState<number>(WIDE_PAGE_SIZES[0]);
   const open = useSyncExternalStore(subscribeOpen, readOpen, () => true);
   const counts = useMemo(() => {
     const map = new Map<TodayActionKind, number>();
@@ -180,21 +179,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
             ))}
           </ul>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border px-5 py-2.5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span id="today-page-size">{t.pageSize}</span>
-              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                <SelectTrigger className="h-8 w-[84px] text-xs" aria-labelledby="today-page-size">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {format(t.pageSizeOption, { count: n })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <PageSizeSelect value={pageSize} onChange={setPageSize} />
             <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </div>
         </div>

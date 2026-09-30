@@ -161,6 +161,8 @@ export const ko = {
   },
   ui: {
     pagination: '페이지 내비게이션',
+    rowsPerPage: '페이지당 행수',
+    rowsOption: '{count}개',
     close: '닫기',
     moreInfo: '자세히 보기',
     loading: '불러오는 중…',
@@ -329,6 +331,8 @@ export const en: Dictionary<typeof ko> = {
   },
   ui: {
     pagination: 'Pagination',
+    rowsPerPage: 'Rows per page',
+    rowsOption: '{count}',
     close: 'Close',
     moreInfo: 'More info',
     loading: 'Loading…',

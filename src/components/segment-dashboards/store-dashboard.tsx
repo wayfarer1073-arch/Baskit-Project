@@ -14,6 +14,7 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Pagination } from '@/components/ui/pagination';
 import { usePaged } from '@/lib/use-paged';
+import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-select';
 
 function qty(value: number, unit: string, template: string) {
   return format(template, { qty: Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1), unit });
@@ -39,7 +40,8 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const checklist = rows.filter((r) => ['order_needed', 'check_needed', 'needs_coverage'].includes(r.analysis.status));
   const checklistPaged = usePaged(checklist);
-  const tablePaged = usePaged(rows);
+  const [tablePageSize, setTablePageSize] = useState<number>(WIDE_PAGE_SIZES[0]);
+  const tablePaged = usePaged(rows, String(tablePageSize), tablePageSize);
 
   const header = (
     <SegmentDashboardHeader
@@ -203,7 +205,10 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
             </TableBody>
           </Table>
         </div>
-        <Pagination className="border-t border-border px-5 py-2.5" page={tablePaged.page} totalPages={tablePaged.totalPages} onChange={tablePaged.setPage} />
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border px-5 py-2.5">
+          <PageSizeSelect value={tablePageSize} onChange={setTablePageSize} />
+          <Pagination page={tablePaged.page} totalPages={tablePaged.totalPages} onChange={tablePaged.setPage} />
+        </div>
       </SectionPanel>
 
       <StoreItemSheet itemId={openItemId} asOfDate={asOfDate} onOpenChange={(open) => !open && setOpenItemId(null)} />
