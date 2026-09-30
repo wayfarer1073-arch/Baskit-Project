@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ClipboardList } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { SectionPanel, SegmentDashboardHeader, SegmentEmptyState, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
+import { SectionPanel, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
+import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
+import { StoreRangePanel } from '@/components/segment-dashboards/range-panels';
+import type { StoreRangeSummary } from '@/domain/segments/range-compare';
 import { WeeklySalesChart } from '@/components/segment-dashboards/weekly-sales-chart';
 import { CoverageBar, CoverageStatusBadge, remainingText, remainingUnitsText } from '@/components/segment-dashboards/coverage-parts';
 import { StoreItemSheet } from '@/components/segment-dashboards/store-item-sheet';
@@ -30,7 +32,8 @@ const STORE_SORT: Record<'item' | 'lastOrder' | 'coverage' | 'sales' | 'progress
   sales: (r) => (r.analysis.lastOrder ? r.analysis.consumedSales : null),
   progress: (r) => r.analysis.progress,
   left: (r) => r.analysis.estimatedRemainingUnits,
-  checkDate: (r) => (r.analysis.status === 'order_needed' || r.analysis.status === 'check_needed' ? '0000-00-00' : r.analysis.status === 'ok' ? r.analysis.expectedCheckDate : null),
+  checkDate: (r) =>
+    r.analysis.status === 'order_needed' || r.analysis.status === 'check_needed' ? '0000-00-00' : r.analysis.status === 'ok' ? r.analysis.expectedCheckDate : null,
   status: (r) => STATUS_RANK[r.analysis.status],
 };
 
@@ -129,9 +132,12 @@ function daysBetween(from: string, to: string) {
 
 interface StoreDashboardProps extends StoreDashboardData {
   asOfDate: string;
+  /** 기간 비교의 시작일. 날짜 하나만 보면 null. */
+  fromDate: string | null;
+  rangeSummary: StoreRangeSummary | null;
 }
 
-export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRemainingPct }: StoreDashboardProps) {
+export function StoreDashboard({ asOfDate, fromDate, rangeSummary, rows, sales, lastSalesDate, checkRemainingPct }: StoreDashboardProps) {
   const { m, locale } = useI18n();
   const t = m.store.dashboard;
   const [openItemId, setOpenItemId] = useState<string | null>(null);
@@ -142,31 +148,21 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
   const tablePaged = usePaged(tableSort.sorted, `${tablePageSize}|${tableSort.sortKey}`, tablePageSize);
 
   const header = (
-    <SegmentDashboardHeader
-      title={t.title}
-      description={format(t.description, { date: asOfDate })}
-      action={
-        <Link
-          href="/store/records"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-accent px-3.5 py-2 text-sm font-medium text-brand-accent-foreground transition-opacity hover:opacity-90"
-        >
-          <ClipboardList className="size-4" aria-hidden="true" />
-          {t.records}
-        </Link>
-      }
+    <DashboardMasthead
+      segment="ORDER_CYCLE"
+      title={m.dashboard.title}
+      segmentLabel={m.segments.ORDER_CYCLE.label}
+      description={fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
+      asOfDate={asOfDate}
+      fromDate={fromDate}
     />
   );
 
   if (rows.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-7">
         {header}
-        <SegmentEmptyState
-          title={t.emptyTitle}
-          description={t.emptyBody}
-          href="/settings?tab=store"
-          cta={t.emptyCta}
-        />
+        <DashboardEmptyState title={t.emptyTitle} body={t.emptyBody} href="/settings?tab=store" cta={t.emptyCta} />
       </div>
     );
   }
@@ -193,13 +189,16 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
         </div>
       )}
 
-      <SummaryPanel
-        title={t.summaryTitle}
-        tooltip={format(t.summaryTip, { pct: checkRemainingPct })}
-        footer={t.summaryFooter}
-      >
+      {rangeSummary && <StoreRangePanel summary={rangeSummary} onSelectItem={setOpenItemId} />}
+
+      <SummaryPanel title={t.summaryTitle} tooltip={format(t.summaryTip, { pct: checkRemainingPct })} footer={t.summaryFooter}>
         <SummaryMetric label={t.needed} value={format(t.count, { count: needed })} emphasis={needed ? 'danger' : undefined} detail={t.neededDetail} />
-        <SummaryMetric label={t.check} value={format(t.count, { count: check })} emphasis={check ? 'warning' : undefined} detail={format(t.checkDetail, { pct: checkRemainingPct })} />
+        <SummaryMetric
+          label={t.check}
+          value={format(t.count, { count: check })}
+          emphasis={check ? 'warning' : undefined}
+          detail={format(t.checkDetail, { pct: checkRemainingPct })}
+        />
         <SummaryMetric
           label={t.trend}
           value={growthLabel(sales.growthRate, t.notComparable)}

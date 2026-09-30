@@ -1,15 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ClipboardCheck, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
-import { SectionPanel, SegmentDashboardHeader, SegmentEmptyState, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
+import { SectionPanel, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
+import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
+import { PeriodicRangePanel } from '@/components/segment-dashboards/range-panels';
+import type { PeriodicRangeSummary } from '@/domain/segments/range-compare';
 import { compareRecountUrgency, type PeriodicStatus } from '@/domain/segments/periodic-count';
 import { STATUS_VARIANT, recountReasonText } from '@/components/segment-dashboards/periodic-parts';
 import { PeriodicSkuSheet } from '@/components/segment-dashboards/periodic-sku-sheet';
@@ -24,6 +26,9 @@ import { PageSizeSelect, WIDE_PAGE_SIZES } from '@/components/ui/page-size-selec
 
 interface PeriodicDashboardProps {
   asOfDate: string;
+  /** 기간 비교의 시작일. 날짜 하나만 보면 null. */
+  fromDate: string | null;
+  rangeSummary: PeriodicRangeSummary | null;
   stockoutSoonDays: number;
   recountDays: number;
   rows: PeriodicRow[];
@@ -50,7 +55,7 @@ function quantity(value: number | null) {
   return value === null ? '—' : `${formatNumber(value)}`;
 }
 
-export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, rows, warehouses }: PeriodicDashboardProps) {
+export function PeriodicDashboard({ asOfDate, fromDate, rangeSummary, stockoutSoonDays, recountDays, rows, warehouses }: PeriodicDashboardProps) {
   const { m } = useI18n();
   const t = m.periodic.dashboard;
   const [query, setQuery] = useState('');
@@ -65,13 +70,7 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
     return { out: count('estimated_out'), soon: count('soon'), unknown: count('unknown'), recount, avgDays };
   }, [rows]);
 
-  const recountQueue = useMemo(
-    () =>
-      rows
-        .filter((r) => r.estimate.recountReasons.length > 0)
-        .sort((a, b) => compareRecountUrgency(a.estimate, b.estimate)),
-    [rows],
-  );
+  const recountQueue = useMemo(() => rows.filter((r) => r.estimate.recountReasons.length > 0).sort((a, b) => compareRecountUrgency(a.estimate, b.estimate)), [rows]);
 
   const filtered = useMemo(() => {
     const q = query.replace(/\s+/g, '').toLowerCase();
@@ -88,31 +87,21 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
   const tablePaged = usePaged(tableSort.sorted, `${query}|${warehouseId}|${recountOnly}|${tablePageSize}|${tableSort.sortKey}`, tablePageSize);
 
   const header = (
-    <SegmentDashboardHeader
-      title={t.title}
-      description={format(t.description, { date: asOfDate })}
-      action={
-        <Link
-          href="/count"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-accent px-3.5 py-2 text-sm font-medium text-brand-accent-foreground transition-opacity hover:opacity-90"
-        >
-          <ClipboardCheck className="size-4" aria-hidden="true" />
-          {t.enterCount}
-        </Link>
-      }
+    <DashboardMasthead
+      segment="PERIODIC_COUNT"
+      title={m.dashboard.title}
+      segmentLabel={m.segments.PERIODIC_COUNT.label}
+      description={fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
+      asOfDate={asOfDate}
+      fromDate={fromDate}
     />
   );
 
   if (rows.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-7">
         {header}
-        <SegmentEmptyState
-          title={t.emptyTitle}
-          description={t.emptyBody}
-          href="/count"
-          cta={t.emptyCta}
-        />
+        <DashboardEmptyState title={t.emptyTitle} body={t.emptyBody} href={`/upload?date=${asOfDate}&mode=PERIODIC_COUNT`} cta={m.dashboard.goUpload} />
       </div>
     );
   }
@@ -121,13 +110,16 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
     <div className="space-y-6">
       {header}
 
-      <SummaryPanel
-        title={t.summaryTitle}
-        tooltip={format(t.summaryTip, { days: recountDays })}
-        footer={t.summaryFooter}
-      >
+      {rangeSummary && <PeriodicRangePanel summary={rangeSummary} onSelectSku={setOpenSkuId} />}
+
+      <SummaryPanel title={t.summaryTitle} tooltip={format(t.summaryTip, { days: recountDays })} footer={t.summaryFooter}>
         <SummaryMetric label={t.out} value={format(t.count, { count: summary.out })} emphasis={summary.out ? 'danger' : undefined} detail={t.outDetail} />
-        <SummaryMetric label={t.soon} value={format(t.count, { count: summary.soon })} emphasis={summary.soon ? 'warning' : undefined} detail={format(t.soonDetail, { days: stockoutSoonDays })} />
+        <SummaryMetric
+          label={t.soon}
+          value={format(t.count, { count: summary.soon })}
+          emphasis={summary.soon ? 'warning' : undefined}
+          detail={format(t.soonDetail, { days: stockoutSoonDays })}
+        />
         <SummaryMetric label={t.recount} value={format(t.count, { count: summary.recount })} detail={format(t.recountDetail, { days: recountDays })} />
         <SummaryMetric label={t.avgDays} value={format(t.avgDaysValue, { days: Math.round(summary.avgDays) })} detail={format(t.tracked, { count: rows.length })} />
       </SummaryPanel>
@@ -257,7 +249,9 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">
                     {r.estimate.lastCountDate}
-                    <span className="ml-1.5 text-xs text-muted-foreground">{r.estimate.daysSinceCount === 0 ? t.today : format(t.daysAgo, { days: r.estimate.daysSinceCount })}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {r.estimate.daysSinceCount === 0 ? t.today : format(t.daysAgo, { days: r.estimate.daysSinceCount })}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatNumber(r.estimate.lastCountQuantity)}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.estimate.inboundSinceCount ? `+${formatNumber(r.estimate.inboundSinceCount)}` : '—'}</TableCell>

@@ -3,6 +3,7 @@ import { analyzeCoverage, compareCoverageUrgency, summarizeSales, type CoverageO
 import type { StoreDashboardData, StoreItemDetail, StoreItemLearning } from '@/domain/segments/read-model';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
 import { storeExpiration } from '@/domain/segments/store-expiration';
+import { compareStoreRange, rangeDays, type StoreRangeSummary } from '@/domain/segments/range-compare';
 import { findStoreWarehouse, getStoreItemExtras, listDailySales, listRecentOrders, listStoreItemsWithOrders } from '@/server/repositories/store-repository';
 
 /** 학습(발주 사이 매출)과 최근 평균 매출에는 최근 1년치 매출이면 충분하다. */
@@ -32,6 +33,18 @@ export async function getStoreDashboard(orgId: string, asOfDate: string): Promis
     }))
     .sort((a, b) => compareCoverageUrgency(a.analysis, b.analysis) || a.name.localeCompare(b.name));
   return { rows, sales: summarizeSales(sales, asOfDate), lastSalesDate: sales.at(-1)?.date ?? null, checkRemainingPct: options.checkRemainingPct };
+}
+
+/** 대시보드 '기간 비교' — 기간 매출(직전 같은 길이 기간과 비교)과 기간 중 발주. */
+export async function getStoreRangeSummary(orgId: string, from: string, to: string): Promise<StoreRangeSummary> {
+  const previousFrom = format(addDays(parseISO(from), -rangeDays(from, to)), 'yyyy-MM-dd');
+  const [items, sales] = await Promise.all([listStoreItemsWithOrders(orgId, to), listDailySales(orgId, previousFrom)]);
+  return compareStoreRange(
+    items,
+    sales.filter((s) => s.date <= to),
+    from,
+    to,
+  );
 }
 
 export async function getStoreItemDetail(orgId: string, itemId: string, asOfDate: string): Promise<StoreItemDetail | null> {

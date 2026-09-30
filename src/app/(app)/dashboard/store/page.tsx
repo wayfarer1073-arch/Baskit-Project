@@ -1,15 +1,18 @@
 import { requireTenant } from '@/server/tenant';
-import { getStoreDashboard } from '@/server/services/store-service';
+import { getStoreDashboard, getStoreRangeSummary } from '@/server/services/store-service';
 import { StoreDashboard } from '@/components/segment-dashboards/store-dashboard';
-import { isDateString, todayKstDateString } from '@/lib/date';
+import { todayKstDateString } from '@/lib/date';
+import { parseDashboardRange } from '@/lib/dashboard-range';
 import { requireEnabledSegment } from '@/server/segments';
 
 export default async function StoreDashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
-  const today = todayKstDateString();
-  const asOfDate = isDateString(params.date) && params.date <= today ? params.date : today;
+  const { asOfDate, fromDate } = parseDashboardRange(params, todayKstDateString());
   const tenant = await requireTenant();
   await requireEnabledSegment(tenant.orgId, 'ORDER_CYCLE');
-  const data = await getStoreDashboard(tenant.orgId, asOfDate);
-  return <StoreDashboard asOfDate={asOfDate} {...data} />;
+  const [data, rangeSummary] = await Promise.all([
+    getStoreDashboard(tenant.orgId, asOfDate),
+    fromDate ? getStoreRangeSummary(tenant.orgId, fromDate, asOfDate) : Promise.resolve(null),
+  ]);
+  return <StoreDashboard asOfDate={asOfDate} fromDate={fromDate} rangeSummary={rangeSummary} {...data} />;
 }

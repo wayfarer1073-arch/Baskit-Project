@@ -58,13 +58,16 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
   const isYesterday = mode === 'day' && day === yesterday;
 
   return (
-    <div className="flex flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:justify-end">
+    <div className="flex shrink-0 flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:justify-end">
       <div className="inline-flex items-center gap-1 rounded-md p-0.5 text-xs" aria-label={t.quickPick}>
         <button
           type="button"
           onClick={() => goToDay(maxDate)}
           disabled={pending}
-          className={cn('rounded px-2.5 py-1 font-medium transition-colors', isToday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+          className={cn(
+            'whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors',
+            isToday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+          )}
         >
           {t.today}
         </button>
@@ -72,7 +75,10 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
           type="button"
           onClick={() => goToDay(yesterday)}
           disabled={pending}
-          className={cn('rounded px-2.5 py-1 font-medium transition-colors', isYesterday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+          className={cn(
+            'whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors',
+            isYesterday ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+          )}
         >
           {t.yesterday}
         </button>
@@ -82,26 +88,52 @@ export function DateRangeControl({ asOfDate, fromDate, maxDate }: DateRangeContr
         <button
           type="button"
           onClick={() => setMode('day')}
-          className={cn('rounded px-2.5 py-1 font-medium transition-colors', mode === 'day' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+          className={cn(
+            'whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors',
+            mode === 'day' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+          )}
         >
           {t.day}
         </button>
         <button
           type="button"
           onClick={() => setMode('range')}
-          className={cn('rounded px-2.5 py-1 font-medium transition-colors', mode === 'range' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground')}
+          className={cn(
+            'whitespace-nowrap rounded px-2.5 py-1 font-medium transition-colors',
+            mode === 'range' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+          )}
         >
           {t.range}
         </button>
       </div>
 
       {mode === 'day' ? (
-        <input type="date" value={day} max={maxDate} onChange={(event) => setDay(event.target.value)} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        <input
+          type="date"
+          value={day}
+          max={maxDate}
+          onChange={(event) => setDay(event.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
       ) : (
         <div className="flex items-center gap-1.5">
-          <input type="date" value={start} max={maxDate} onChange={(event) => setStart(event.target.value)} aria-label={t.rangeStart} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          <input
+            type="date"
+            value={start}
+            max={maxDate}
+            onChange={(event) => setStart(event.target.value)}
+            aria-label={t.rangeStart}
+            className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
           <MoveRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <input type="date" value={end} max={maxDate} onChange={(event) => setEnd(event.target.value)} aria-label={t.rangeEnd} className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          <input
+            type="date"
+            value={end}
+            max={maxDate}
+            onChange={(event) => setEnd(event.target.value)}
+            aria-label={t.rangeEnd}
+            className="h-8 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
         </div>
       )}
 

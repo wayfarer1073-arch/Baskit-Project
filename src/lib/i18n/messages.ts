@@ -134,7 +134,8 @@ const baseKo = {
     zeroStockPast: '어느 쪽이든 재고가 남아 있던 이전 날짜로 조회하면 평소처럼 보여요.',
     chooseColumn: '열 선택',
     columnsTitle: '읽을 열 고르기',
-    columnsHint: '체크한 항목만 파일에서 읽어요. 값이 적힌 열은 자동으로 체크되고, 한 건도 없는 열은 해제돼요. 값이 있어도 읽지 않으려면 체크를 해제하세요. 상품명·정상재고는 꼭 필요해요.',
+    columnsHint:
+      '체크한 항목만 파일에서 읽어요. 값이 적힌 열은 자동으로 체크되고, 한 건도 없는 열은 해제돼요. 값이 있어도 읽지 않으려면 체크를 해제하세요. 상품명·정상재고는 꼭 필요해요.',
     emptyColumn: '파일의 ‘{column}’ 열에 값이 없어 체크를 해제했어요.',
     templateNameHint: '이름을 붙여 저장하면 설정 > 공통 > 업로드 양식에서 확인할 수 있고, 같은 양식의 파일은 자동으로 적용돼요.',
     required: '필수',
@@ -166,7 +167,8 @@ const baseKo = {
   },
   templates: {
     title: '업로드 양식',
-    description: '일일 재고 연동·비정기 실사 엑셀에 함께 쓰여요. 업로드 화면의 “양식 설정”에서 읽을 열을 고르고 이름을 붙여 저장하면, 같은 양식의 파일은 자동으로 읽어요. 이름을 누르면 구성이 보여요.',
+    description:
+      '일일 재고 연동·비정기 실사 엑셀에 함께 쓰여요. 업로드 화면의 “양식 설정”에서 읽을 열을 고르고 이름을 붙여 저장하면, 같은 양식의 파일은 자동으로 읽어요. 이름을 누르면 구성이 보여요.',
     empty: '아직 저장된 양식이 없어요. 업로드 화면에서 양식을 설정하고 이름을 붙여 저장하면 여기에 보여요.',
     columnCount: '읽는 열 {count}개',
     fromColumn: '‘{column}’ 열',
@@ -352,7 +354,8 @@ const baseKo = {
   },
   costs: {
     title: '원가 관리',
-    description: '원가가 한 번이라도 등록된 품목이에요. 재고 파일에 원가 열이 없거나 칸이 비면 최근 등록 원가를 쓰고, 한 번도 없으면 0원으로 계산해요. 여기서 직접 정하거나 지울 수 있어요(과거 날짜의 금액은 바뀌지 않아요).',
+    description:
+      '원가가 한 번이라도 등록된 품목이에요. 재고 파일에 원가 열이 없거나 칸이 비면 최근 등록 원가를 쓰고, 한 번도 없으면 0원으로 계산해요. 여기서 직접 정하거나 지울 수 있어요(과거 날짜의 금액은 바뀌지 않아요).',
     empty: '아직 원가가 등록된 품목이 없어요.',
     source: { FILE: '파일', MANUAL: '직접 입력' },
     warehouse: '창고',
@@ -412,7 +415,8 @@ const baseKo = {
     openDashboard: '대시보드 열기',
     holidayUpload: {
       title: '휴무일 업로드',
-      description: '켜면 주말·등록 휴무일에도 재고 파일 업로드와 실사 입력(일일 재고 연동·비정기 실사)을 받고, 자료가 들어온 휴무일은 영업일로 계산해요. 꺼도 이미 들어온 휴무일 자료는 그대로 계산에 반영돼요. 매장 매출·발주 기록은 주말에도 영업하는 경우가 많아 이 설정과 관계없이 받아요.',
+      description:
+        '켜면 주말·등록 휴무일에도 재고 파일 업로드와 실사 입력(일일 재고 연동·비정기 실사)을 받고, 자료가 들어온 휴무일은 영업일로 계산해요. 꺼도 이미 들어온 휴무일 자료는 그대로 계산에 반영돼요. 매장 매출·발주 기록은 주말에도 영업하는 경우가 많아 이 설정과 관계없이 받아요.',
       label: '휴무일에도 업로드 받기',
       on: '휴무일 업로드를 켰어요.',
       off: '휴무일 업로드를 껐어요. 이미 올라온 휴무일 자료는 그대로 반영돼요.',
@@ -547,13 +551,15 @@ const baseEn: Dictionary<typeof baseKo> = {
     settingsButton: 'File layout',
     zeroStock: 'Treat items with 0 stock as sold out?',
     zeroStockYes: 'Yes — sold out',
-    zeroStockYesHint: 'For one month from the day they hit 0 they stay in the stock table with a sold-out badge and appear in the sold-out list (click to see the trend before selling out). They are left out of stock totals.',
+    zeroStockYesHint:
+      'For one month from the day they hit 0 they stay in the stock table with a sold-out badge and appear in the sold-out list (click to see the trend before selling out). They are left out of stock totals.',
     zeroStockNo: 'No — stop managing them',
     zeroStockNoHint: 'They are treated as items you no longer manage, not as sold out, and disappear from the dashboard from that day.',
     zeroStockPast: 'Either way, looking up an earlier date when the item still had stock shows it as usual.',
     chooseColumn: 'Choose a column',
     columnsTitle: 'Columns to read',
-    columnsHint: 'Only checked items are read from the file. Columns with values are checked automatically and empty ones are unchecked. Uncheck a column to skip it even when it has values. Product name and on-hand stock are required.',
+    columnsHint:
+      'Only checked items are read from the file. Columns with values are checked automatically and empty ones are unchecked. Uncheck a column to skip it even when it has values. Product name and on-hand stock are required.',
     emptyColumn: 'The ‘{column}’ column in this file is empty, so it was unchecked.',
     templateNameHint: 'Name and save it to see it under Settings > General > Upload layouts; files with the same layout will use it automatically.',
     required: 'Required',
@@ -581,7 +587,8 @@ const baseEn: Dictionary<typeof baseKo> = {
     unitPLT: 'Pallets — converted with units per pallet',
     newCodes: '{count} new product codes: {codes}',
     missingTitle: 'Some existing SKUs aren’t in this Excel file.',
-    missingBody: 'If you upload it as is, the {count} SKUs below will be treated as sold out. If they were left out by mistake, fix the file or enter their quantities under Enter directly after uploading.',
+    missingBody:
+      'If you upload it as is, the {count} SKUs below will be treated as sold out. If they were left out by mistake, fix the file or enter their quantities under Enter directly after uploading.',
   },
   templates: {
     title: 'Upload layouts',
@@ -779,7 +786,8 @@ const baseEn: Dictionary<typeof baseKo> = {
   },
   costs: {
     title: 'Unit costs',
-    description: 'Items that have had a cost at least once. When a stock file has no cost column or a blank cell, the latest registered cost is used, or 0 if there has never been one. You can set or remove costs here (amounts for past dates do not change).',
+    description:
+      'Items that have had a cost at least once. When a stock file has no cost column or a blank cell, the latest registered cost is used, or 0 if there has never been one. You can set or remove costs here (amounts for past dates do not change).',
     empty: 'No items have a cost yet.',
     source: { FILE: 'File', MANUAL: 'Entered' },
     warehouse: 'Warehouse',
@@ -798,7 +806,8 @@ const baseEn: Dictionary<typeof baseKo> = {
   },
   mergeLinks: {
     title: 'Same item across warehouses',
-    description: 'Items with the same product code are combined automatically in “Combine warehouses” on the dashboard. Link items here only when the same item has different codes in different warehouses.',
+    description:
+      'Items with the same product code are combined automatically in “Combine warehouses” on the dashboard. Link items here only when the same item has different codes in different warehouses.',
     empty: 'No manual links yet.',
     groupLabel: 'Group {key}',
     warehouse: 'Warehouse',

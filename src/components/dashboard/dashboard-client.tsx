@@ -22,8 +22,7 @@ import type { InventoryRow } from '@/domain/inventory/read-model';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { QuickFilter, TableTab } from '@/lib/inventory-filters';
-import { DateRangeControl } from '@/components/dashboard/date-range-control';
-import { todayKstDateString } from '@/lib/date';
+import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { cn } from '@/lib/utils';
 import { MergedInventoryTable } from '@/components/inventory-table/merged-inventory-table';
@@ -49,7 +48,19 @@ interface DashboardClientProps {
   specialSchedules: Record<string, SpecialSchedule>;
 }
 
-export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows, dailyTotals, latestUploads, isAdmin, holidays, favoriteSkuIds, specialSchedules }: DashboardClientProps) {
+export function DashboardClient({
+  asOfDate,
+  fromDate,
+  warehouses,
+  settings,
+  rows,
+  dailyTotals,
+  latestUploads,
+  isAdmin,
+  holidays,
+  favoriteSkuIds,
+  specialSchedules,
+}: DashboardClientProps) {
   const [warehouseFilter, setWarehouseFilter] = useState<string | 'ALL'>('ALL');
   const [tableTab, setTableTab] = useState<TableTab>('ALL');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
@@ -98,47 +109,29 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
     document.getElementById('inventory-table-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  const masthead = (
+    <DashboardMasthead
+      segment="DAILY_SYNC"
+      title={m.dashboard.title}
+      segmentLabel={m.segments.DAILY_SYNC.label}
+      description={fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
+      asOfDate={asOfDate}
+      fromDate={fromDate}
+    />
+  );
+
   if (rows.length === 0) {
     return (
       <div className="space-y-7">
-        <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">{m.dashboard.title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{format(m.dashboard.asOf, { date: asOfDate })}</p>
-          </div>
-          <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
-        </div>
-        <div className="flex items-center justify-center py-12">
-          <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-dashed bg-card p-10 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-              <UploadCloud className="size-6 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">{m.dashboard.emptyTitle}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{m.dashboard.emptyBody}</p>
-            </div>
-            <Button asChild>
-              <Link href="/upload">
-                <UploadCloud className="size-4" /> {m.dashboard.goUpload}
-              </Link>
-            </Button>
-          </div>
-        </div>
+        {masthead}
+        <DashboardEmptyState title={m.dashboard.emptyTitle} body={m.dashboard.emptyBody} href={`/upload?date=${asOfDate}&mode=DAILY_SYNC`} cta={m.dashboard.goUpload} />
       </div>
     );
   }
 
   return (
     <div className="space-y-9">
-      <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-tight sm:text-[32px]">{m.dashboard.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
-          </p>
-        </div>
-        <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
-      </div>
+      {masthead}
       <TodayActions actions={todayActions} onSelect={setSelectedSkuId} />
       <KpiCards kpis={kpis} fromDate={fromDate} asOfDate={asOfDate} onOpenSoldOutList={() => setSoldOutPanelOpen(true)} />
       <OperatingSummary rows={rows} />
