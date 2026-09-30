@@ -1,8 +1,9 @@
 import * as XLSX from 'xlsx';
 import { bufferToAoa, normalizeHeaderCell, normalizeString, readWorkbook } from './aoa-reader';
 import { decodeTextTable } from './text-encoding';
+import { splitDataRows } from './example-rows';
 import { HEADER_ALIASES } from './types';
-import { LAYOUT_FIELDS, type ImportLayout, type LayoutField, type MatchConfidence } from './layout-types';
+import { LAYOUT_FIELDS, REQUIRED_LAYOUT_FIELDS, type ImportLayout, type LayoutField, type MatchConfidence } from './layout-types';
 
 export * from './layout-types';
 
@@ -163,4 +164,56 @@ export function resolveColumns(headers: string[], columns: ImportLayout['columns
     else indexes[field] = idx;
   }
   return { indexes, missing };
+}
+
+/** 헤더 아래 데이터 행(빈 행·작성 방법/예시 행 제외)에서 이 열에 값이 하나라도 있는지. */
+function columnHasData(dataRows: string[][], index: number): boolean {
+  return dataRows.some((r) => normalizeString(r[index]) !== '');
+}
+
+/**
+ * 파일에 적힌 값에 맞춰 읽을 열을 고른다(양식 설정의 체크 상태).
+ * - 값이 한 건도 없는 선택 열은 뺀다(자동 체크 해제). 필수 열과 keep에 든 열은 그대로 둔다.
+ * - 사용자가 직접 체크를 해제한 열(값이 null)은 값이 있어도 다시 켜지 않는다.
+ * - 아직 정해지지 않은 열(키 없음)은 헤더를 알아볼 수 있고 값이 있으면 자동으로 켠다.
+ * emptyColumns: 헤더는 알아봤지만 값이 없어 읽지 않는 열 — 화면에서 왜 해제됐는지 알려 준다.
+ */
+export function alignColumnsToData(
+  headers: string[],
+  rowsBelowHeader: string[][],
+  columns: ImportLayout['columns'],
+  keep: LayoutField[] = [],
+): { columns: ImportLayout['columns']; emptyColumns: Partial<Record<LayoutField, string>> } {
+  const { dataRows } = splitDataRows(rowsBelowHeader);
+  const suggested = suggestColumns(headers, dataRows.slice(0, 20)).columns;
+  const indexOf = (header: string) => headers.findIndex((h) => norm(h) === norm(header));
+  const next: ImportLayout['columns'] = { ...columns };
+  const emptyColumns: Partial<Record<LayoutField, string>> = {};
+  const used = new Set(
+    Object.values(columns)
+      .filter((h): h is string => !!h)
+      .map(norm),
+  );
+  for (const field of LAYOUT_FIELDS) {
+    if (REQUIRED_LAYOUT_FIELDS.includes(field)) continue;
+    const current = columns[field];
+    if (current === null) continue;
+    if (current) {
+      const idx = indexOf(current);
+      if (idx !== -1 && !columnHasData(dataRows, idx) && !keep.includes(field)) {
+        delete next[field];
+        emptyColumns[field] = current;
+      }
+      continue;
+    }
+    const header = suggested[field];
+    if (!header || used.has(norm(header))) continue;
+    const idx = indexOf(header);
+    if (idx === -1) continue;
+    if (columnHasData(dataRows, idx)) {
+      next[field] = header;
+      used.add(norm(header));
+    } else emptyColumns[field] = header;
+  }
+  return { columns: next, emptyColumns };
 }

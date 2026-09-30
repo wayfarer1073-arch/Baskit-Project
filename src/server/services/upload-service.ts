@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { autoLayout, parseSheets } from '@/domain/excel/parser';
-import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField, type SheetData } from '@/domain/excel/layout';
+import { alignColumnsToData, readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField, type SheetData } from '@/domain/excel/layout';
 import { SpreadsheetRejectedError } from '@/domain/excel/aoa-reader';
 import { applyCodeAliases, assignAutoCodes, convertStockUnit, markZeroStock } from '@/domain/excel/normalize';
 import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-alias-repository';
@@ -73,13 +73,15 @@ function computeContentSignature(rows: ParsedInventoryRow[]): string {
  * 처음 보는 상품코드도 함께 돌려준다(업로드 뒤 '새 상품' 안내용).
  */
 async function normalizeForWarehouse(warehouseId: string | undefined, rows: ParsedInventoryRow[], layout: ImportLayout) {
-  if (!warehouseId) return { rows: markZeroStock(assignAutoCodes(rows, new Map(), new Set()).rows, layout.zeroStockAsSoldOut), issues: [] as ValidationIssue[], newCodes: [] as string[] };
+  if (!warehouseId)
+    return { rows: markZeroStock(assignAutoCodes(rows, new Map(), new Set()).rows, layout.zeroStockAsSoldOut), issues: [] as ValidationIssue[], newCodes: [] as string[] };
   const [aliasMap, info] = await Promise.all([loadAliasMap(warehouseId), loadWarehouseSkuInfo(warehouseId)]);
   const coded = assignAutoCodes(rows, info.codeByName, info.knownCodes);
   const aliased = applyCodeAliases(coded.rows, aliasMap);
   const converted = convertStockUnit(aliased.rows, layout.stockUnit ?? 'EA', info.factors);
   const issues: ValidationIssue[] = [...converted.issues];
-  if (coded.assigned > 0) issues.push({ level: 'WARNING', code: 'AUTO_CODE_ASSIGNED', message: `상품코드 열이 없어 처음 보는 상품 ${coded.assigned}개에 코드를 자동으로 붙였습니다(A0001 형식).` });
+  if (coded.assigned > 0)
+    issues.push({ level: 'WARNING', code: 'AUTO_CODE_ASSIGNED', message: `상품코드 열이 없어 처음 보는 상품 ${coded.assigned}개에 코드를 자동으로 붙였습니다(A0001 형식).` });
   if (aliased.aliased > 0) issues.push({ level: 'WARNING', code: 'CODE_ALIAS_APPLIED', message: `연결된 상품코드 ${aliased.aliased}개를 기존 상품으로 바꿔 저장합니다.` });
   // 창고에 첫 업로드면 전부 새 상품이라 알릴 필요가 없다.
   const newCodes = info.knownCodes.size === 0 ? [] : converted.rows.filter((r) => !info.knownCodes.has(r.productCode)).map((r) => r.productCode);
@@ -91,6 +93,8 @@ export interface UploadPreview {
   layout: ImportLayout;
   template: { id: string; name: string } | null;
   confidence: Partial<Record<LayoutField, MatchConfidence>>;
+  /** 헤더는 알아봤지만 값이 한 건도 없어 자동으로 읽지 않는 열. */
+  emptyColumns: Partial<Record<LayoutField, string>>;
   /** 헤더 행 고르기용 — 선택한 시트의 위쪽 15행(열은 최대 30개). */
   topRows: string[][];
   headers: string[];
@@ -112,10 +116,29 @@ async function segmentOfWarehouse(warehouseId?: string): Promise<StockSegment> {
 }
 
 /**
+ * 저장된 템플릿을 이 파일에 맞춘다 — 템플릿을 저장할 때 비어 있어 빠졌던 열에 이번엔 값이 있으면 켜고,
+ * 이번 파일에 값이 없는 선택 열은 끈다. 사용자가 직접 해제한 열은 그대로 둔다.
+ * 상품코드는 템플릿대로 둔다(끄면 상품명 기준 자동 코드로 바뀌어 기존 품목과 갈라진다).
+ */
+function fitTemplateToFile(sheets: SheetData[], layout: ImportLayout): ImportLayout {
+  const sheet = (layout.sheetName ? sheets.find((s) => s.name === layout.sheetName) : sheets[0]) ?? null;
+  if (!sheet) return layout;
+  const headers = sheet.aoa[layout.headerRowIndex] ?? [];
+  const { columns } = alignColumnsToData(headers, sheet.aoa.slice(layout.headerRowIndex + 1), layout.columns, ['productCode']);
+  return { ...layout, columns };
+}
+
+/**
  * 파일을 저장하지 않고 양식만 확인한다. 양식을 주지 않으면 저장된 템플릿 → 자동 인식 순으로 정한다.
  * 사용자가 화면에서 시트·헤더 행·열을 바꾸면 그 양식으로 다시 미리보기를 요청한다.
  */
-export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout, warehouseId?: string, snapshotDate?: string): Promise<UploadPreview | { error: string }> {
+export async function previewUpload(
+  orgId: string,
+  fileBuffer: Buffer,
+  layout?: ImportLayout,
+  warehouseId?: string,
+  snapshotDate?: string,
+): Promise<UploadPreview | { error: string }> {
   let sheets: SheetData[];
   try {
     sheets = readSheets(fileBuffer);
@@ -125,23 +148,32 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
   }
   if (sheets.length === 0) return { error: '파일에서 표 데이터를 찾을 수 없습니다.' };
   const template = layout ? null : await findMatchingTemplate(orgId, await segmentOfWarehouse(warehouseId), sheets);
-  const chosen = layout ?? template?.layout ?? autoLayout(sheets);
+  const chosen = layout ?? (template ? fitTemplateToFile(sheets, template.layout) : autoLayout(sheets));
   const sheet = sheets.find((s) => s.name === chosen.sheetName) ?? sheets[0];
   const headers = sheet.aoa[chosen.headerRowIndex] ?? [];
-  const { confidence } = suggestColumns(headers, sheet.aoa.slice(chosen.headerRowIndex + 1, chosen.headerRowIndex + 21));
+  const rowsBelow = sheet.aoa.slice(chosen.headerRowIndex + 1);
+  const { confidence: suggestedConfidence } = suggestColumns(headers, rowsBelow.slice(0, 20));
+  // 읽기로 한 열의 인식 정도만 보여 준다(값이 없어 뺀 열은 제외).
+  const confidence = Object.fromEntries(Object.entries(suggestedConfidence).filter(([field]) => chosen.columns[field as LayoutField])) as UploadPreview['confidence'];
+  const { emptyColumns } = alignColumnsToData(headers, rowsBelow, {});
   const parsed = parseSheets(sheets, chosen);
   const normalized = parsed.issues.some((i) => i.level === 'ERROR')
     ? { rows: parsed.rows, issues: [], newCodes: [] }
     : await normalizeForWarehouse(warehouseId, parsed.rows, chosen);
   const canCompare = warehouseId && snapshotDate && normalized.rows.length > 0 && !parsed.issues.some((i) => i.level === 'ERROR');
   const missingSkus = canCompare
-    ? await skusMissingFromUpload(warehouseId, new Date(`${snapshotDate}T00:00:00.000Z`), normalized.rows.map((r) => r.productCode))
+    ? await skusMissingFromUpload(
+        warehouseId,
+        new Date(`${snapshotDate}T00:00:00.000Z`),
+        normalized.rows.map((r) => r.productCode),
+      )
     : [];
   return {
     sheets: sheets.map((s) => ({ name: s.name, rowCount: s.aoa.length })),
     layout: chosen,
     template: template ? { id: template.id, name: template.name } : null,
     confidence: template ? {} : confidence,
+    emptyColumns,
     topRows: sheet.aoa.slice(0, 15).map((r) => r.slice(0, 30)),
     headers,
     rowCount: normalized.rows.length,
@@ -166,7 +198,7 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
   if (sheets.length === 0) return { status: 'ERROR', issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }] };
   const segment = await segmentOfWarehouse(request.warehouseId);
   const template = !request.layout && request.orgId ? await findMatchingTemplate(request.orgId, segment, sheets) : null;
-  const layout = request.layout ?? template?.layout ?? autoLayout(sheets);
+  const layout = request.layout ?? (template ? fitTemplateToFile(sheets, template.layout) : autoLayout(sheets));
   const parsed = parseSheets(sheets, layout);
   const normalized = parsed.issues.some((i) => i.level === 'ERROR')
     ? { rows: parsed.rows, issues: [], newCodes: [] }
@@ -226,9 +258,7 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
   // 같은 날 직접 입력한 상품 중 이번 파일에 없는 것은 교체해도 남긴다(합치기) — 엑셀에 있으면 엑셀 값이 이긴다.
   const fileCodes = new Set(parseResult.rows.map((r) => r.productCode));
   const keptManualRows = existingForDate ? (await manualRowsForDate(request.warehouseId, request.snapshotDate)).filter((r) => !fileCodes.has(r.productCode)) : [];
-  const rowsToSave = keptManualRows.length
-    ? [...parseResult.rows, ...keptManualRows.map((r, i) => ({ ...r, rowNumber: parseResult.rows.length + i + 1 }))]
-    : parseResult.rows;
+  const rowsToSave = keptManualRows.length ? [...parseResult.rows, ...keptManualRows.map((r, i) => ({ ...r, rowNumber: parseResult.rows.length + i + 1 }))] : parseResult.rows;
 
   let snapshot;
   try {

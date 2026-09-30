@@ -1,15 +1,8 @@
 import type { ValidationIssue } from './types';
 import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
 import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
-import {
-  PACKAGING_FIELDS,
-  PACKAGING_HEADER_ALIASES,
-  PACKAGING_REQUIRED_FIELDS,
-  type PackagingField,
-  type PackagingParseResult,
-  type ParsedPackagingRow,
-} from './packaging-types';
-
+import { exampleRowsSkippedMessage, splitDataRows } from './example-rows';
+import { PACKAGING_FIELDS, PACKAGING_HEADER_ALIASES, PACKAGING_REQUIRED_FIELDS, type PackagingField, type PackagingParseResult, type ParsedPackagingRow } from './packaging-types';
 
 /** 빈 값은 null(갱신 안 함), 정수가 아니거나 음수면 파싱 실패로 null 처리하고 WARNING을 남긴다. */
 function parseOptionalCount(value: string): { value: number | null; invalid: boolean } {
@@ -64,7 +57,8 @@ export function parsePackagingWorkbook(buffer: Buffer): PackagingParseResult {
     headerIndexByField.set(field, headerRow.indexOf(headerName));
   }
 
-  const dataRows = aoa.slice(headerRowIdx + 1).filter((r) => r.some((c) => normalizeString(c) !== ''));
+  const { dataRows, exampleRows } = splitDataRows(aoa.slice(headerRowIdx + 1));
+  if (exampleRows > 0) issues.push({ level: 'WARNING', code: 'EXAMPLE_ROWS_SKIPPED', message: exampleRowsSkippedMessage(exampleRows) });
   if (dataRows.length === 0) {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 데이터가 한 건도 없습니다.' });
     return { rows: [], issues };

@@ -1,7 +1,19 @@
 import { NUMERIC_FIELDS, type CanonicalField, type ParseResult, type ParsedInventoryRow, type ValidationIssue } from './types';
 import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
 import { normalizeString, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
-import { detectHeaderRow, parseDateCell, readSheets, REQUIRED_LAYOUT_FIELDS, resolveColumns, suggestColumns, type ImportLayout, type LayoutField, type SheetData } from './layout';
+import {
+  alignColumnsToData,
+  detectHeaderRow,
+  parseDateCell,
+  readSheets,
+  REQUIRED_LAYOUT_FIELDS,
+  resolveColumns,
+  suggestColumns,
+  type ImportLayout,
+  type LayoutField,
+  type SheetData,
+} from './layout';
+import { exampleRowsSkippedMessage, splitDataRows } from './example-rows';
 
 /** 콤마 천단위 구분자, 공백, 통화기호를 제거하고 숫자로 변환한다. 빈 값/파싱 실패는 null. */
 function normalizeNumber(value: string): number | null {
@@ -28,7 +40,6 @@ const DECIMAL_14_2_MIN = -DECIMAL_14_2_MAX;
 // 원가합은 단위원가 × PostgreSQL Int 재고수량까지 담을 수 있도록 Decimal(24,2)를 사용한다.
 const DECIMAL_24_2_MAX = 10 ** 22 - 0.01;
 const DECIMAL_24_2_MIN = -DECIMAL_24_2_MAX;
-
 
 const FIELD_LABEL: Record<LayoutField, string> = {
   productCode: '상품코드',
@@ -104,7 +115,10 @@ export function autoLayout(sheets: SheetData[], sheetName?: string | null): Impo
   const sheet = sheets.find((s) => s.name === sheetName) ?? sheets[0];
   const headerRowIndex = sheet ? detectHeaderRow(sheet.aoa) : 0;
   const headers = sheet?.aoa[headerRowIndex] ?? [];
-  const { columns } = suggestColumns(headers, sheet?.aoa.slice(headerRowIndex + 1, headerRowIndex + 21) ?? []);
+  const rowsBelow = sheet?.aoa.slice(headerRowIndex + 1) ?? [];
+  const { columns: suggested } = suggestColumns(headers, splitDataRows(rowsBelow).dataRows.slice(0, 20));
+  // 헤더는 있어도 값이 한 건도 없는 열은 읽지 않는다(샘플 양식의 빈 열 등).
+  const { columns } = alignColumnsToData(headers, rowsBelow, suggested);
   return { sheetName: sheet?.name ?? null, headerRowIndex, columns, duplicateMode: 'sum', zeroStockAsSoldOut: true };
 }
 
@@ -156,7 +170,8 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
   }
   if (issues.some((i) => i.level === 'ERROR')) return { rows: [], headerMap, issues, fileDates: [], layout };
 
-  const dataRows = aoa.slice(layout.headerRowIndex + 1).filter((r) => r.some((c) => normalizeString(c) !== ''));
+  const { dataRows, exampleRows } = splitDataRows(aoa.slice(layout.headerRowIndex + 1));
+  if (exampleRows > 0) issues.push({ level: 'WARNING', code: 'EXAMPLE_ROWS_SKIPPED', message: exampleRowsSkippedMessage(exampleRows) });
   if (dataRows.length === 0) {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 상품 데이터가 한 건도 없습니다.' });
     return { rows: [], headerMap, issues, fileDates: [], layout };

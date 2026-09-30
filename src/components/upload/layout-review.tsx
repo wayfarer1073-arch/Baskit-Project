@@ -20,6 +20,8 @@ export interface LayoutPreview {
   layout: ImportLayout;
   template: { id: string; name: string } | null;
   confidence: Partial<Record<LayoutField, MatchConfidence>>;
+  /** 헤더는 알아봤지만 값이 없어 자동으로 체크를 해제한 열. */
+  emptyColumns?: Partial<Record<LayoutField, string>>;
   topRows: string[][];
   headers: string[];
   rowCount: number;
@@ -162,6 +164,7 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
                 const confidence = value ? preview.confidence[field] : undefined;
                 const id = `layout-field-${field}`;
                 const hint = (t.fieldHints as Partial<Record<LayoutField, string>>)[field];
+                const emptyHeader = !checked ? (preview.emptyColumns?.[field] ?? null) : null;
                 return (
                   <li key={field} className="grid grid-cols-1 gap-1.5 px-2.5 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] sm:items-center">
                     <label className="flex items-start gap-2 text-xs">
@@ -188,6 +191,7 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
                             {hint}
                           </span>
                         )}
+                        {emptyHeader && <span className="block text-[11px] font-normal text-muted-foreground">{format(t.emptyColumn, { column: emptyHeader })}</span>}
                       </span>
                     </label>
                     {checked && (

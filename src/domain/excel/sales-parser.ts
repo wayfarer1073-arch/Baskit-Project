@@ -1,4 +1,5 @@
 import { normalizeHeaderCell } from '@/domain/excel/aoa-reader';
+import { isExampleRow } from '@/domain/excel/example-rows';
 
 export interface ParsedSalesRow {
   date: string;
@@ -73,6 +74,8 @@ export function parseSalesAoa(aoa: string[][], today: string): { rows: ParsedSal
     const rawDate = row[dateCol] ?? '';
     const rawAmount = row[amountCol] ?? '';
     if (!rawDate.trim() && !rawAmount.trim()) continue;
+    // 샘플 양식의 작성 방법·예시 행은 지우지 않고 올려도 건너뛴다.
+    if (isExampleRow(row)) continue;
     const date = parseSalesDate(rawDate);
     const amount = parseAmount(rawAmount);
     if (!date || amount === null || date > today) {

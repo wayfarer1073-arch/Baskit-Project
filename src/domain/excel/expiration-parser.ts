@@ -1,6 +1,7 @@
 import type { ValidationIssue } from './types';
 import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
 import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
+import { exampleRowsSkippedMessage, splitDataRows } from './example-rows';
 import {
   EXPIRATION_FIELDS,
   EXPIRATION_HEADER_ALIASES,
@@ -9,7 +10,6 @@ import {
   type ExpirationParseResult,
   type ParsedExpirationRow,
 } from './expiration-types';
-
 
 /** "2027-01-01" / "2027.01.01" / "2027/01/01" 등을 모두 허용하고 'yyyy-MM-dd'로 정규화한다. */
 function parseFlexibleDate(value: string): string | null {
@@ -74,7 +74,8 @@ export function parseExpirationWorkbook(buffer: Buffer): ExpirationParseResult {
     headerIndexByField.set(field, headerRow.indexOf(headerName));
   }
 
-  const dataRows = aoa.slice(headerRowIdx + 1).filter((r) => r.some((c) => normalizeString(c) !== ''));
+  const { dataRows, exampleRows } = splitDataRows(aoa.slice(headerRowIdx + 1));
+  if (exampleRows > 0) issues.push({ level: 'WARNING', code: 'EXAMPLE_ROWS_SKIPPED', message: exampleRowsSkippedMessage(exampleRows) });
   if (dataRows.length === 0) {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 데이터가 한 건도 없습니다.' });
     return { rows: [], issues };
