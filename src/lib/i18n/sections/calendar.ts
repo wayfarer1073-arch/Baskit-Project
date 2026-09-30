@@ -11,15 +11,12 @@ export const ko = {
     orders: '발주 {count}',
   },
   mobile: {
-    legend: { DAILY_SYNC: '일일 업로드', PERIODIC_COUNT: '비정기 실사', ORDER_CYCLE: '매장 매출' },
     dayListLabel: '고른 날짜의 기록',
     dayTitle: '{month}월 {day}일 ({weekday})',
     noWarehouse: '등록된 창고가 없어요',
     uploaded: '업로드함',
     missing: '미업로드',
-    dailyAll: '일일 업로드 전체',
-    dailyPartial: '일일 업로드 일부',
-    moreEvents: '외 {count}건',
+    moreEvents: '+{count}',
   },
   panel: {
     title: '{date}',
@@ -126,15 +123,12 @@ export const en: Dictionary<typeof ko> = {
     orders: '{count} orders',
   },
   mobile: {
-    legend: { DAILY_SYNC: 'Daily upload', PERIODIC_COUNT: 'Periodic count', ORDER_CYCLE: 'Store sales' },
     dayListLabel: 'Records for the selected date',
     dayTitle: '{weekday}, {month}/{day}',
     noWarehouse: 'No warehouses yet',
     uploaded: 'Uploaded',
     missing: 'missing',
-    dailyAll: 'All daily uploads',
-    dailyPartial: 'Some daily uploads',
-    moreEvents: '+{count} more',
+    moreEvents: '+{count}',
   },
   panel: {
     title: '{date}',

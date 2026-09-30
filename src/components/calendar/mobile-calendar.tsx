@@ -116,10 +116,10 @@ export function MobileCalendar(props: MobileCalendarProps) {
                 onClick={() => props.onSelectDate(date)}
                 aria-pressed={isSelected}
                 aria-label={format(day, 'yyyy-MM-dd')}
-                className={cn('relative flex min-h-14 flex-col items-center border-r border-b border-border/60 pt-1', !inMonth && 'bg-muted/30')}
+                className={cn('relative flex min-h-14 flex-col items-center border-r border-b border-border/60 pt-2.5', !inMonth && 'bg-muted/30')}
               >
                 {marks.length > 0 && (
-                  <span className={cn('absolute top-1 left-1 flex flex-col items-center gap-[2px]', !inMonth && 'opacity-40')} aria-hidden="true">
+                  <span className={cn('absolute top-1 left-1 flex items-center gap-[2px]', !inMonth && 'opacity-40')} aria-hidden="true">
                     {marks.map((mk) => (
                       <span key={mk.key} className={cn(mk.color, mk.triangle ? 'h-[5px] w-[6px] [clip-path:polygon(50%_0,100%_100%,0_100%)]' : 'size-[5px] rounded-full')} />
                     ))}
@@ -141,10 +141,11 @@ export function MobileCalendar(props: MobileCalendarProps) {
                   <span className={cn('mt-auto flex w-full flex-col gap-[2px] px-[3px] pb-1', !inMonth && 'opacity-40')} aria-hidden="true">
                     {bars.map((s, i) => {
                       const color = SCHEDULE_COLOR_CLASSNAMES[s.color as ScheduleColor] ?? SCHEDULE_COLOR_CLASSNAMES.red;
-                      // 일정이 둘보다 많으면 두 번째 막대에 '외 n건'을 작게 적는다.
+                      // 일정이 둘보다 많으면 두 번째 막대를 절반 길이로 줄이고 남는 자리에 '+n'을 작게 적는다.
                       return i === MAX_BARS - 1 && more > 0 ? (
-                        <span key={s.id} className={cn('flex h-[10px] items-center justify-center rounded-sm text-[8px] leading-none font-medium whitespace-nowrap', color.bar)}>
-                          {fill(c.mobile.moreEvents, { count: more })}
+                        <span key={s.id} className="flex h-[3px] items-center gap-[2px]">
+                          <span className={cn('h-[3px] w-1/2 shrink-0 rounded-full', color.swatch)} />
+                          <span className="text-[7px] leading-none font-medium text-muted-foreground">{fill(c.mobile.moreEvents, { count: more })}</span>
                         </span>
                       ) : (
                         <span key={s.id} className={cn('h-[3px] rounded-full', color.swatch)} />
@@ -155,28 +156,6 @@ export function MobileCalendar(props: MobileCalendarProps) {
               </button>
             );
           })}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground" aria-hidden="true">
-          {show('DAILY_SYNC') && (
-            <>
-              <span className="inline-flex items-center gap-1">
-                <span className={cn('size-[5px] rounded-full', DOT.DAILY_SYNC)} />
-                {c.mobile.dailyAll}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className={cn('h-[5px] w-[6px] [clip-path:polygon(50%_0,100%_100%,0_100%)]', DOT.DAILY_SYNC)} />
-                {c.mobile.dailyPartial}
-              </span>
-            </>
-          )}
-          {enabledSegments
-            .filter((s) => s !== 'DAILY_SYNC')
-            .map((s) => (
-              <span key={s} className="inline-flex items-center gap-1">
-                <span className={cn('size-[5px] rounded-full', DOT[s])} />
-                {c.mobile.legend[s]}
-              </span>
-            ))}
         </div>
       </div>
 
