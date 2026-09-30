@@ -18,6 +18,7 @@ import type { ScheduleRow } from '@/domain/events/schedule-types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format as fill } from '@/lib/i18n/locales';
+import type { WarehouseOption } from '@/components/calendar/day-panels';
 
 export interface CalendarEntry {
   warehouseId: string;
@@ -36,7 +37,7 @@ export interface CalendarEntry {
 }
 
 interface UploadCalendarProps {
-  warehouses: { id: string; code: string; name: string }[];
+  warehouses: WarehouseOption[];
   entries: CalendarEntry[];
   holidays: { date: string; name: string }[];
   schedules: ScheduleRow[];
@@ -111,11 +112,14 @@ export function UploadCalendar({
   const showPeriodic = enabledSegments.includes('PERIODIC_COUNT');
   const showStore = enabledSegments.includes('ORDER_CYCLE');
   const salesByDate = useMemo(() => new Map(sales.map((s) => [s.date, s.amount])), [sales]);
+  const dailyWarehouses = useMemo(() => warehouses.filter((w) => w.segment === 'DAILY_SYNC'), [warehouses]);
+  // 비정기 실사 표시는 비정기 실사 창고의 기록만 센다(일일 업로드 창고의 파일과 섞이지 않게).
   const skusByDate = useMemo(() => {
+    const periodicIds = new Set(warehouses.filter((w) => w.segment === 'PERIODIC_COUNT').map((w) => w.id));
     const map = new Map<string, number>();
-    for (const e of entries) map.set(e.date, (map.get(e.date) ?? 0) + e.rowCount);
+    for (const e of entries) if (periodicIds.has(e.warehouseId)) map.set(e.date, (map.get(e.date) ?? 0) + e.rowCount);
     return map;
-  }, [entries]);
+  }, [entries, warehouses]);
   const [colorOverrides, setColorOverrides] = useState<Record<string, ScheduleColor>>({});
   // 저장 후 새로고침되면 서버가 준 최신 일정을 그대로 쓰고, 색상만 바로 반영되도록 덧씌운다.
   const scheduleList = useMemo(() => schedules.map((s) => (colorOverrides[s.id] ? { ...s, color: colorOverrides[s.id] } : s)), [schedules, colorOverrides]);
@@ -257,7 +261,7 @@ export function UploadCalendar({
                       const holidayName = holidayByDate.get(dateStr);
                       const isWeekendDay = getDay(day) === 0 || getDay(day) === 6;
                       const isBlocked = isWeekendDay || holidayName !== undefined;
-                      const uploadedCodes = showDaily ? warehouses.filter((w) => entryByKey.has(`${w.id}|${dateStr}`)).map((w) => w.code) : [];
+                      const uploadedCodes = showDaily ? dailyWarehouses.filter((w) => entryByKey.has(`${w.id}|${dateStr}`)).map((w) => w.code) : [];
                       const countedSkus = showPeriodic ? (skusByDate.get(dateStr) ?? 0) : 0;
                       const salesAmount = showStore ? salesByDate.get(dateStr) : undefined;
                       const markerTone = isToday ? 'text-background/80 group-hover:text-black/70' : 'text-muted-foreground';

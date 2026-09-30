@@ -13,6 +13,8 @@ const schema = z.object({
         quantity: z.number().positive('발주 수량은 0보다 커야 합니다.').max(1_000_000),
         coverageAmount: z.number().int('충족 매출은 원 단위 정수로 입력하세요.').positive('충족 매출은 0보다 커야 합니다.').max(100_000_000_000).nullable(),
         leftoverQuantity: z.number().min(0, '잔량은 0 이상이어야 합니다.').max(1_000_000).nullable().default(null),
+        /** 이 발주분의 소비기한(선택) — 관리가 필요한 품목만 적는다. */
+        expirationDate: z.string().refine(isDateString, '소비기한 날짜를 확인하세요.').nullable().default(null),
       }),
     )
     .min(1, '발주할 품목을 하나 이상 입력하세요.')
@@ -29,6 +31,9 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '입력값이 올바르지 않습니다.' }, { status: 400 });
   if (parsed.data.date > todayKstDateString()) return NextResponse.json({ error: '미래 날짜로는 발주를 기록할 수 없습니다.' }, { status: 400 });
+  if (parsed.data.lines.some((l) => l.expirationDate && l.expirationDate < parsed.data.date)) {
+    return NextResponse.json({ error: '소비기한은 발주일과 같거나 그 뒤여야 합니다.' }, { status: 400 });
+  }
 
   const count = await addPurchaseOrders(tenant.orgId, { ...parsed.data, createdById: tenant.userId });
   if (count === null) return NextResponse.json({ error: '품목을 찾을 수 없습니다.' }, { status: 404 });

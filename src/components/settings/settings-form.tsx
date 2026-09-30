@@ -73,41 +73,28 @@ export function CommonSettings({
   isAdmin,
   enabledSegments,
   currentUserId,
-  warehouses,
   users: initialUsers,
   account,
   holidays,
   allowNonWorkingDayUploads,
-  importTemplates,
-  costs,
-  mergeLinks,
 }: {
   isAdmin: boolean;
   enabledSegments: Segment[];
   currentUserId: string | null;
-  warehouses: { id: string; code: string; name: string }[];
   users: UserRow[];
   account: { email: string; verified: boolean; workspaceName: string } | null;
   holidays: { id: string; date: string; name: string }[];
   allowNonWorkingDayUploads: boolean;
-  importTemplates: ImportTemplateView[];
-  costs: CostRowView[];
-  mergeLinks: MergeLinkView[];
 }) {
   const [users, setUsers] = useState(initialUsers);
-  // 끈 방식에만 쓰이는 카드는 숨긴다(데이터는 그대로). 창고·업로드 양식·원가는 재고 파일을 쓰는 두 방식 공용.
+  // 창고·업로드 양식·원가는 방식마다 다르므로 각 방식 탭에 있다. 여기에는 모든 방식이 같이 쓰는 것만 둔다.
   const usesStock = enabledSegments.includes('DAILY_SYNC') || enabledSegments.includes('PERIODIC_COUNT');
-  const usesDaily = enabledSegments.includes('DAILY_SYNC');
   return (
     <div className="space-y-6">
       <EnabledSegments isAdmin={isAdmin} enabled={enabledSegments} />
       <LanguageSettings />
-      {usesStock && <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />}
       {usesStock && <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />}
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
-      {usesStock && <ImportTemplateManagement templates={importTemplates} />}
-      {usesStock && <CostManagement costs={costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
-      {usesDaily && warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}
@@ -115,13 +102,34 @@ export function CommonSettings({
   );
 }
 
-interface DailySettingsProps {
-  isAdmin: boolean;
+/** 재고 파일을 쓰는 방식(일일·비정기)마다 따로 두는 창고·업로드 양식·원가. */
+export interface StockSegmentSettingsData {
   warehouses: { id: string; code: string; name: string }[];
-  settings: RiskThresholdSettings;
-  skus: SkuVisibilityRow[];
+  importTemplates: ImportTemplateView[];
+  costs: CostRowView[];
   expirations: ExpirationLotRow[];
   packagingStatuses: PackagingUploadStatus[];
+}
+
+/** 방식 탭 공통 — 소비기한·SKU 추가 정보(포장 단위)·업로드 양식·품목별 원가. 그 방식의 창고 품목만 다룬다. */
+export function StockItemSettings({ isAdmin, stock }: { isAdmin: boolean; stock: StockSegmentSettingsData }) {
+  const { warehouses } = stock;
+  return (
+    <>
+      <ExpirationManagement isAdmin={isAdmin} warehouses={warehouses} initialEntries={stock.expirations} />
+      <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={stock.packagingStatuses} />
+      <ImportTemplateManagement templates={stock.importTemplates} />
+      <CostManagement costs={stock.costs} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />
+    </>
+  );
+}
+
+interface DailySettingsProps {
+  isAdmin: boolean;
+  stock: StockSegmentSettingsData;
+  mergeLinks: MergeLinkView[];
+  settings: RiskThresholdSettings;
+  skus: SkuVisibilityRow[];
   codeAliases: CodeAliasView[];
   reorderDefaults: ReorderDefaults;
   supplierPolicies: SupplierPolicyRow[];
@@ -130,11 +138,10 @@ interface DailySettingsProps {
 /** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
 export function DailySettings({
   isAdmin,
-  warehouses,
+  stock,
+  mergeLinks,
   settings,
   skus,
-  expirations,
-  packagingStatuses,
   codeAliases,
   reorderDefaults,
   supplierPolicies,
@@ -161,8 +168,10 @@ export function DailySettings({
     }
   }
 
+  const { warehouses } = stock;
   return (
     <div className="space-y-6">
+      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} segment="DAILY_SYNC" />
       <Card>
         <CardHeader>
           <div className="flex items-center gap-1.5">
@@ -211,11 +220,11 @@ export function DailySettings({
 
       <SkuVisibilityManagement isAdmin={isAdmin} initialSkus={skus} />
 
-      <ExpirationManagement isAdmin={isAdmin} warehouses={warehouses} initialEntries={expirations} />
-
-      <SkuPackagingManagement isAdmin={isAdmin} warehouses={warehouses} initialStatuses={packagingStatuses} />
+      <StockItemSettings isAdmin={isAdmin} stock={stock} />
 
       <CodeAliasManagement aliases={codeAliases} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} />
+
+      {warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
 
     </div>
   );

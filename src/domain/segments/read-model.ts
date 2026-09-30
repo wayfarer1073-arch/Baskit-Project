@@ -1,4 +1,5 @@
 import type { PeriodicEstimate } from './periodic-count';
+import type { StoreExpiration } from './store-expiration';
 import type { CoverageAnalysis, SalesTrend } from './sales-coverage';
 
 export interface PeriodicRow {
@@ -67,8 +68,8 @@ export interface StoreCoverageRow {
   leadTimeDays: number;
   supplierName: string | null;
   analysis: CoverageAnalysis;
-  /** 가장 이른 소비기한이 임박 기준 안에 들어왔을 때만 채운다(기준일 대비 남은 일수, 지났으면 음수). */
-  expiringSoon: { date: string; daysLeft: number } | null;
+  /** 지금 있는 발주분 중 소비기한을 적은 것의 가장 이른 소비기한. 적지 않았으면 null(따라가지 않음). */
+  expiration: StoreExpiration | null;
 }
 
 /** 매장 품목의 원가·소비기한·참고 정보 — 설정의 매장 발주 예측 탭에서 고치고, 품목 상세에서 본다. */
@@ -82,16 +83,8 @@ export interface StoreItemExtras {
   /** 발주 단위 하나에 든 낱개 수(입수량). */
   packSize: number | null;
   note: string;
-  /** 소비기한 임박으로 볼 남은 일수. null이면 앱 기본값. */
+  /** 발주 때 적은 소비기한이 이 일수 안으로 들어오면 임박으로 본다. null이면 매장 기본값. */
   expirationRiskDays: number | null;
-  lots: StoreItemLot[];
-}
-
-export interface StoreItemLot {
-  lotId: string;
-  lot: string;
-  isAutoLot: boolean;
-  expirationDate: string;
 }
 
 export interface StoreDashboardData {
@@ -122,6 +115,8 @@ export interface StoreItemLearning {
   supplierName: string | null;
   /** 지금 발주분의 예상 잔량 — 재발주할 때 잔량 입력의 기본값으로 쓴다. */
   estimatedRemainingUnits: number | null;
+  /** 이전 발주에 소비기한을 적은 적이 있는 품목 — 발주 입력에서 소비기한 칸을 먼저 펼쳐 둔다. */
+  tracksExpiration: boolean;
   orderCount: number;
   salesPerUnit: number | null;
   learnedCycles: number;
@@ -136,6 +131,7 @@ export interface OrderEntryRow {
   quantity: number;
   coverageAmount: number | null;
   leftoverQuantity: number | null;
+  expirationDate: string | null;
   createdByName: string;
 }
 

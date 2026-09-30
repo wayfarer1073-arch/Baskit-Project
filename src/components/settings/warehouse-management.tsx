@@ -16,9 +16,11 @@ import { Paged } from '@/components/ui/paged';
 interface WarehouseManagementProps {
   isAdmin: boolean;
   warehouses: { id: string; code: string; name: string }[];
+  /** 이 목록이 속한 방식 — 새 창고도 이 방식으로 만든다. */
+  segment: 'DAILY_SYNC' | 'PERIODIC_COUNT';
 }
 
-export function WarehouseManagement({ isAdmin, warehouses }: WarehouseManagementProps) {
+export function WarehouseManagement({ isAdmin, warehouses, segment }: WarehouseManagementProps) {
   const t = useI18n().m.settingsScreens;
   const router = useRouter();
   const [names, setNames] = useState(Object.fromEntries(warehouses.map((w) => [w.id, w.name])));
@@ -67,7 +69,7 @@ export function WarehouseManagement({ isAdmin, warehouses }: WarehouseManagement
       const res = await fetch('/api/warehouses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({ name: newName, segment }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? t.common.addFailed);

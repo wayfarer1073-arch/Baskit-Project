@@ -26,7 +26,9 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
         data: { organizationId: organization.id, email, name: input.adminName, passwordHash, role: 'ADMIN', termsAcceptedAt: new Date() },
         select: { id: true, email: true, name: true },
       });
-      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: input.defaultWarehouseName ?? '기본 창고', sortOrder: 1 } });
+      // 기본 창고는 가입 때 고른 방식의 창고로 만든다(매장 발주 예측만 쓰면 일일 재고 연동 창고로 두고, 나중에 켜면 그대로 쓴다).
+      const segment = input.segment === 'PERIODIC_COUNT' ? 'PERIODIC_COUNT' : 'DAILY_SYNC';
+      await tx.warehouse.create({ data: { organizationId: organization.id, code: 'A', name: input.defaultWarehouseName ?? '기본 창고', sortOrder: 1, segment } });
       await tx.settings.create({ data: { organizationId: organization.id, ...DEFAULT_RISK_SETTINGS } });
       return { organization, user };
     });

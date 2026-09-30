@@ -1,4 +1,4 @@
-import { listWarehouses } from '@/server/repositories/warehouse-repository';
+import { ensureSegmentWarehouse, listWarehouses } from '@/server/repositories/warehouse-repository';
 import { listSnapshotsForWarehouse } from '@/server/repositories/snapshot-repository';
 import { listInboundCountsByWarehouseAndDate } from '@/server/repositories/inbound-repository';
 import { listHolidays } from '@/server/repositories/holiday-repository';
@@ -33,6 +33,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
   const initialDate = typeof params.date === 'string' && isDateString(params.date) ? params.date : null;
   const initialMode = isSegment(params.mode) && enabledSegments.includes(params.mode) ? params.mode : null;
   const isAdmin = tenant.isAdmin;
+  // 켜 둔 재고 방식마다 창고가 하나는 있어야 그 방식의 업로드·실사 입력을 할 수 있다.
+  const defaultWarehouseName = (await getMessages()).domain.defaultWarehouse;
+  for (const segment of ['DAILY_SYNC', 'PERIODIC_COUNT'] as const) {
+    if (enabledSegments.includes(segment)) await ensureSegmentWarehouse(tenant.orgId, segment, defaultWarehouseName);
+  }
   const warehouses = await listWarehouses(tenant.orgId);
   const inboundCounts = await listInboundCountsByWarehouseAndDate(tenant.orgId);
   const holidays = await listHolidays(tenant.orgId);
@@ -69,7 +74,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
   if (enabledSegments.includes('DAILY_SYNC')) {
     const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
     const todayClosed = weekday === 0 || weekday === 6 || holidays.some((h) => h.date === today);
-    const missing = warehouses.filter((w) => !calendarEntries.some((e) => e.warehouseId === w.id && e.date === today)).length;
+    const missing = warehouses.filter((w) => w.segment === 'DAILY_SYNC').filter((w) => !calendarEntries.some((e) => e.warehouseId === w.id && e.date === today)).length;
     if ((!todayClosed || allowNonWorkingDayUploads) && missing > 0) todos.push({ kind: 'dailyMissing', count: missing, date: today, mode: 'DAILY_SYNC' });
   }
   if (enabledSegments.includes('PERIODIC_COUNT')) {
@@ -87,7 +92,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
     <div className="space-y-6">
       {tenant.role === 'VIEWER' && <ViewerNotice message={(await getMessages()).account.viewerNotice} />}
       <UploadCalendar
-        warehouses={warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name }))}
+        warehouses={warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name, segment: w.segment === 'PERIODIC_COUNT' ? ('PERIODIC_COUNT' as const) : ('DAILY_SYNC' as const) }))}
         entries={calendarEntries}
         holidays={holidays.map((h) => ({ date: h.date, name: h.name }))}
         schedules={schedules}

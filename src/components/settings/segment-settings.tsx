@@ -13,6 +13,8 @@ import type { StoreItemExtras, StoreItemLearning, SupplierRow } from '@/domain/s
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
+import { WarehouseManagement } from '@/components/settings/warehouse-management';
+import { StockItemSettings, type StockSegmentSettingsData } from '@/components/settings/settings-form';
 import { StoreItemExtrasPanel, StoreItemExtrasSummary } from '@/components/settings/store-item-extras';
 import { cn } from '@/lib/utils';
 
@@ -119,10 +121,22 @@ function NumberSettingCard({
 
 // ── 비정기 실사 ─────────────────────────────────────────────────────────────────────────────
 
-export function PeriodicSettings({ isAdmin, recountDays, stockoutSoonDays }: { isAdmin: boolean; recountDays: number; stockoutSoonDays: number }) {
+export function PeriodicSettings({
+  isAdmin,
+  recountDays,
+  stockoutSoonDays,
+  stock,
+}: {
+  isAdmin: boolean;
+  recountDays: number;
+  stockoutSoonDays: number;
+  stock: StockSegmentSettingsData;
+}) {
   const t = useI18n().m.settingsScreens.segment;
+  const { warehouses } = stock;
   return (
     <div className="space-y-6">
+      <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} segment="PERIODIC_COUNT" />
       <NumberSettingCard
         title={t.recountTitle}
         description={t.recountDescription}
@@ -146,6 +160,7 @@ export function PeriodicSettings({ isAdmin, recountDays, stockoutSoonDays }: { i
         field="stockoutSoonDays"
         isAdmin={isAdmin}
       />
+      <StockItemSettings isAdmin={isAdmin} stock={stock} />
     </div>
   );
 }

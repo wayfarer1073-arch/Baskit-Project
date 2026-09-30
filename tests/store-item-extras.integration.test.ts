@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, requireTestDatabase } from './db-fixtures';
-import { createStoreItem, listStoreItemExtras, updateStoreItemExtras } from '../src/server/repositories/store-repository';
-import { addExpirationLot } from '../src/server/repositories/expiration-repository';
+import { addPurchaseOrders, createStoreItem, listRecentOrders, listStoreItemExtras, setOrderExpiration, updateStoreItemExtras } from '../src/server/repositories/store-repository';
 import { listRegisteredCosts } from '../src/server/repositories/cost-repository';
 import { getStoreDashboard, getStoreItemDetail } from '../src/server/services/store-service';
 
@@ -35,19 +34,28 @@ it('saves cost and reference info on a store item and shows it in the detail and
   expect(await listRegisteredCosts(f.org.id)).toEqual([]);
 });
 
-it('marks a store item whose earliest expiration is within its warning days', async () => {
-  await updateStoreItemExtras(f.org.id, item, info);
-  await addExpirationLot(f.org.id, item, null, '2026-10-10');
-  await addExpirationLot(f.org.id, item, null, '2026-10-02');
-  expect((await listStoreItemExtras(f.org.id))[item].lots.map((l) => [l.lot, l.expirationDate])).toEqual([
-    ['A', '2026-10-02'],
-    ['B', '2026-10-10'],
-  ]);
+it('follows the expiration entered with an order on the dashboard', async () => {
+  await updateStoreItemExtras(f.org.id, item, info); // 임박 기준 3일
+  await addPurchaseOrders(f.org.id, { date: '2026-09-20', lines: [{ itemId: item, quantity: 12, coverageAmount: 100000, leftoverQuantity: null, expirationDate: '2026-10-01' }], createdById: f.user.id });
+  // 다음 발주: 잔량이 남아 있었으니 이전 발주분(10-01)도 아직 있다.
+  await addPurchaseOrders(f.org.id, { date: '2026-09-27', lines: [{ itemId: item, quantity: 12, coverageAmount: 100000, leftoverQuantity: 2, expirationDate: '2026-10-09' }], createdById: f.user.id });
 
   const [row] = (await getStoreDashboard(f.org.id, '2026-09-30')).rows;
-  expect(row.expiringSoon).toEqual({ date: '2026-10-02', daysLeft: 2 });
-  const [later] = (await getStoreDashboard(f.org.id, '2026-09-20')).rows;
-  expect(later.expiringSoon).toBeNull(); // 12일 남음 > 기준 3일
+  expect(row.expiration).toMatchObject({ date: '2026-10-01', daysLeft: 1, near: true, orderDate: '2026-09-20' });
+  const [earlier] = (await getStoreDashboard(f.org.id, '2026-09-21')).rows;
+  expect(earlier.expiration).toMatchObject({ date: '2026-10-01', daysLeft: 10, near: false });
+
+  // 나중에 소비기한을 고치거나 지울 수 있다.
+  const [latest] = await listRecentOrders(f.org.id, 1, item);
+  expect(latest.expirationDate).toBe('2026-10-09');
+  expect(await setOrderExpiration(f.org.id, latest.id, '2026-09-01')).toBe('before_order');
+  expect(await setOrderExpiration(f.org.id, latest.id, null)).toBe('ok');
+  expect((await listRecentOrders(f.org.id, 1, item))[0].expirationDate).toBeNull();
+});
+
+it('does not follow items whose orders have no expiration', async () => {
+  await addPurchaseOrders(f.org.id, { date: '2026-09-27', lines: [{ itemId: item, quantity: 12, coverageAmount: 100000, leftoverQuantity: null }], createdById: f.user.id });
+  expect((await getStoreDashboard(f.org.id, '2026-09-30')).rows[0].expiration).toBeNull();
 });
 
 it('does not touch items of another workspace', async () => {

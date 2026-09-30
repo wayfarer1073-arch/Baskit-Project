@@ -138,7 +138,7 @@ async function seedPeriodic(tx: Prisma.TransactionClient, orgId: string, uploade
   const countDates = new Set<string>();
   // 7~12일 간격으로 실사, 마지막 실사는 며칠 전.
   for (let d = addDays(start, 2); d <= addDays(end, -4); d = addDays(d, 7 + Math.floor(rand() * 6))) countDates.add(ymd(d));
-  const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: 'A', name: '본사 창고', sortOrder: 1 } });
+  const wh = await tx.warehouse.create({ data: { organizationId: orgId, code: 'A', name: '본사 창고', sortOrder: 1, segment: 'PERIODIC_COUNT' } });
   await seedWarehouseSeries(tx, { warehouseId: wh.id, uploaderId, plans: planSkus(rand, 35, 'P'), start, end: addDays(end, -1), countDates, rand, recordAllInbound: true });
 }
 
@@ -148,12 +148,22 @@ const STORE_SUPPLIERS = [
   { key: 'pack', name: '포장재몰', leadTimeDays: 3 },
 ] as const;
 
-const STORE_ITEMS: { name: string; unit: string; leadTimeDays: number; everyDays: number; qty: number; supplier?: (typeof STORE_SUPPLIERS)[number]['key']; stopDaysAgo?: number }[] = [
+const STORE_ITEMS: {
+  name: string;
+  unit: string;
+  leadTimeDays: number;
+  everyDays: number;
+  qty: number;
+  supplier?: (typeof STORE_SUPPLIERS)[number]['key'];
+  stopDaysAgo?: number;
+  /** 소비기한을 관리하는 품목 — 발주일로부터 이 일수 뒤를 소비기한으로 적는다. */
+  shelfLifeDays?: number;
+}[] = [
   { name: '원두 (1kg)', unit: '봉', leadTimeDays: 2, everyDays: 7, qty: 8, supplier: 'bean' },
-  { name: '우유 (1L)', unit: '팩', leadTimeDays: 1, everyDays: 3, qty: 24, supplier: 'dairy' },
+  { name: '우유 (1L)', unit: '팩', leadTimeDays: 1, everyDays: 3, qty: 24, supplier: 'dairy', shelfLifeDays: 5 },
   { name: '테이크아웃 컵 16oz', unit: '박스', leadTimeDays: 3, everyDays: 14, qty: 2, supplier: 'pack' },
   { name: '바닐라 시럽', unit: '병', leadTimeDays: 2, everyDays: 20, qty: 3 },
-  { name: '크루아상 생지', unit: '박스', leadTimeDays: 1, everyDays: 4, qty: 3 },
+  { name: '크루아상 생지', unit: '박스', leadTimeDays: 1, everyDays: 4, qty: 3, shelfLifeDays: 30 },
   { name: '종이 빨대', unit: '박스', leadTimeDays: 3, everyDays: 10, qty: 1, supplier: 'pack', stopDaysAgo: 60 },
 ];
 
@@ -183,7 +193,7 @@ export async function seedStoreData(tx: Prisma.TransactionClient, orgId: string,
   }
 
   // 매장 품목은 '매장 품목' 가상 창고의 SKU다.
-  const storeWarehouse = await tx.warehouse.create({ data: { organizationId: orgId, code: 'STORE', name: '매장 품목', kind: 'STORE', sortOrder: 9999 } });
+  const storeWarehouse = await tx.warehouse.create({ data: { organizationId: orgId, code: 'STORE', name: '매장 품목', kind: 'STORE', segment: 'ORDER_CYCLE', sortOrder: 9999 } });
   for (const [index, spec] of STORE_ITEMS.entries()) {
     const item = await tx.sku.create({
       data: {
@@ -215,6 +225,7 @@ export async function seedStoreData(tx: Prisma.TransactionClient, orgId: string,
           quantity: spec.qty,
           coverageAmount: Math.round((spec.qty * salesPerUnit * 0.85) / 10_000) * 10_000,
           leftoverQuantity: i === firstDay ? null : rand() < 0.75 ? leftover : null,
+          expirationDate: spec.shelfLifeDays ? addDays(day.date, spec.shelfLifeDays) : null,
           createdById: uploaderId,
         });
         stock = Math.max(0, stock) + spec.qty;

@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import type { StockSegment } from '@/server/repositories/warehouse-repository';
 import { dateOnlyToString } from '@/lib/date';
 import type { ParsedExpirationRow } from '@/domain/excel/expiration-types';
 
@@ -111,11 +112,11 @@ export async function syncExpirationDatesFromStockFile(datesBySkuId: ReadonlyMap
 
 /** 최신 업로드에 남아 있고 로트가 하나 이상 등록된 SKU의 모든 로트를, 상품코드 순으로 나열한다(같은
  *  상품코드는 창고, 그 다음 소비기한 순으로 정렬). */
-export async function listExpirationLots(orgId: string): Promise<ExpirationLotRow[]> {
+export async function listExpirationLots(orgId: string, segment?: StockSegment): Promise<ExpirationLotRow[]> {
   await backfillLegacyExpirationDates(orgId);
 
   const lots = await prisma.skuExpirationLot.findMany({
-    where: { sku: { isActive: true, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } } },
+    where: { sku: { isActive: true, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK', ...(segment ? { segment } : {}) } } },
     include: { sku: { include: { warehouse: { select: { code: true, name: true } } } } },
     orderBy: [{ sku: { productCode: 'asc' } }, { sku: { warehouse: { code: 'asc' } } }, { expirationDate: 'asc' }],
   });

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import type { StockSegment } from '@/server/repositories/warehouse-repository';
 import { headerFingerprint, LAYOUT_FIELDS, type DuplicateMode, type ImportLayout, type SheetData } from '@/domain/excel/layout';
 
 export interface ImportTemplateRow {
@@ -31,8 +32,9 @@ function toRow(t: TemplateRecord): ImportTemplateRow {
   return { id: t.id, name: t.name, layout: toLayout(t), lastUsedAt: t.lastUsedAt?.toISOString() ?? null, updatedAt: t.updatedAt.toISOString() };
 }
 
-export async function listImportTemplates(orgId: string): Promise<ImportTemplateRow[]> {
-  const rows = await prisma.importTemplate.findMany({ where: { organizationId: orgId }, orderBy: [{ lastUsedAt: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }] });
+/** 방식별 업로드 양식 — 일일 재고 연동과 비정기 실사는 양식을 따로 둔다. */
+export async function listImportTemplates(orgId: string, segment: StockSegment): Promise<ImportTemplateRow[]> {
+  const rows = await prisma.importTemplate.findMany({ where: { organizationId: orgId, segment }, orderBy: [{ lastUsedAt: { sort: 'desc', nulls: 'last' } }, { name: 'asc' }] });
   return rows.map(toRow);
 }
 
@@ -44,8 +46,8 @@ export function layoutFingerprint(sheets: SheetData[], layout: Pick<ImportLayout
 }
 
 /** 저장된 템플릿 중 이 파일과 같은 양식(같은 시트·헤더 행의 열 이름 집합)을 찾는다. */
-export async function findMatchingTemplate(orgId: string, sheets: SheetData[]): Promise<ImportTemplateRow | null> {
-  const templates = await prisma.importTemplate.findMany({ where: { organizationId: orgId }, orderBy: { lastUsedAt: { sort: 'desc', nulls: 'last' } } });
+export async function findMatchingTemplate(orgId: string, segment: StockSegment, sheets: SheetData[]): Promise<ImportTemplateRow | null> {
+  const templates = await prisma.importTemplate.findMany({ where: { organizationId: orgId, segment }, orderBy: { lastUsedAt: { sort: 'desc', nulls: 'last' } } });
   for (const t of templates) {
     if (layoutFingerprint(sheets, { sheetName: t.sheetName, headerRowIndex: t.headerRowIndex }) === t.fingerprint) return toRow(t);
   }
@@ -53,7 +55,7 @@ export async function findMatchingTemplate(orgId: string, sheets: SheetData[]): 
 }
 
 /** 같은 양식(지문)이 이미 있으면 이름과 열 지정을 갱신하고, 없으면 새로 만든다. */
-export async function saveImportTemplate(orgId: string, name: string, fingerprint: string, layout: ImportLayout) {
+export async function saveImportTemplate(orgId: string, segment: StockSegment, name: string, fingerprint: string, layout: ImportLayout) {
   const data = {
     name,
     sheetName: layout.sheetName,
@@ -65,8 +67,8 @@ export async function saveImportTemplate(orgId: string, name: string, fingerprin
     lastUsedAt: new Date(),
   };
   return prisma.importTemplate.upsert({
-    where: { organizationId_fingerprint: { organizationId: orgId, fingerprint } },
-    create: { organizationId: orgId, fingerprint, ...data },
+    where: { organizationId_segment_fingerprint: { organizationId: orgId, segment, fingerprint } },
+    create: { organizationId: orgId, segment, fingerprint, ...data },
     update: data,
   });
 }

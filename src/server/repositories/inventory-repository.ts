@@ -14,9 +14,12 @@ import { attributesAt, loadSkuAttributeHistory, type SkuAttributes, type SkuAttr
 type CalendarInput = ClosedDays | ((warehouseId: string) => ClosedDays);
 const calendarOf = (input: CalendarInput, warehouseId: string) => (typeof input === 'function' ? input(warehouseId) : input);
 
-/** 조직의 사용 중인(보관되지 않은) 실재고 창고에 속한 데이터만 보도록 하는 공통 조건. 매장 품목 가상 창고는 뺀다. */
+/**
+ * 일일 재고 연동 화면이 보는 창고 — 조직의 사용 중인(보관되지 않은) 일일 재고 연동 창고만.
+ * 비정기 실사 창고와 매장 품목 가상 창고는 뺀다(비정기 실사는 count-repository가 따로 읽는다).
+ */
 function activeWarehouseOf(orgId: string) {
-  return { organizationId: orgId, isArchived: false, kind: 'STOCK' as const };
+  return { organizationId: orgId, isArchived: false, kind: 'STOCK' as const, segment: 'DAILY_SYNC' as const };
 }
 
 /** 품절 인식일로부터 정확히 1개월 뒤(유예기간 종료일, 이 날짜부터는 더 이상 노출하지 않음). */
@@ -366,7 +369,7 @@ export async function loadDailyWarehouseTotals(orgId: string, asOfDate?: string)
     }[]
   >`
     WITH org_warehouses AS (
-      SELECT id FROM warehouses WHERE "organizationId" = ${orgId} AND NOT "isArchived"
+      SELECT id FROM warehouses WHERE "organizationId" = ${orgId} AND NOT "isArchived" AND "kind" = 'STOCK' AND "segment" = 'DAILY_SYNC'
     ), real_warehouses AS (
       SELECT DISTINCT "warehouseId" FROM inventory_snapshots
       WHERE status = 'ACTIVE' AND NOT "isMock"

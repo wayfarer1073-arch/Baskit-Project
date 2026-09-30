@@ -58,7 +58,7 @@ it('saves a confirmed layout as a template and applies it to the next file even 
     replaceExisting: false,
   });
   expect(saved.status).toBe('SUCCESS');
-  expect((await listImportTemplates(a.org.id)).map((t) => t.name)).toEqual(['OO물류']);
+  expect((await listImportTemplates(a.org.id, 'DAILY_SYNC')).map((t) => t.name)).toEqual(['OO물류']);
 
   // 다음 날 파일은 열 순서가 바뀌었지만 같은 양식 — 템플릿이 자동 적용된다.
   const next = workbook([['OO물류 재고현황'], ['출력일 2026-09-21'], ['품명', '현재고수량(EA)', '관리번호', '로케이션'], ['사과', 4, 'P1', 'A-01'], ['배', 1, 'P2', 'B-01']]);

@@ -42,7 +42,7 @@ export function AppSidebar({ userName, userRole, workspaceName, defaultSegment, 
         <AppNav segment={segment} enabled={enabledSegments} variant="sidebar" recentPosts={recentPosts} isPlatformAdmin={isPlatformAdmin} />
       </nav>
 
-      <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-4 py-4">
+      <div className="flex items-center justify-between gap-2 px-4 py-4">
         <div className="min-w-0 text-xs leading-tight">
           <div className="truncate font-medium text-sidebar-foreground">{userName}</div>
           <div className="text-sidebar-muted-foreground">{userRole}</div>

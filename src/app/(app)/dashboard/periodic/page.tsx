@@ -11,7 +11,7 @@ export default async function PeriodicDashboardPage({ searchParams }: { searchPa
   const asOfDate = isDateString(params.date) && params.date <= today ? params.date : today;
   const tenant = await requireTenant();
   await requireEnabledSegment(tenant.orgId, 'PERIODIC_COUNT');
-  const [{ rows, stockoutSoonDays, recountDays }, warehouses] = await Promise.all([getPeriodicRows(tenant.orgId, asOfDate), listWarehouses(tenant.orgId)]);
+  const [{ rows, stockoutSoonDays, recountDays }, warehouses] = await Promise.all([getPeriodicRows(tenant.orgId, asOfDate), listWarehouses(tenant.orgId, 'PERIODIC_COUNT')]);
 
   return (
     <PeriodicDashboard

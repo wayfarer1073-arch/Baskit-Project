@@ -2,18 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import type { StoreItemExtras } from '@/domain/segments/read-model';
-import { DEFAULT_EXPIRATION_RISK_DAYS } from '@/domain/inventory/types';
-import { daysUntilDate, isExpirationNear } from '@/lib/expiration-days';
+import { STORE_DEFAULT_EXPIRATION_RISK_DAYS } from '@/domain/segments/store-expiration';
 import { formatMoney } from '@/lib/format';
-import { formatExpirationDday } from '@/lib/status';
-import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 
@@ -47,26 +43,16 @@ function toDraft(e: StoreItemExtras): Draft {
 
 const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
 
-/** 품목 줄 아래에 붙는 요약 — 원가와 가장 이른 소비기한. */
+/** 품목 줄 아래에 붙는 요약 — 원가. (소비기한은 발주마다 달라 발주 기록에서 입력한다.) */
 export function StoreItemExtrasSummary({ extras, unit }: { extras: StoreItemExtras; unit: string }) {
   const { m, locale } = useI18n();
   const t = m.settingsScreens.items.extras;
-  const soonest = extras.lots[0];
-  return (
-    <>
-      {extras.unitCost !== null && <span>{` · ${format(t.summaryCost, { cost: `${formatMoney(extras.unitCost, locale)}/${unit}` })}`}</span>}
-      {soonest && (
-        <span className={cn(isExpirationNear(soonest.expirationDate, extras.expirationRiskDays) && 'font-medium text-destructive')}>
-          {` · ${format(t.summaryExp, { date: `${soonest.expirationDate} ${formatExpirationDday(daysUntilDate(soonest.expirationDate))}` })}`}
-        </span>
-      )}
-    </>
-  );
+  return extras.unitCost !== null ? <span>{` · ${format(t.summaryCost, { cost: `${formatMoney(extras.unitCost, locale)}/${unit}` })}`}</span> : null;
 }
 
 /**
- * 매장 품목의 원가·소비기한·참고 정보 편집 패널. 재고 SKU와 같은 칸(원가, 소비기한 로트, 옵션·위치·바코드·입수량, 메모)을 쓴다.
- * 소비기한 로트는 추가·삭제가 바로 저장되고, 나머지는 '정보 저장'으로 한 번에 저장한다.
+ * 매장 품목의 원가·참고 정보 편집 패널. 재고 SKU와 같은 칸(원가, 옵션·위치·바코드·입수량, 메모)을 쓴다.
+ * 소비기한은 발주분마다 달라 캘린더의 발주 입력에서 적고, 여기서는 임박으로 볼 일수만 정한다.
  */
 export function StoreItemExtrasPanel({ itemName, unit, extras, isAdmin }: { itemName: string; unit: string; extras: StoreItemExtras; isAdmin: boolean }) {
   const { m } = useI18n();
@@ -74,8 +60,6 @@ export function StoreItemExtrasPanel({ itemName, unit, extras, isAdmin }: { item
   const requestFailed = m.settingsScreens.common.requestFailed;
   const router = useRouter();
   const [draft, setDraft] = useState(() => toDraft(extras));
-  const [lotDate, setLotDate] = useState('');
-  const [lotName, setLotName] = useState('');
   const [busy, setBusy] = useState(false);
   const changed = JSON.stringify(draft) !== JSON.stringify(toDraft(extras));
   const id = (field: string) => `extras-${extras.itemId}-${field}`;
@@ -136,11 +120,15 @@ export function StoreItemExtrasPanel({ itemName, unit, extras, isAdmin }: { item
             min: 0,
             max: 365,
             step: 1,
-            placeholder: format(t.riskPlaceholder, { days: DEFAULT_EXPIRATION_RISK_DAYS }),
+            placeholder: format(t.riskPlaceholder, { days: STORE_DEFAULT_EXPIRATION_RISK_DAYS }),
             className: 'text-right tabular-nums',
           })}
           <div className="col-span-2 sm:col-span-3">{field('note', t.note, { maxLength: 200, placeholder: t.notePlaceholder })}</div>
         </div>
+        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          {t.expByOrder}
+          <InfoTooltip>{t.expTip}</InfoTooltip>
+        </p>
         {isAdmin ? (
           <div className="flex justify-end">
             <Button type="submit" size="sm" variant="outline" disabled={busy || !changed}>
@@ -152,76 +140,6 @@ export function StoreItemExtrasPanel({ itemName, unit, extras, isAdmin }: { item
         )}
       </form>
 
-      <section aria-label={t.expTitle} className="space-y-2 border-t border-border pt-3">
-        <div className="flex items-center gap-1.5">
-          <h4 className="text-xs font-semibold">{t.expTitle}</h4>
-          <InfoTooltip>{t.expTip}</InfoTooltip>
-        </div>
-        {extras.lots.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t.expEmpty}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-1.5">
-            {extras.lots.map((l) => {
-              const near = isExpirationNear(l.expirationDate, draft.riskDays === '' ? null : Number(draft.riskDays));
-              return (
-                <li
-                  key={l.lotId}
-                  className={cn('flex items-center gap-1.5 rounded-md border bg-background py-0.5 pr-0.5 pl-2 text-xs', near ? 'border-destructive/40' : 'border-border')}
-                >
-                  <span className="font-medium">{l.lot}</span>
-                  <span className="tabular-nums">{l.expirationDate}</span>
-                  <span className={cn('tabular-nums', near ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
-                    {formatExpirationDday(daysUntilDate(l.expirationDate))}
-                  </span>
-                  {isAdmin && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="size-6"
-                      disabled={busy}
-                      aria-label={format(t.deleteLotAria, { lot: l.lot })}
-                      onClick={() => run(() => send(`/api/expiration/lots/${l.lotId}`, 'DELETE'), t.lotDeleted)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {isAdmin && (
-          <form
-            className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const ok = await run(() => send('/api/expiration/lots', 'POST', { skuId: extras.itemId, lot: lotName.trim() || null, expirationDate: lotDate }), t.lotAdded);
-              if (ok) {
-                setLotDate('');
-                setLotName('');
-              }
-            }}
-          >
-            <div className="space-y-1">
-              <Label htmlFor={id('lot-date')} className="text-xs">
-                {t.expDate}
-              </Label>
-              <Input id={id('lot-date')} type="date" required value={lotDate} onChange={(e) => setLotDate(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={id('lot-name')} className="text-xs">
-                {t.lotName}
-              </Label>
-              <Input id={id('lot-name')} maxLength={30} placeholder={t.lotPlaceholder} value={lotName} onChange={(e) => setLotName(e.target.value)} />
-            </div>
-            <Button type="submit" size="sm" disabled={busy || !lotDate} className="col-span-2 sm:col-span-1">
-              <Plus className="size-4" />
-              {t.addLot}
-            </Button>
-          </form>
-        )}
-      </section>
     </div>
   );
 }

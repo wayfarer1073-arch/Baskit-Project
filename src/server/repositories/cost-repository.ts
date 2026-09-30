@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import type { StockSegment } from '@/server/repositories/warehouse-repository';
 
 export interface RegisteredCostRow {
   skuId: string;
@@ -13,11 +14,12 @@ export interface RegisteredCostRow {
 }
 
 /** 원가가 한 번이라도 등록된(현재 원가 > 0) 품목. 보관한 창고는 뺀다. 매장 품목(가상 창고)도 함께 보여 준다. */
-export async function listRegisteredCosts(orgId: string): Promise<RegisteredCostRow[]> {
+export async function listRegisteredCosts(orgId: string, segment?: StockSegment): Promise<RegisteredCostRow[]> {
   const skus = await prisma.sku.findMany({
     where: {
       currentUnitCost: { gt: 0 },
-      warehouse: { organizationId: orgId, isArchived: false },
+      // 방식을 주면 그 방식의 창고 품목만(설정의 일일 재고 연동·비정기 실사 탭). 매장 품목 원가는 매장 탭의 품목 추가 정보에서 다룬다.
+      warehouse: segment ? { organizationId: orgId, isArchived: false, kind: 'STOCK', segment } : { organizationId: orgId, isArchived: false },
       NOT: { isActive: false, warehouse: { kind: 'STORE' } }, // 보관한 매장 품목은 뺀다
     },
     orderBy: [{ warehouse: { sortOrder: 'asc' } }, { productCode: 'asc' }],

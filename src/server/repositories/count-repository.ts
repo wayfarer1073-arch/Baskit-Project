@@ -120,7 +120,7 @@ export interface CountLineInput {
  * 상품을 품절로 보지 않는다(partial).
  */
 export async function recordCounts(orgId: string, input: { warehouseId: string; date: string; lines: CountLineInput[]; userId: string }) {
-  const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, organizationId: orgId, isArchived: false, kind: 'STOCK' } });
+  const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, organizationId: orgId, isArchived: false, kind: 'STOCK', segment: 'PERIODIC_COUNT' } });
   if (!warehouse) return null;
 
   const snapshotDate = toDateOnly(input.date);
@@ -176,7 +176,7 @@ export async function recordCounts(orgId: string, input: { warehouseId: string; 
  * 그날 기록한 상품이 먼저, 그다음 최근에 센 순. 지난 날짜를 고칠 때도 같은 표를 쓴다.
  */
 export async function loadCountSheet(orgId: string, warehouseId: string, date: string): Promise<CountSheetRow[] | null> {
-  const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, organizationId: orgId, kind: 'STOCK' }, select: { id: true } });
+  const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, organizationId: orgId, kind: 'STOCK', segment: 'PERIODIC_COUNT' }, select: { id: true } });
   if (!warehouse) return null;
   const day = toDateOnly(date);
   const skus = await prisma.sku.findMany({
@@ -248,7 +248,7 @@ export async function loadCountedSkus(orgId: string, asOfDate: string, skuId?: s
   const mockFilter = { OR: [{ isMock: false }, { isMock: true, warehouseId: { notIn: realWarehouses.map((w) => w.warehouseId) } }] };
   const skus = await prisma.sku.findMany({
     where: {
-      warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' },
+      warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK', segment: 'PERIODIC_COUNT' },
       isHiddenFromDashboard: false,
       firstSeenDate: { lte: asOf },
       ...(skuId ? { id: skuId } : { OR: [{ isActive: true }, { soldOutDetectedDate: { gt: asOf } }, { removedDate: { gt: asOf } }] }),

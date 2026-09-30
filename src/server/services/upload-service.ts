@@ -11,6 +11,8 @@ import { applyStockFileExtras } from '@/server/repositories/stock-extras-reposit
 import { storeUploadFile } from '@/server/repositories/upload-file-repository';
 import type { ParsedInventoryRow, ValidationIssue } from '@/domain/excel/types';
 import { manualRowsForDate, skusMissingFromUpload, type MissingSku } from '@/server/repositories/count-repository';
+import { prisma } from '@/lib/prisma';
+import type { StockSegment } from '@/server/repositories/warehouse-repository';
 import { createSnapshot, findActiveSnapshot, getLatestActiveSnapshotBefore, getSnapshotProductCodes, SnapshotConflictError } from '@/server/repositories/snapshot-repository';
 
 export interface UploadRequest {
@@ -102,6 +104,13 @@ export interface UploadPreview {
   missingSkus: MissingSku[];
 }
 
+/** 업로드 양식은 방식(일일 재고 연동·비정기 실사)마다 따로 둔다 — 창고의 방식을 따른다. 창고를 모르면 일일 재고 연동. */
+async function segmentOfWarehouse(warehouseId?: string): Promise<StockSegment> {
+  if (!warehouseId) return 'DAILY_SYNC';
+  const warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { segment: true } });
+  return warehouse?.segment === 'PERIODIC_COUNT' ? 'PERIODIC_COUNT' : 'DAILY_SYNC';
+}
+
 /**
  * 파일을 저장하지 않고 양식만 확인한다. 양식을 주지 않으면 저장된 템플릿 → 자동 인식 순으로 정한다.
  * 사용자가 화면에서 시트·헤더 행·열을 바꾸면 그 양식으로 다시 미리보기를 요청한다.
@@ -115,7 +124,7 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
     throw e;
   }
   if (sheets.length === 0) return { error: '파일에서 표 데이터를 찾을 수 없습니다.' };
-  const template = layout ? null : await findMatchingTemplate(orgId, sheets);
+  const template = layout ? null : await findMatchingTemplate(orgId, await segmentOfWarehouse(warehouseId), sheets);
   const chosen = layout ?? template?.layout ?? autoLayout(sheets);
   const sheet = sheets.find((s) => s.name === chosen.sheetName) ?? sheets[0];
   const headers = sheet.aoa[chosen.headerRowIndex] ?? [];
@@ -155,7 +164,8 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
     throw e;
   }
   if (sheets.length === 0) return { status: 'ERROR', issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }] };
-  const template = !request.layout && request.orgId ? await findMatchingTemplate(request.orgId, sheets) : null;
+  const segment = await segmentOfWarehouse(request.warehouseId);
+  const template = !request.layout && request.orgId ? await findMatchingTemplate(request.orgId, segment, sheets) : null;
   const layout = request.layout ?? template?.layout ?? autoLayout(sheets);
   const parsed = parseSheets(sheets, layout);
   const normalized = parsed.issues.some((i) => i.level === 'ERROR')
@@ -279,7 +289,7 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
 
   if (request.orgId) {
     const fingerprint = layoutFingerprint(sheets, layout);
-    if (request.saveTemplateAs && fingerprint) await saveImportTemplate(request.orgId, request.saveTemplateAs, fingerprint, layout);
+    if (request.saveTemplateAs && fingerprint) await saveImportTemplate(request.orgId, segment, request.saveTemplateAs, fingerprint, layout);
     else if (template) await touchImportTemplate(request.orgId, template.id);
   }
 

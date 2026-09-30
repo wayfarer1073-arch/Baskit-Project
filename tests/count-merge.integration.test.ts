@@ -9,6 +9,8 @@ requireTestDatabase();
 let a: Awaited<ReturnType<typeof createFixture>>;
 beforeEach(async () => {
   a = await createFixture();
+  // 비정기 실사 창고로 쓴다(일일 재고 연동 창고와는 서로 섞이지 않는다).
+  await prisma.warehouse.update({ where: { id: a.warehouse.id }, data: { segment: 'PERIODIC_COUNT' } });
 });
 afterEach(async () => {
   await cleanupFixture(a);

@@ -61,7 +61,7 @@ export function MobileNav({ userName, userRole, defaultSegment, enabledSegments,
         <nav className="flex flex-col gap-1 p-3" aria-label={m.nav.siteMenu}>
           <AppNav segment={segment} enabled={enabledSegments} variant="drawer" recentPosts={recentPosts} isPlatformAdmin={isPlatformAdmin} onNavigate={() => setOpen(false)} />
         </nav>
-        <div className="mt-auto flex items-center justify-between gap-3 border-t p-4">
+        <div className="mt-auto flex items-center justify-between gap-3 p-4">
           <div className="text-xs leading-tight">
             <div className="font-medium text-foreground">{userName}</div>
             <div className="text-muted-foreground">{userRole}</div>

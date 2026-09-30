@@ -23,7 +23,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   await requireEnabledSegment(tenant.orgId, 'DAILY_SYNC');
   const settings = await getSettings(tenant.orgId);
   const [warehouses, rows, dailyTotals, holidays, favoriteSkuIds] = await Promise.all([
-    listWarehouses(tenant.orgId),
+    listWarehouses(tenant.orgId, 'DAILY_SYNC'),
     getInventoryRows({ orgId: tenant.orgId, asOfDate, compareFromDate: mode === 'range' ? fromDate : undefined, settings }),
     loadDailyWarehouseTotals(tenant.orgId, asOfDate),
     listHolidayDateStrings(tenant.orgId),

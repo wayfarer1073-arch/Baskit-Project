@@ -13,7 +13,8 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
 import { SkuEventsSection } from '@/components/events/sku-events-section';
-import { daysUntilDate, isExpirationNear } from '@/lib/expiration-days';
+import { ExpiryBadge } from '@/components/segment-dashboards/expiry-badge';
+import type { StoreExpiration } from '@/domain/segments/store-expiration';
 import { formatExpirationDday } from '@/lib/status';
 import type { StoreItemExtras } from '@/domain/segments/read-model';
 
@@ -36,11 +37,22 @@ function Row({ label, value, hint }: { label: string; value: React.ReactNode; hi
 }
 
 /** 설정에서 입력한 원가·소비기한·규격 등. 적은 것만 보여 주고, 아무것도 없으면 설정으로 가는 길을 안내한다. */
-function StoreItemInfo({ extras, unit, lastOrderQty }: { extras: StoreItemExtras; unit: string; lastOrderQty: number | null }) {
+function StoreItemInfo({
+  extras,
+  expiration,
+  unit,
+  lastOrderQty,
+  asOfDate,
+}: {
+  extras: StoreItemExtras;
+  expiration: StoreExpiration | null;
+  unit: string;
+  lastOrderQty: number | null;
+  asOfDate: string;
+}) {
   const { m, locale } = useI18n();
   const t = m.store.item.info;
-  const soonest = extras.lots[0];
-  const hasAny = extras.unitCost !== null || soonest || extras.spec || extras.storage || extras.barcode || extras.packSize !== null || extras.note;
+  const hasAny = extras.unitCost !== null || expiration || extras.spec || extras.storage || extras.barcode || extras.packSize !== null || extras.note;
   return (
     <section aria-label={t.title}>
       <div className="flex items-center justify-between">
@@ -60,15 +72,15 @@ function StoreItemInfo({ extras, unit, lastOrderQty }: { extras: StoreItemExtras
               hint={lastOrderQty ? format(t.orderValue, { amount: formatMoney(extras.unitCost * lastOrderQty, locale) }) : undefined}
             />
           )}
-          {soonest && (
+          {expiration && (
             <Row
               label={t.expiration}
               value={
-                <span className={cn(isExpirationNear(soonest.expirationDate, extras.expirationRiskDays) && 'font-semibold text-destructive')}>
-                  {soonest.expirationDate} {formatExpirationDday(daysUntilDate(soonest.expirationDate))}
+                <span className={cn(expiration.near && 'font-semibold text-destructive')}>
+                  {expiration.date} {formatExpirationDday(expiration.daysLeft)}
                 </span>
               }
-              hint={extras.lots.length > 1 ? format(t.lots, { count: extras.lots.length }) : undefined}
+              hint={format(t.expirationFrom, { date: expiration.orderDate, qty: format(m.store.units.qty, { qty: expiration.quantity.toLocaleString(), unit }) })}
             />
           )}
           {extras.spec && <Row label={t.spec} value={extras.spec} />}
@@ -263,7 +275,7 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                 )}
               </section>
 
-              <StoreItemInfo extras={d.extras} unit={unit} lastOrderQty={a.lastOrder?.quantity ?? null} />
+              <StoreItemInfo extras={d.extras} expiration={d.expiration} unit={unit} lastOrderQty={a.lastOrder?.quantity ?? null} asOfDate={asOfDate} />
 
               <SkuEventsSection warehouseId={d.warehouseId} skuId={d.itemId} skuLabel={d.name} />
 
@@ -284,6 +296,7 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                           <span className="tabular-nums">
                             {format(m.store.units.qty, { qty: o.quantity.toLocaleString(), unit })}
                           </span>
+                          {o.expirationDate && <ExpiryBadge date={o.expirationDate} riskDays={d.extras.expirationRiskDays} asOf={asOfDate} />}
                           <span className="ml-auto text-right text-xs text-muted-foreground">
                             {o.coverageAmount === null ? t.coverageMissing : format(m.store.records.coverageValue, { amount: money(o.coverageAmount) })}
                             {o.leftoverQuantity !== null && <span className="block">{format(m.store.records.leftoverThen, { units: o.leftoverQuantity <= 0 ? m.store.records.none : du(o.leftoverQuantity) })}</span>}

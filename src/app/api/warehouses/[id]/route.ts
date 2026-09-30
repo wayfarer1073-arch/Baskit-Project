@@ -32,8 +32,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params;
   const warehouses = await listWarehouses(tenant.orgId);
-  if (!warehouses.some((w) => w.id === id)) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
-  if (warehouses.length <= 1) return NextResponse.json({ error: '창고가 최소 하나는 있어야 합니다.' }, { status: 400 });
+  const target = warehouses.find((w) => w.id === id);
+  if (!target) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
+  // 방식마다 창고가 최소 하나는 있어야 그 방식의 업로드·입력을 할 수 있다.
+  if (warehouses.filter((w) => w.segment === target.segment).length <= 1) return NextResponse.json({ error: '창고가 최소 하나는 있어야 합니다.' }, { status: 400 });
 
   await archiveWarehouse(tenant.orgId, id);
   return NextResponse.json({ ok: true });

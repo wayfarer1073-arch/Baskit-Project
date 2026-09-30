@@ -4,7 +4,11 @@ import { forbidViewer, getTenant } from '@/server/tenant';
 import { createWarehouse, listWarehouses } from '@/server/repositories/warehouse-repository';
 
 const MAX_WAREHOUSES = 20;
-const schema = z.object({ name: z.string().trim().min(1, '창고 이름을 입력하세요.').max(50) });
+const schema = z.object({
+  name: z.string().trim().min(1, '창고 이름을 입력하세요.').max(50),
+  /** 이 창고를 쓰는 방식. 설정의 일일 재고 연동·비정기 실사 탭에서 각각 추가한다. */
+  segment: z.enum(['DAILY_SYNC', 'PERIODIC_COUNT']).default('DAILY_SYNC'),
+});
 
 export async function POST(request: Request) {
   const tenant = await getTenant();
@@ -22,6 +26,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `창고는 최대 ${MAX_WAREHOUSES}개까지 등록할 수 있습니다.` }, { status: 400 });
   }
 
-  const warehouse = await createWarehouse(tenant.orgId, parsed.data.name);
+  const warehouse = await createWarehouse(tenant.orgId, parsed.data.name, parsed.data.segment);
   return NextResponse.json({ warehouse: { id: warehouse.id, code: warehouse.code, name: warehouse.name } }, { status: 201 });
 }

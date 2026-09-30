@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel, SegmentDashboardHeader, SegmentEmptyState, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { WeeklySalesChart } from '@/components/segment-dashboards/weekly-sales-chart';
 import { CoverageBar, CoverageStatusBadge, remainingText, remainingUnitsText } from '@/components/segment-dashboards/coverage-parts';
@@ -11,6 +11,7 @@ import { StoreItemSheet } from '@/components/segment-dashboards/store-item-sheet
 import type { StoreDashboardData, StoreCoverageRow } from '@/domain/segments/read-model';
 import { formatMoney } from '@/lib/format';
 import { formatExpirationDday } from '@/lib/status';
+import { STORE_DEFAULT_EXPIRATION_RISK_DAYS } from '@/domain/segments/store-expiration';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
@@ -39,14 +40,80 @@ function qty(value: number, unit: string, template: string) {
 
 /** 소비기한이 임박 기준 안에 든 품목 옆의 작은 경고 표시. */
 function ExpiringTag({ row, label, className }: { row: StoreCoverageRow; label: string; className?: string }) {
-  if (!row.expiringSoon) return null;
+  if (!row.expiration?.near) return null;
   return (
     <span
-      title={row.expiringSoon.date}
+      title={row.expiration.date}
       className={cn('inline-flex shrink-0 rounded bg-status-danger-bg px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-status-danger', className)}
     >
-      {format(label, { dday: formatExpirationDday(row.expiringSoon.daysLeft) })}
+      {format(label, { dday: formatExpirationDday(row.expiration.daysLeft) })}
     </span>
+  );
+}
+
+/**
+ * 소비기한을 적은 발주분이 있는 품목만 모아 임박 순으로 따라가는 표. 적은 품목이 하나도 없으면 그리지 않는다.
+ */
+function ExpiryFollowUp({ rows, onOpen }: { rows: StoreCoverageRow[]; onOpen: (itemId: string) => void }) {
+  const { m } = useI18n();
+  const t = m.store.expiry;
+  const tracked = rows
+    .filter((r): r is StoreCoverageRow & { expiration: NonNullable<StoreCoverageRow['expiration']> } => r.expiration !== null)
+    .sort((a, b) => a.expiration.daysLeft - b.expiration.daysLeft || a.name.localeCompare(b.name));
+  const paged = usePaged(tracked);
+  if (tracked.length === 0) return null;
+  const nearCount = tracked.filter((r) => r.expiration.near).length;
+  const left = (days: number) => (days < 0 ? format(t.expired, { days: -days }) : days === 0 ? t.today : format(t.daysLeft, { days }));
+  return (
+    <SectionPanel
+      title={t.panelTitle}
+      description={format(t.panelTip, { days: STORE_DEFAULT_EXPIRATION_RISK_DAYS })}
+      action={
+        <span className="text-xs text-sidebar-muted-foreground">
+          {format(t.panelCount, { count: tracked.length })}
+          {nearCount > 0 && <span className="ml-2 rounded bg-status-danger-bg px-1.5 py-0.5 font-semibold text-status-danger">{format(t.near, { count: nearCount })}</span>}
+        </span>
+      }
+    >
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t.colItem}</TableHead>
+              <TableHead>{t.colOrder}</TableHead>
+              <TableHead>{t.colExpiration}</TableHead>
+              <TableHead className="text-right">{t.colLeft}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paged.pageItems.map((r) => (
+              <TableRow key={r.itemId} className="cursor-pointer" onClick={() => onOpen(r.itemId)}>
+                <TableCell>
+                  <button type="button" className="text-left text-sm font-medium underline-offset-4 hover:underline" onClick={() => onOpen(r.itemId)}>
+                    {r.name}
+                  </button>
+                </TableCell>
+                <TableCell className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">
+                  {format(t.orderValue, { date: r.expiration.orderDate, qty: qty(r.expiration.quantity, r.unit, m.store.units.qty) })}
+                </TableCell>
+                <TableCell className="text-sm whitespace-nowrap tabular-nums">{r.expiration.date}</TableCell>
+                <TableCell className="text-right">
+                  <span
+                    className={cn(
+                      'inline-flex rounded px-1.5 py-0.5 text-xs whitespace-nowrap tabular-nums',
+                      r.expiration.near ? 'bg-status-danger-bg font-semibold text-status-danger' : 'text-muted-foreground',
+                    )}
+                  >
+                    {left(r.expiration.daysLeft)}
+                  </span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <Pagination className="border-t border-border px-5 py-2.5" page={paged.page} totalPages={paged.totalPages} onChange={paged.setPage} />
+    </SectionPanel>
   );
 }
 
@@ -177,6 +244,8 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
           </div>
         </SectionPanel>
       </div>
+
+      <ExpiryFollowUp rows={rows} onOpen={setOpenItemId} />
 
       <SectionPanel title={t.itemsTitle} description={format(t.itemsDescription, { count: rows.length })}>
         <div className="overflow-x-auto">

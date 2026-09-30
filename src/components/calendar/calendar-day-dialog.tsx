@@ -45,8 +45,10 @@ export function CalendarDayDialog(props: CalendarDayDialogProps) {
   const [mode, setMode] = useState<Segment | null>(single ? enabledSegments[0] : props.initialMode);
   const isFuture = date > today;
 
-  const uploadedCodes = warehouses.filter((w) => entryByWarehouseId.has(w.id)).map((w) => w.code);
-  const countedSkus = [...entryByWarehouseId.values()].reduce((sum, e) => sum + e.rowCount, 0);
+  const dailyWarehouses = warehouses.filter((w) => w.segment === 'DAILY_SYNC');
+  const periodicWarehouses = warehouses.filter((w) => w.segment === 'PERIODIC_COUNT');
+  const uploadedCodes = dailyWarehouses.filter((w) => entryByWarehouseId.has(w.id)).map((w) => w.code);
+  const countedSkus = periodicWarehouses.reduce((sum, w) => sum + (entryByWarehouseId.get(w.id)?.rowCount ?? 0), 0);
   const status: Record<Segment, string> = {
     DAILY_SYNC: uploadedCodes.length ? format(t.uploadedWarehouses, { codes: uploadedCodes.join(' ') }) : t.notUploaded,
     PERIODIC_COUNT: countedSkus ? format(t.countedSkus, { count: countedSkus }) : t.notCounted,
@@ -94,12 +96,12 @@ export function CalendarDayDialog(props: CalendarDayDialogProps) {
             {isFuture ? (
               <p className="rounded-md bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">{t.future}</p>
             ) : mode === 'DAILY_SYNC' ? (
-              <DailyDayPanel date={date} warehouses={warehouses} entryByWarehouseId={entryByWarehouseId} blocked={stockBlocked} isAdmin={isAdmin} />
+              <DailyDayPanel date={date} warehouses={dailyWarehouses} entryByWarehouseId={entryByWarehouseId} blocked={stockBlocked} isAdmin={isAdmin} />
             ) : mode === 'PERIODIC_COUNT' ? (
               <PeriodicDayPanel
                 date={date}
                 today={today}
-                warehouses={warehouses}
+                warehouses={periodicWarehouses}
                 entryByWarehouseId={entryByWarehouseId}
                 blocked={stockBlocked}
                 isAdmin={isAdmin}

@@ -116,7 +116,7 @@ it('no: a zero-stock item leaves management right away, with no sold-out window,
 
 it('saves the zero-stock choice and stock unit with the layout template', async () => {
   const { saveImportTemplate, listImportTemplates } = await import('../src/server/repositories/import-template-repository');
-  await saveImportTemplate(a.org.id, '제외 양식', 'fp-test', { ...layout(false), stockUnit: 'BOX' });
-  const [saved] = await listImportTemplates(a.org.id);
+  await saveImportTemplate(a.org.id, 'DAILY_SYNC', '제외 양식', 'fp-test', { ...layout(false), stockUnit: 'BOX' });
+  const [saved] = await listImportTemplates(a.org.id, 'DAILY_SYNC');
   expect(saved.layout).toMatchObject({ zeroStockAsSoldOut: false, stockUnit: 'BOX' });
 });

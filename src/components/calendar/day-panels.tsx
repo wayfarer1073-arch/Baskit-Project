@@ -26,6 +26,8 @@ export interface WarehouseOption {
   id: string;
   code: string;
   name: string;
+  /** 이 창고를 쓰는 방식 — 일일 업로드 패널과 비정기 실사 패널은 각자 자기 방식의 창고만 보여 준다. */
+  segment: 'DAILY_SYNC' | 'PERIODIC_COUNT';
 }
 
 function toExisting(entry: CalendarEntry | undefined) {

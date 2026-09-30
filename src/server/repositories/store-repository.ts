@@ -20,9 +20,8 @@ export interface StoreItemRow {
   itemLeadTimeDays: number;
   supplierId: string | null;
   supplierName: string | null;
-  soonestExpiration: string | null;
   expirationRiskDays: number | null;
-  orders: { date: string; quantity: number; coverageAmount: number | null; leftoverQuantity: number | null }[];
+  orders: { date: string; quantity: number; coverageAmount: number | null; leftoverQuantity: number | null; expirationDate: string | null }[];
 }
 
 const num = (v: Prisma.Decimal | null) => (v === null ? null : Number(v));
@@ -45,7 +44,7 @@ export async function ensureStoreWarehouse(orgId: string): Promise<string> {
   const existing = await findStoreWarehouse(orgId);
   if (existing) return existing.id;
   try {
-    const created = await prisma.warehouse.create({ data: { organizationId: orgId, code: STORE_WAREHOUSE_CODE, name: '매장 품목', kind: 'STORE', sortOrder: 9999 } });
+    const created = await prisma.warehouse.create({ data: { organizationId: orgId, code: STORE_WAREHOUSE_CODE, name: '매장 품목', kind: 'STORE', segment: 'ORDER_CYCLE', sortOrder: 9999 } });
     return created.id;
   } catch (e) {
     // 동시에 두 요청이 만들려 하면 한쪽은 코드 중복으로 실패한다 — 먼저 만든 창고를 쓴다.
@@ -64,7 +63,7 @@ export async function listStoreItemsWithOrders(orgId: string, asOfDate?: string)
       purchaseOrders: {
         where: asOfDate ? { orderDate: { lte: toDateOnly(asOfDate) } } : undefined,
         orderBy: { orderDate: 'asc' },
-        select: { orderDate: true, quantity: true, coverageAmount: true, leftoverQuantity: true },
+        select: { orderDate: true, quantity: true, coverageAmount: true, leftoverQuantity: true, expirationDate: true },
       },
       supplier: { select: { id: true, name: true, leadTimeDays: true } },
     },
@@ -79,13 +78,13 @@ export async function listStoreItemsWithOrders(orgId: string, asOfDate?: string)
       itemLeadTimeDays,
       supplierId: item.supplier?.id ?? null,
       supplierName: item.supplier?.name ?? null,
-      soonestExpiration: item.expirationDate ? dateOnlyToString(item.expirationDate) : null,
       expirationRiskDays: item.expirationRiskDays,
       orders: item.purchaseOrders.map((o) => ({
         date: dateOnlyToString(o.orderDate),
         quantity: Number(o.quantity),
         coverageAmount: num(o.coverageAmount),
         leftoverQuantity: num(o.leftoverQuantity),
+        expirationDate: o.expirationDate ? dateOnlyToString(o.expirationDate) : null,
       })),
     };
   });
@@ -161,7 +160,6 @@ const extrasSelect = {
   eaPerBox: true,
   specialNote: true,
   expirationRiskDays: true,
-  expirationLots: { orderBy: [{ expirationDate: 'asc' }, { lot: 'asc' }], select: { id: true, lot: true, isAutoLot: true, expirationDate: true } },
 } satisfies Prisma.SkuSelect;
 
 function toExtras(s: Prisma.SkuGetPayload<{ select: typeof extrasSelect }>): StoreItemExtras {
@@ -175,7 +173,6 @@ function toExtras(s: Prisma.SkuGetPayload<{ select: typeof extrasSelect }>): Sto
     packSize: s.eaPerBox,
     note: s.specialNote,
     expirationRiskDays: s.expirationRiskDays,
-    lots: s.expirationLots.map((l) => ({ lotId: l.id, lot: l.lot, isAutoLot: l.isAutoLot, expirationDate: dateOnlyToString(l.expirationDate) })),
   };
 }
 
@@ -240,6 +237,7 @@ export async function listRecentOrders(orgId: string, limit = 40, itemId?: strin
     quantity: Number(o.quantity),
     coverageAmount: num(o.coverageAmount),
     leftoverQuantity: num(o.leftoverQuantity),
+    expirationDate: o.expirationDate ? dateOnlyToString(o.expirationDate) : null,
     createdByName: o.createdBy.name,
   }));
 }
@@ -250,6 +248,8 @@ export interface OrderLineInput {
   coverageAmount: number | null;
   /** 발주를 넣을 때 남아 있던 양(모르면 null). */
   leftoverQuantity: number | null;
+  /** 이 발주분의 소비기한(선택). */
+  expirationDate?: string | null;
 }
 
 /** 같은 날 여러 품목을 한 번에 발주 기록한다. 하나라도 이 조직의 품목이 아니면 아무것도 저장하지 않는다. */
@@ -264,10 +264,20 @@ export async function addPurchaseOrders(orgId: string, input: { date: string; li
       quantity: l.quantity,
       coverageAmount: l.coverageAmount,
       leftoverQuantity: l.leftoverQuantity,
+      expirationDate: l.expirationDate ? toDateOnly(l.expirationDate) : null,
       createdById: input.createdById,
     })),
   });
   return result.count;
+}
+
+/** 이미 기록한 발주의 소비기한을 적거나 고친다(null이면 지운다). 발주일보다 앞설 수 없다. */
+export async function setOrderExpiration(orgId: string, id: string, expirationDate: string | null): Promise<'ok' | 'not_found' | 'before_order'> {
+  const order = await prisma.purchaseOrder.findFirst({ where: { id, sku: storeItemWhere(orgId) }, select: { orderDate: true } });
+  if (!order) return 'not_found';
+  if (expirationDate && expirationDate < dateOnlyToString(order.orderDate)) return 'before_order';
+  await prisma.purchaseOrder.update({ where: { id }, data: { expirationDate: expirationDate ? toDateOnly(expirationDate) : null } });
+  return 'ok';
 }
 
 export function getStoreItem(orgId: string, itemId: string) {

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SectionPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { OPEN_UNIT_OPTIONS, describeUnitsText } from '@/components/segment-dashboards/coverage-parts';
 import type { OrderEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
+import { ExpiryBadge } from '@/components/segment-dashboards/expiry-badge';
 import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
@@ -64,12 +65,24 @@ interface DraftLine {
   /** 지금 남은 양 — 뜯지 않은 단위 수와, 열어 둔 마지막 단위가 남은 정도(%). 둘 다 비우면 '모름'. */
   leftWhole: string;
   leftOpen: string;
+  /** 이 발주분의 소비기한(선택). showExpiry가 켜진 줄만 보낸다. */
+  expiration: string;
+  showExpiry: boolean;
 }
 
 const won = (v: string) => Number(v.replace(/[^0-9]/g, ''));
 let lineSeq = 0;
 /** 첫 줄은 서버 렌더와 같은 key(0)를 쓰고, 이후 줄은 클라이언트에서만 번호를 늘린다(하이드레이션 불일치 방지). */
-const newLine = (itemId: string, key = ++lineSeq): DraftLine => ({ key, itemId, quantity: '', coverage: '', leftWhole: '', leftOpen: '0' });
+const newLine = (itemId: string, key = ++lineSeq, showExpiry = false): DraftLine => ({
+  key,
+  itemId,
+  quantity: '',
+  coverage: '',
+  leftWhole: '',
+  leftOpen: '0',
+  expiration: '',
+  showExpiry,
+});
 
 function leftoverOf(line: DraftLine): number | null {
   if (!line.leftWhole.trim() && line.leftOpen === '0') return null;
@@ -84,6 +97,47 @@ function leftoverDraft(units: number): Pick<DraftLine, 'leftWhole' | 'leftOpen'>
     leftWhole: String(whole),
     leftOpen: String(Math.round((q - whole) * 100)),
   };
+}
+
+/** 기록한 발주의 소비기한 — 적은 발주는 배지로 보여 주고, 눌러서 고치거나 지운다. 적지 않은 발주도 나중에 적을 수 있다. */
+function OrderExpiry({ order, busy, run }: { order: OrderEntryRow; busy: boolean; run: Run }) {
+  const { m } = useI18n();
+  const t = m.store.expiry;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(order.expirationDate ?? '');
+  if (editing) {
+    return (
+      <form
+        className="flex items-center gap-1"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const ok = await run(() => send(`/api/store/orders/${order.id}`, 'PATCH', { expirationDate: value || null }), value ? t.saved : t.cleared);
+          if (ok) setEditing(false);
+        }}
+      >
+        <Input
+          type="date"
+          aria-label={format(t.editAria, { item: order.itemName, date: order.date })}
+          min={order.date}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-7 w-36 text-xs"
+        />
+        <Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={busy}>
+          {m.settingsScreens.common.save}
+        </Button>
+      </form>
+    );
+  }
+  return order.expirationDate ? (
+    <button type="button" className="shrink-0" onClick={() => setEditing(true)} aria-label={format(t.editAria, { item: order.itemName, date: order.date })}>
+      <ExpiryBadge date={order.expirationDate} />
+    </button>
+  ) : (
+    <button type="button" className="hidden shrink-0 text-[11px] text-muted-foreground underline-offset-4 hover:underline sm:inline" onClick={() => setEditing(true)}>
+      {t.edit}
+    </button>
+  );
 }
 
 /** 발주 기록. 캘린더 패널에서는 fixedDate로 날짜를 고정하고, 목록도 그날 발주만 보여준다. */
@@ -105,8 +159,11 @@ export function OrderSection({
   const { m, locale } = useI18n();
   const t = m.store.records;
   const [date, setDate] = useState(fixedDate ?? today);
-  const [lines, setLines] = useState<DraftLine[]>([newLine(items[0]?.id ?? '', 0)]);
   const byId = new Map(items.map((i) => [i.id, i]));
+  // 이전 발주에 소비기한을 적었던 품목은 소비기한 칸을 먼저 펼쳐 둔다(관리하는 품목이라고 본다).
+  const tracks = (itemId: string) => byId.get(itemId)?.tracksExpiration ?? false;
+  const blankLine = (key?: number) => newLine(items[0]?.id ?? '', key, tracks(items[0]?.id ?? ''));
+  const [lines, setLines] = useState<DraftLine[]>([blankLine(0)]);
   const shownOrders = fixedDate ? orders.filter((o) => o.date === fixedDate) : orders;
 
   function update(key: number, patch: Partial<DraftLine>) {
@@ -135,9 +192,10 @@ export function OrderSection({
         quantity: Number(l.quantity),
         coverageAmount: l.coverage.trim() ? won(l.coverage) : null,
         leftoverQuantity: leftoverOf(l),
+        expirationDate: l.showExpiry && l.expiration ? l.expiration : null,
       }));
     const ok = await run(() => send('/api/store/orders', 'POST', { date, lines: payload }), format(t.ordersSaved, { count: payload.length }));
-    if (ok) setLines([newLine(items[0]?.id ?? '')]);
+    if (ok) setLines([blankLine()]);
   }
 
   return (
@@ -180,6 +238,7 @@ export function OrderSection({
                           itemId: v,
                           leftWhole: '',
                           leftOpen: '0',
+                          showExpiry: line.showExpiry || tracks(v),
                         })
                       }
                     >
@@ -266,6 +325,37 @@ export function OrderSection({
                   >
                     <X className="size-4" />
                   </Button>
+                  <div className="col-span-2 flex flex-wrap items-end gap-2 sm:col-span-5">
+                    {line.showExpiry ? (
+                      <>
+                        <div className="space-y-1">
+                          <Label htmlFor={`order-exp-${line.key}`} className="text-xs">
+                            {m.store.expiry.fieldOptional}
+                          </Label>
+                          <Input
+                            id={`order-exp-${line.key}`}
+                            type="date"
+                            min={date}
+                            value={line.expiration}
+                            onChange={(e) => update(line.key, { expiration: e.target.value })}
+                            className="w-44"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="pb-2 text-[11px] text-muted-foreground underline underline-offset-2"
+                          onClick={() => update(line.key, { showExpiry: false, expiration: '' })}
+                        >
+                          {m.store.expiry.remove}
+                        </button>
+                        <span className="pb-2 text-[11px] text-muted-foreground">{m.store.expiry.hint}</span>
+                      </>
+                    ) : (
+                      <button type="button" className="text-xs font-medium underline-offset-4 hover:underline" onClick={() => update(line.key, { showExpiry: true })}>
+                        {m.store.expiry.add}
+                      </button>
+                    )}
+                  </div>
                   <div className="col-span-2 space-y-0.5 text-[11px] text-muted-foreground sm:col-span-5">
                     {item && item.estimatedRemainingUnits !== null && (
                       <p>
@@ -309,7 +399,7 @@ export function OrderSection({
             })}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setLines((prev) => [...prev, newLine(items[0]?.id ?? '')])}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setLines((prev) => [...prev, blankLine()])}>
               <Plus className="size-3.5" />
               {t.addItem}
             </Button>
@@ -331,6 +421,7 @@ export function OrderSection({
                   {o.quantity.toLocaleString()}
                   {o.unit}
                 </span>
+                <OrderExpiry order={o} busy={busy} run={run} />
                 <span className="hidden w-40 text-right text-xs text-muted-foreground sm:inline">
                   {o.coverageAmount === null ? t.coverageLearned : format(t.coverageValue, { amount: formatMoney(o.coverageAmount, locale) })}
                   {o.leftoverQuantity !== null && <span className="block">{format(t.leftoverThen, { units: o.leftoverQuantity <= 0 ? t.none : describeUnitsText(o.leftoverQuantity, o.unit, m.store) })}</span>}
