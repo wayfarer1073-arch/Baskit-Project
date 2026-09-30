@@ -77,10 +77,10 @@ it('saves a confirmed layout as a template and applies it to the next file even 
   expect(result.status).toBe('SUCCESS');
   const stock = await prisma.inventoryItem.findMany({
     where: { snapshot: { warehouseId: a.warehouse.id, snapshotDate: new Date('2026-09-21') } },
-    select: { productCode: true, normalStock: true },
-    orderBy: { productCode: 'asc' },
+    select: { sku: { select: { productCode: true } }, normalStock: true },
+    orderBy: { sku: { productCode: 'asc' } },
   });
-  expect(stock).toEqual([
+  expect(stock.map((i) => ({ productCode: i.sku.productCode, normalStock: i.normalStock }))).toEqual([
     { productCode: 'P1', normalStock: 4 },
     { productCode: 'P2', normalStock: 1 },
   ]);
@@ -142,7 +142,7 @@ it('routes a linked code to the existing product and converts box counts with th
   expect(result.status).toBe('SUCCESS');
   const items = await prisma.inventoryItem.findMany({
     where: { snapshot: { warehouseId: a.warehouse.id, snapshotDate: new Date('2026-09-18') } },
-    select: { productCode: true, normalStock: true },
+    select: { sku: { select: { productCode: true } }, normalStock: true },
   });
-  expect(items).toEqual([{ productCode: 'P1', normalStock: 48 }]);
+  expect(items.map((i) => ({ productCode: i.sku.productCode, normalStock: i.normalStock }))).toEqual([{ productCode: 'P1', normalStock: 48 }]);
 });

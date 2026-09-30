@@ -58,7 +58,7 @@ export async function setSkuUnitCost(orgId: string, skuId: string, unitCost: num
     const item = await tx.inventoryItem.findFirst({
       where: { skuId, snapshot: { status: 'ACTIVE' } },
       orderBy: { snapshot: { snapshotDate: 'desc' } },
-      select: { id: true, unitCost: true, unitCostProvided: true, totalCost: true, extra: true },
+      select: { snapshotId: true, unitCost: true, unitCostProvided: true, totalCost: true, extra: true },
     });
     if (item) {
       const extra = (item.extra && typeof item.extra === 'object' && !Array.isArray(item.extra) ? item.extra : {}) as Prisma.JsonObject;
@@ -68,7 +68,7 @@ export async function setSkuUnitCost(orgId: string, skuId: string, unitCost: num
         totalCost: item.totalCost === null ? null : Number(item.totalCost),
       };
       await tx.inventoryItem.update({
-        where: { id: item.id },
+        where: { snapshotId_skuId: { snapshotId: item.snapshotId, skuId } },
         // 파일의 원가합이 남아 있으면 그날 금액이 직접 정한 원가를 따르지 않으므로 원가합은 비운다.
         data: { unitCost: value, unitCostProvided: true, totalCost: null, extra: { ...extra, manualCost: { value, at: new Date().toISOString(), original: previous } } },
       });

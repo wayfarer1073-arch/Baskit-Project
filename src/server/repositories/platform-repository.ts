@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { addDays, format } from 'date-fns';
 import type { BusinessSegment, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { removeStoredFiles, storageKeysFor } from '@/server/repositories/upload-file-repository';
 import { dateOnlyToString } from '@/lib/date';
 import type { AuditLogRow, PlatformMetrics, WorkspaceSummary, WorkspaceUserRow, WorkspaceWarehouseRow } from '@/domain/platform/read-model';
 
@@ -177,6 +178,7 @@ export async function updateWorkspace(orgId: string, data: { name?: string; segm
  */
 export async function deleteWorkspace(orgId: string) {
   const inOrgWarehouse = { warehouse: { organizationId: orgId } };
+  const fileKeys = await storageKeysFor({ organizationId: orgId });
   await prisma.$transaction(
     async (tx) => {
       await tx.snapshotInbound.deleteMany({ where: { sku: inOrgWarehouse } });
@@ -197,6 +199,8 @@ export async function deleteWorkspace(orgId: string) {
     },
     { timeout: 60_000, maxWait: 15_000 },
   );
+  // 객체 저장소에 둔 원본 파일도 지운다(DB 행은 워크스페이스와 함께 cascade로 지워졌다).
+  await removeStoredFiles(fileKeys);
 }
 
 export function getUserForAdmin(userId: string) {

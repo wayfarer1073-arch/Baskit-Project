@@ -31,8 +31,7 @@ async function main() {
         fileHash: `${d}`, rowCount: skuCount, uploadedById: fixture.user.id,
       } });
       await prisma.inventoryItem.createMany({ data: skus.map(s => ({
-        snapshotId: snap.id, skuId: s.id, productCode: s.productCode, productName: s.currentProductName,
-        normalStock: 1000 - d, availableStock: 1000 - d, unitCost: 10,
+        snapshotId: snap.id, skuId: s.id, normalStock: 1000 - d, unitCost: 10,
       })) });
     }
     for (let i = 0; i < repeats; i++) {

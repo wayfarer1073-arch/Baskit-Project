@@ -28,3 +28,15 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      # 보관 기한 정리 API(/api/cron/maintenance) 호출용 비밀값 — 외부 스케줄러에 같은 값을 넣는다.
+      - key: CRON_SECRET
+        generateValue: true
+      # 업로드 원본 파일을 둘 S3 호환 저장소(R2 등). 비워 두면 DB에 저장한다.
+      - key: FILE_STORAGE_BUCKET
+        sync: false
+      - key: FILE_STORAGE_ENDPOINT
+        sync: false
+      - key: FILE_STORAGE_ACCESS_KEY_ID
+        sync: false
+      - key: FILE_STORAGE_SECRET_ACCESS_KEY
+        sync: false

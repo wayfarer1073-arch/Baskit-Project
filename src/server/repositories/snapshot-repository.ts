@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { ParsedInventoryRow } from '@/domain/excel/types';
+import { realignSkuAttributes, recordSkuAttributes } from '@/server/repositories/sku-attribute-repository';
+import { removeStoredFiles, storageKeysFor } from '@/server/repositories/upload-file-repository';
 
 export function findActiveSnapshot(warehouseId: string, snapshotDate: Date) {
   return prisma.inventorySnapshot.findFirst({
@@ -24,8 +26,8 @@ export function getLatestActiveSnapshotBefore(warehouseId: string, beforeDate: D
 }
 
 export async function getSnapshotProductCodes(snapshotId: string): Promise<string[]> {
-  const items = await prisma.inventoryItem.findMany({ where: { snapshotId }, select: { productCode: true } });
-  return items.map((i) => i.productCode);
+  const items = await prisma.inventoryItem.findMany({ where: { snapshotId }, select: { sku: { select: { productCode: true } } } });
+  return items.map((i) => i.sku.productCode);
 }
 
 export interface CreateSnapshotInput {
@@ -46,8 +48,8 @@ export class SnapshotConflictError extends Error {
 }
 
 /**
- * 같은 (창고, 기준일)에 이미 ACTIVE 스냅샷이 있으면 REPLACED로 남기고 새 버전을 만든다(덮어쓰기로
- * 이력을 지우지 않음). 이 스냅샷이 해당 창고의 가장 최신 스냅샷일 때만 "사라진 SKU"의 isActive를 갱신한다
+ * 같은 (창고, 기준일)에 이미 ACTIVE 스냅샷이 있으면 REPLACED로 남기고 새 버전을 만든다. 이전 버전은 누가 언제 올렸는지와
+ * 원본 파일만 남기고 재고 행은 바로 지운다(어디서도 읽지 않는 행이라 공간만 차지한다). 이 스냅샷이 해당 창고의 가장 최신 스냅샷일 때만 "사라진 SKU"의 isActive를 갱신한다
  * (과거 날짜 스냅샷을 나중에 업로드해도 최신 상태 판정이 흔들리지 않도록).
  */
 export async function createSnapshot(input: CreateSnapshotInput) {
@@ -61,9 +63,12 @@ export async function createSnapshot(input: CreateSnapshotInput) {
       });
 
       let version = 1;
+      let replacedSkuIds: string[] = [];
       if (existing) {
         if (input.replaceExisting === false) throw new SnapshotConflictError();
         await tx.inventorySnapshot.update({ where: { id: existing.id }, data: { status: 'REPLACED' } });
+        replacedSkuIds = (await tx.inventoryItem.findMany({ where: { snapshotId: existing.id }, select: { skuId: true } })).map((i) => i.skuId);
+        await tx.inventoryItem.deleteMany({ where: { snapshotId: existing.id } });
         version = existing.version + 1;
       }
 
@@ -145,24 +150,24 @@ export async function createSnapshot(input: CreateSnapshotInput) {
         await tx.inventoryItem.createMany({ data: batch.map((row) => ({
             snapshotId: snapshot.id,
             skuId: skuIdByCode.get(row.productCode)!,
-            productCode: row.productCode,
-            productName: row.productName,
-            option: row.option,
-            barcode: row.barcode,
-            location: row.location,
-            category: row.category,
             unitCost: row.unitCost,
             unitCostProvided: !row.costMissing,
             totalCost: row.totalCost,
             normalStock: row.normalStock,
             defectiveStock: row.defectiveStock,
-            availableStock: row.availableStock,
             incomingStock: row.incomingStock,
-            warningQty: row.warningQty,
-            dangerQty: row.dangerQty,
             ...(Object.keys(row.extra).length > 0 ? { extra: row.extra as Prisma.InputJsonValue } : {}),
         })) });
+        // 상품명·옵션 등은 그 날짜에 효력 있는 값과 다를 때만 변경 이력에 남긴다.
+        await recordSkuAttributes(tx, input.snapshotDate, batch.map((row) => ({
+          skuId: skuIdByCode.get(row.productCode)!,
+          attributes: { productName: row.productName, option: row.option, barcode: row.barcode, location: row.location, warningQty: row.warningQty, dangerQty: row.dangerQty },
+        })));
       }
+
+      // 다시 올린 목록에서 빠진 품목은 그 날짜의 관측이 사라졌으므로 그날 남긴 속성 버전을 정리한다.
+      const dropped = replacedSkuIds.filter((id) => !touchedSkuIds.includes(id));
+      if (dropped.length > 0) await realignSkuAttributes(tx, input.warehouseId, input.snapshotDate, dropped);
 
       if (isLatestSnapshot && touchedSkuIds.length > 0 && !input.partial) {
         // 직전까지 활성이던 SKU가 이번 최신 스냅샷에는 없다 — "다음 업로드 목록에서 빠짐" =
@@ -186,7 +191,8 @@ export async function createSnapshot(input: CreateSnapshotInput) {
  * current*)를 다시 맞추고, 모든 SKU의 firstSeenDate/lastSeenDate를 남은 데이터로 재계산한다.
  */
 export async function resetUploadForDate(warehouseId: string, snapshotDate: Date): Promise<{ deletedSnapshotCount: number }> {
-  return prisma.$transaction(
+  const fileKeys: string[] = [];
+  const result = await prisma.$transaction(
     async (tx) => {
       await tx.$queryRaw`SELECT id FROM warehouses WHERE id = ${warehouseId} FOR UPDATE`;
 
@@ -199,7 +205,9 @@ export async function resetUploadForDate(warehouseId: string, snapshotDate: Date
         await tx.snapshotInbound.deleteMany({ where: { snapshotDate, skuId: { in: skuIds } } });
       }
 
+      fileKeys.push(...(await storageKeysFor({ snapshotId: { in: toDelete.map((s) => s.id) } }, tx)));
       await tx.inventorySnapshot.deleteMany({ where: { id: { in: toDelete.map((s) => s.id) } } });
+      await realignSkuAttributes(tx, warehouseId, snapshotDate);
 
       const newLatest = await tx.inventorySnapshot.findFirst({
         where: { warehouseId, status: 'ACTIVE' },
@@ -207,16 +215,28 @@ export async function resetUploadForDate(warehouseId: string, snapshotDate: Date
       });
 
       if (newLatest) {
+        // 상품 속성은 남은 최신 날짜에 효력 있는 버전(그 날짜 이하 중 가장 최근)으로 되돌린다.
         await tx.$executeRaw`
           UPDATE skus AS s SET
-            "currentProductName" = ii."productName",
-            "currentOption" = ii.option,
-            "currentBarcode" = ii.barcode,
-            "currentLocation" = ii.location,
+            "currentProductName" = v."productName",
+            "currentOption" = v.option,
+            "currentBarcode" = v.barcode,
+            "currentLocation" = v.location,
+            "currentWarningQty" = v."warningQty",
+            "currentDangerQty" = v."dangerQty",
+            "updatedAt" = NOW()
+          FROM (
+            SELECT DISTINCT ON (a."skuId") a.* FROM sku_attribute_versions a
+            JOIN inventory_items ii ON ii."skuId" = a."skuId" AND ii."snapshotId" = ${newLatest.id}
+            WHERE a."effectiveDate" <= ${newLatest.snapshotDate}
+            ORDER BY a."skuId", a."effectiveDate" DESC
+          ) AS v
+          WHERE s.id = v."skuId"
+        `;
+        await tx.$executeRaw`
+          UPDATE skus AS s SET
             "currentUnitCost" = CASE WHEN ii."unitCostProvided" THEN ii."unitCost" ELSE s."currentUnitCost" END,
             "unitCostSource" = CASE WHEN ii."unitCostProvided" THEN (CASE WHEN ii.extra ? 'manualCost' THEN 'MANUAL' ELSE 'FILE' END)::"CostSource" ELSE s."unitCostSource" END,
-            "currentWarningQty" = ii."warningQty",
-            "currentDangerQty" = ii."dangerQty",
             "isActive" = NOT COALESCE(ii.extra ? 'stockStatus', false),
             "soldOutDetectedDate" = CASE WHEN ii.extra->>'stockStatus' = 'soldOut' THEN COALESCE(s."soldOutDetectedDate", ${newLatest.snapshotDate}) ELSE NULL END,
             "removedDate" = CASE WHEN ii.extra->>'stockStatus' = 'removed' THEN COALESCE(s."removedDate", ${newLatest.snapshotDate}) ELSE NULL END,
@@ -254,6 +274,9 @@ export async function resetUploadForDate(warehouseId: string, snapshotDate: Date
     },
     { timeout: 60000, maxWait: 15000 },
   );
+  // 원본 파일 행은 스냅샷과 함께 지워졌으니, 저장소의 내용도 지운다(트랜잭션이 끝난 뒤에).
+  await removeStoredFiles(fileKeys);
+  return result;
 }
 
 export function listSnapshotsForWarehouse(warehouseId: string) {

@@ -234,13 +234,14 @@ model Sku {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items            InventoryItem[]
-  events           InventoryEvent[]
-  snapshotInbounds SnapshotInbound[]
-  expirationLots   SkuExpirationLot[]
-  favoritedBy      SkuFavorite[]
-  codeAliases      SkuCodeAlias[]
-  purchaseOrders   PurchaseOrder[]
+  items             InventoryItem[]
+  events            InventoryEvent[]
+  snapshotInbounds  SnapshotInbound[]
+  expirationLots    SkuExpirationLot[]
+  favoritedBy       SkuFavorite[]
+  codeAliases       SkuCodeAlias[]
+  purchaseOrders    PurchaseOrder[]
+  attributeVersions SkuAttributeVersion[]
 
   @@unique([warehouseId, productCode])
   @@index([warehouseId])
@@ -322,37 +323,44 @@ model SnapshotInbound {
   @@map("snapshot_inbounds")
 }
 
+/// 업로드 한 번의 품목 한 줄 — 수량·원가처럼 날마다 바뀌는 숫자만 둔다. 가장 많이 쌓이는 표라 칸을 최소로 유지한다.
+/// 상품명·옵션·바코드·위치·파일의 위험/경고수량은 날마다 거의 같으므로 바뀐 날만 SkuAttributeVersion에 남긴다.
 model InventoryItem {
-  id         String            @id @default(cuid())
   snapshotId String
   snapshot   InventorySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   skuId      String
   sku        Sku               @relation(fields: [skuId], references: [id])
 
-  productCode      String
-  productName      String
-  option           String?
-  barcode          String?
-  location         String?
-  category         String?
   unitCost         Decimal  @default(0) @db.Decimal(14, 2)
   unitCostProvided Boolean  @default(true) // 업로드 행에 원가가 명시됐는지(빈 값이면 직전 SKU 원가를 이어받음)
   totalCost        Decimal? @db.Decimal(24, 2) // 업로드 원가합. null이면 유효 원가 × 정상재고
 
   normalStock    Int @default(0) // 정상재고
   defectiveStock Int @default(0) // 불량재고
-  availableStock Int @default(0) // 가용재고
   incomingStock  Int @default(0) // 입고대기
-  warningQty     Int @default(0) // 경고수량
-  dangerQty      Int @default(0) // 위험수량
 
-  extra Json? // 원본 부가 컬럼 보존 (공급처/판매가 등, 리포트 export용)
+  extra Json? // 직접 입력·재고 0 상태·로트·직접 정한 원가 등 행별 표시와 원본 부가 컬럼(없으면 비움)
 
-  createdAt DateTime @default(now())
-
-  @@unique([snapshotId, skuId])
+  @@id([snapshotId, skuId])
   @@index([skuId])
   @@map("inventory_items")
+}
+
+/// SKU의 서술 속성 변경 이력 — 업로드된 값이 그 날짜에 효력 있는 값과 다를 때만 한 줄 남긴다.
+/// 과거 날짜로 조회하면 그날 효력이 있던(그 날짜 이하 중 가장 최근) 값을 쓴다.
+model SkuAttributeVersion {
+  skuId         String
+  sku           Sku      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  effectiveDate DateTime @db.Date
+  productName   String
+  option        String?
+  barcode       String?
+  location      String?
+  warningQty    Int      @default(0)
+  dangerQty     Int      @default(0)
+
+  @@id([skuId, effectiveDate])
+  @@map("sku_attribute_versions")
 }
 
 model InventoryEvent {
@@ -692,7 +700,8 @@ enum CostSource {
 }
 
 /// 재고 업로드의 원본 파일. 업로드 버전(스냅샷)마다 하나씩 보관해 나중에 그대로 내려받을 수 있다.
-/// 스냅샷(자료 초기화)이나 워크스페이스를 지우면 함께 지워진다. 지금은 DB에 두고, 규모가 커지면 객체 저장소로 옮긴다.
+/// 스냅샷(자료 초기화)이나 워크스페이스를 지우면 함께 지워지고, 보관 기한(UPLOAD_FILE_RETENTION_DAYS)이 지나면 정리된다.
+/// 내용은 객체 저장소(S3 호환, storageKey)에 두는 것이 기본이고, 저장소를 설정하지 않은 환경에서만 DB(data)에 둔다.
 model UploadFile {
   id             String            @id @default(cuid())
   organizationId String
@@ -703,7 +712,10 @@ model UploadFile {
   contentType    String
   size           Int
   sha256         String
-  data           Bytes
+  /// 객체 저장소를 쓰지 않을 때만 채운다.
+  data           Bytes?
+  /// 객체 저장소의 키. 채워져 있으면 내용은 저장소에 있다.
+  storageKey     String?
   createdAt      DateTime          @default(now())
 
   @@index([organizationId, createdAt])

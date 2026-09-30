@@ -250,6 +250,12 @@ async function main() {
         },
       });
       skuIdByCode.set(product.code, sku.id);
+      // 상품 속성은 변경 이력에 첫 날짜로 한 번만 남긴다(재고 행에는 숫자만 저장).
+      await prisma.skuAttributeVersion.upsert({
+        where: { skuId_effectiveDate: { skuId: sku.id, effectiveDate: new Date(`${series[0].date}T00:00:00.000Z`) } },
+        update: { productName: product.name, barcode: product.barcode, location: product.location, warningQty, dangerQty },
+        create: { skuId: sku.id, effectiveDate: new Date(`${series[0].date}T00:00:00.000Z`), productName: product.name, barcode: product.barcode, location: product.location, warningQty, dangerQty },
+      });
     }
 
     // 일자별 스냅샷 + 아이템 bulk insert
@@ -272,7 +278,7 @@ async function main() {
         },
       });
 
-      const itemsData = skuSeries.map(({ product, series, unitCost, dangerQty, warningQty }) => {
+      const itemsData = skuSeries.map(({ product, series, unitCost }) => {
         const day = series[dayIndex];
         if (day.restockEvent) {
           events.push({ skuId: skuIdByCode.get(product.code)!, note: `${product.name} 입고 반영`, quantity: 0, eventDate: new Date(`${date}T10:00:00.000Z`) });
@@ -280,17 +286,10 @@ async function main() {
         return {
           snapshotId: snapshot.id,
           skuId: skuIdByCode.get(product.code)!,
-          productCode: product.code,
-          productName: product.name,
-          barcode: product.barcode,
-          location: product.location,
           unitCost,
           normalStock: day.normalStock,
           defectiveStock: day.defectiveStock,
-          availableStock: day.availableStock,
           incomingStock: day.incomingStock,
-          warningQty,
-          dangerQty,
         };
       });
 

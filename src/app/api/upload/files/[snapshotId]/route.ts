@@ -9,7 +9,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ snapshotId
   const { snapshotId } = await params;
   const file = await getUploadFile(tenant.orgId, snapshotId);
   if (!file) return NextResponse.json({ error: '보관된 원본 파일이 없습니다.' }, { status: 404 });
-  return new Response(Buffer.from(file.data), {
+  return new Response(new Uint8Array(file.data), {
     headers: {
       'Content-Type': file.contentType,
       'Content-Length': String(file.size),

@@ -120,6 +120,18 @@ SKU와 재고 항목을 1,000행 단위로 저장합니다. 일별 추이는 Pos
 - `DATABASE_URL`을 Supabase(또는 다른 관리형 Postgres) 커넥션 문자열로 바꾸고 `npm run db:migrate`를 실행하면 그대로 배포할 수 있습니다.
 - `AUTH_SECRET`은 운영 환경에서 반드시 `openssl rand -base64 32` 등으로 새로 생성하세요.
 
+### 저장 공간 관리
+
+재고 데이터가 쌓일수록 DB 저장 비용이 커지므로 다음처럼 나눠 둡니다.
+
+- **재고 행은 숫자만**: `inventory_items`에는 수량·원가만 저장하고, 상품명·옵션·바코드·위치·파일의 위험/경고수량은 값이 바뀐 날만
+  `sku_attribute_versions`에 남깁니다(과거 날짜로 조회하면 그날 효력 있던 값을 씁니다). 같은 날짜를 다시 올리면 이전 버전의 재고 행은 바로 지웁니다.
+- **원본 파일은 객체 저장소에**: `FILE_STORAGE_*`(`.env.example` 참고)를 설정하면 업로드 원본 파일을 Cloudflare R2·S3 등에 둡니다.
+  이미 DB에 있는 파일은 `npm run db:move-files`로 옮깁니다. 설정하지 않으면 DB에 저장합니다.
+- **보관 기한 정리**: 하루 한 번 `/api/cron/maintenance`를 `Authorization: Bearer <CRON_SECRET>` 헤더로 호출하면
+  오래된 원본 파일(기본 180일)·끝난 업로드 작업 기록·만료된 토큰과 초대·오래된 운영 기록을 지웁니다. 재고·메모·발주·매출 데이터는 지우지 않습니다.
+  Render Cron Job, GitHub Actions `schedule`, cron-job.org 같은 외부 스케줄러를 쓰거나 서버에서 `npm run db:maintenance`를 실행하세요.
+
 ### Render로 배포하기
 
 저장소 루트의 `render.yaml`이 웹 서비스(`baskit-web`)와 PostgreSQL(`baskit-db`)을 함께 선언하는 Blueprint입니다.

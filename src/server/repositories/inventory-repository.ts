@@ -8,6 +8,7 @@ import type { SkuDescriptor, DailyWarehouseTotal } from '@/domain/inventory/read
 import type { DatedInbound } from '@/domain/inventory/inbounds';
 import { observationsFromLedger, type LedgerEntry } from '@/domain/ledger/ledger';
 import { NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
+import { attributesAt, loadSkuAttributeHistory, type SkuAttributes, type SkuAttributeVersionRow } from '@/server/repositories/sku-attribute-repository';
 
 /** 창고 하나의 달력 또는 창고별 달력을 돌려주는 함수. */
 type CalendarInput = ClosedDays | ((warehouseId: string) => ClosedDays);
@@ -110,18 +111,12 @@ export async function loadInboundsBySku(skuIds: string[], asOfDate?: string): Pr
 // Shared projection avoids transferring unused item IDs, extra JSON and audit fields for every observation.
 const observationSelect = {
   skuId: true,
-  productName: true,
-  option: true,
-  barcode: true,
-  location: true,
   unitCost: true,
   unitCostProvided: true,
   totalCost: true,
   normalStock: true,
   defectiveStock: true,
   incomingStock: true,
-  warningQty: true,
-  dangerQty: true,
   extra: true,
   snapshot: { select: { snapshotDate: true, warehouseId: true } },
 } satisfies Prisma.InventoryItemSelect;
@@ -160,11 +155,36 @@ function isManualCount(extra: unknown) {
   return !!extra && typeof extra === 'object' && (extra as { manual?: unknown }).manual === true;
 }
 
+/** SKU에 캐시된 지금 값 — 속성 변경 이력이 없을 때(이력 이전 날짜 등) 대신 쓴다. */
+function currentAttributes(sku: {
+  currentProductName: string;
+  currentOption: string | null;
+  currentBarcode: string | null;
+  currentLocation: string | null;
+  currentWarningQty: number;
+  currentDangerQty: number;
+}): SkuAttributes {
+  return {
+    productName: sku.currentProductName,
+    option: sku.currentOption,
+    barcode: sku.currentBarcode,
+    location: sku.currentLocation,
+    warningQty: sku.currentWarningQty,
+    dangerQty: sku.currentDangerQty,
+  };
+}
+
 /**
  * 스냅샷 행(날짜순)과 입고 기록을 품목 하나의 재고 원장으로 바꾼다. 원가가 비어 있는 행은 직전에 알려진
  * 단가를 이어받아 평가한다(resolveInventoryCost).
  */
-function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedInbound[]): LedgerEntry[] {
+function ledgerForItem(
+  skuId: string,
+  items: ObservationItem[],
+  inbounds: DatedInbound[],
+  history: SkuAttributeVersionRow[] | undefined,
+  fallback: SkuAttributes,
+): LedgerEntry[] {
   let latestKnownUnitCost: number | null = null;
   const entries: LedgerEntry[] = items.map((item) => {
     const resolved = resolveInventoryCost(
@@ -177,8 +197,11 @@ function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedI
       latestKnownUnitCost,
     );
     latestKnownUnitCost = resolved.latestKnownUnitCost;
+    const date = dateOnlyToString(item.snapshot.snapshotDate);
+    // 파일의 위험/경고수량은 그 날짜에 효력 있던 값(속성 변경 이력)을 쓴다.
+    const attributes = attributesAt(history, date) ?? fallback;
     return {
-      date: dateOnlyToString(item.snapshot.snapshotDate),
+      date,
       locationId: item.snapshot.warehouseId,
       itemId: skuId,
       // 현재 업로드 규격은 정상재고를 유일한 재고 수량으로 쓴다(가용재고 열이 비어 0으로 저장된 과거 자료 포함).
@@ -190,8 +213,8 @@ function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedI
         valuationKnown: resolved.valuationKnown,
         defectiveStock: item.defectiveStock,
         incomingStock: item.incomingStock,
-        warningQty: item.warningQty,
-        dangerQty: item.dangerQty,
+        warningQty: attributes.warningQty,
+        dangerQty: attributes.dangerQty,
       },
     };
   });
@@ -268,19 +291,20 @@ export async function loadActiveSkusWithSeries(
     select: observationSelect,
     orderBy: { snapshot: { snapshotDate: 'asc' } },
   });
-  const inboundsBySku = await loadInboundsBySku(skuIds, asOfDate);
+  const [inboundsBySku, historyBySku] = await Promise.all([loadInboundsBySku(skuIds, asOfDate), loadSkuAttributeHistory(skuIds, asOfDate)]);
 
   const itemsBySku = new Map<string, ObservationItem[]>();
-  // items가 snapshotDate asc로 정렬되어 있으므로, 마지막에 덮어써지는 값이 asOfDate 시점 기준
-  // "가장 최근" 관측치의 상품 속성이 된다. sku.current*는 asOfDate와 무관하게 항상 "지금" 값이라
-  // 과거 조회에 미래 변경 사항이 섞여 보이므로 쓰지 않는다.
-  const latestAttrsBySku = new Map<string, { productName: string; option: string | null; barcode: string | null; location: string | null }>();
   for (const item of items) {
     const list = itemsBySku.get(item.skuId);
     if (list) list.push(item);
     else itemsBySku.set(item.skuId, [item]);
-    latestAttrsBySku.set(item.skuId, { productName: item.productName, option: item.option, barcode: item.barcode, location: item.location });
   }
+  // asOfDate 시점 기준 가장 최근 관측일에 효력 있던 상품 속성을 쓴다. sku.current*는 asOfDate와 무관하게 항상
+  // "지금" 값이라 과거 조회에 미래 변경 사항이 섞여 보이므로 이력이 없을 때만 쓴다.
+  const attributesOf = (skuId: string) => {
+    const last = itemsBySku.get(skuId)?.at(-1);
+    return last ? attributesAt(historyBySku.get(skuId), dateOnlyToString(last.snapshot.snapshotDate)) : null;
+  };
 
   // 재고 0으로 품절된 품목은 그날 기준으로 재고 0이 시작된 날부터 1개월 동안만 품절 목록에 보인다.
   const zeroSoldOutSince = new Map<string, string>();
@@ -293,7 +317,7 @@ export async function loadActiveSkusWithSeries(
   }
 
   return skus.filter((sku) => !expired.has(sku.id)).map((sku) => {
-    const attrs = latestAttrsBySku.get(sku.id);
+    const attrs = attributesOf(sku.id);
     return {
       descriptor: {
         skuId: sku.id,
@@ -319,7 +343,10 @@ export async function loadActiveSkusWithSeries(
         packagingBarcode: sku.packagingBarcode,
         ...supplierFields(sku),
       },
-      observations: observationsFromLedger(ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? []), calendarOf(holidays, sku.warehouseId)),
+      observations: observationsFromLedger(
+        ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], historyBySku.get(sku.id), currentAttributes(sku)),
+        calendarOf(holidays, sku.warehouseId),
+      ),
     };
   });
 }
@@ -406,7 +433,7 @@ export async function loadSkuWithSeries(
     select: { id: true },
   });
   const latestRow = latestSnapshot
-    ? await prisma.inventoryItem.findUnique({ where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } }, select: { id: true, extra: true } })
+    ? await prisma.inventoryItem.findUnique({ where: { snapshotId_skuId: { snapshotId: latestSnapshot.id, skuId } }, select: { extra: true } })
     : null;
   const isInLatestSnapshot = !!latestRow;
   const latestStatus = latestRow ? stockStatusOf(latestRow.extra) : null;
@@ -435,12 +462,17 @@ export async function loadSkuWithSeries(
   // 재고 0으로 품절된 품목: 그날 기준 재고 0이 시작된 날부터 1개월까지만 보여준다(목록과 같은 규칙).
   const zeroSoldOutSince = latestStatus === 'soldOut' ? trailingSoldOutStart(items) : null;
   if (zeroSoldOutSince && asOfDate && asOfDate >= soldOutGraceEndDate(zeroSoldOutSince)) return null;
-  const inboundsBySku = await loadInboundsBySku([skuId], asOfDate);
+  const [inboundsBySku, historyBySku] = await Promise.all([loadInboundsBySku([skuId], asOfDate), loadSkuAttributeHistory([skuId], asOfDate)]);
+  const history = historyBySku.get(skuId);
 
-  const observations = observationsFromLedger(ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? []), calendarOf(holidays, sku.warehouseId));
+  const observations = observationsFromLedger(
+    ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? [], history, currentAttributes(sku)),
+    calendarOf(holidays, sku.warehouseId),
+  );
 
-  // asOfDate 시점 기준 가장 최근 관측치의 상품 속성을 쓴다(과거 조회에 이후 변경분이 섞이지 않도록).
+  // asOfDate 시점 기준 가장 최근 관측일에 효력 있던 상품 속성을 쓴다(과거 조회에 이후 변경분이 섞이지 않도록).
   const latestItem = items.at(-1);
+  const latestAttrs = latestItem ? attributesAt(history, dateOnlyToString(latestItem.snapshot.snapshotDate)) : null;
 
   return {
     descriptor: {
@@ -449,10 +481,10 @@ export async function loadSkuWithSeries(
       warehouseCode: sku.warehouse.code,
       warehouseName: sku.warehouse.name,
       productCode: sku.productCode,
-      productName: latestItem?.productName ?? sku.currentProductName,
-      option: latestItem ? latestItem.option : sku.currentOption,
-      barcode: latestItem ? latestItem.barcode : sku.currentBarcode,
-      location: latestItem ? latestItem.location : sku.currentLocation,
+      productName: latestAttrs?.productName ?? sku.currentProductName,
+      option: latestAttrs ? latestAttrs.option : sku.currentOption,
+      barcode: latestAttrs ? latestAttrs.barcode : sku.currentBarcode,
+      location: latestAttrs ? latestAttrs.location : sku.currentLocation,
       manualDangerQty: sku.manualDangerQty,
       manualWarningQty: sku.manualWarningQty,
       expirationDate: sku.expirationDate ? dateOnlyToString(sku.expirationDate) : null,

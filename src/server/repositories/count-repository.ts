@@ -5,6 +5,7 @@ import type { ParsedInventoryRow } from '@/domain/excel/types';
 import { readLots, type CountLot, type CountSheetRow, type PeriodicCountEntry } from '@/domain/segments/read-model';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import { createSnapshot } from '@/server/repositories/snapshot-repository';
+import { attributesAt, loadSkuAttributeHistory, type SkuAttributes } from '@/server/repositories/sku-attribute-repository';
 
 /** 직접 입력한 실사가 들어간 스냅샷의 파일명 자리 표시. */
 export const MANUAL_COUNT_SOURCE = '직접 입력';
@@ -15,29 +16,60 @@ function isManualLine(extra: unknown) {
   return !!extra && typeof extra === 'object' && (extra as { manual?: unknown }).manual === true;
 }
 
-type StoredItem = Prisma.InventoryItemGetPayload<object>;
+const storedItemInclude = {
+  sku: {
+    select: {
+      productCode: true,
+      currentProductName: true,
+      currentOption: true,
+      currentBarcode: true,
+      currentLocation: true,
+      currentWarningQty: true,
+      currentDangerQty: true,
+    },
+  },
+} satisfies Prisma.InventoryItemInclude;
+
+type StoredItem = Prisma.InventoryItemGetPayload<{ include: typeof storedItemInclude }>;
 
 /** 저장된 실사 줄을 다시 저장할 수 있는 행으로 되돌린다(같은 날 새 버전을 만들 때 기존 줄을 옮겨 담는 용도). */
-function itemToRow(item: StoredItem, rowNumber: number): ParsedInventoryRow {
+function itemToRow(item: StoredItem, attributes: SkuAttributes, rowNumber: number): ParsedInventoryRow {
   return {
     rowNumber,
-    productCode: item.productCode,
-    productName: item.productName,
-    option: item.option,
-    barcode: item.barcode,
-    location: item.location,
-    category: item.category,
+    productCode: item.sku.productCode,
+    productName: attributes.productName,
+    option: attributes.option,
+    barcode: attributes.barcode,
+    location: attributes.location,
+    category: null,
     unitCost: Number(item.unitCost),
     costMissing: !item.unitCostProvided,
     totalCost: item.totalCost === null ? null : Number(item.totalCost),
     normalStock: item.normalStock,
-    availableStock: item.availableStock,
+    availableStock: item.normalStock,
     incomingStock: item.incomingStock,
     defectiveStock: item.defectiveStock,
-    warningQty: item.warningQty,
-    dangerQty: item.dangerQty,
+    warningQty: attributes.warningQty,
+    dangerQty: attributes.dangerQty,
     extra: item.extra && typeof item.extra === 'object' && !Array.isArray(item.extra) ? (item.extra as Record<string, unknown>) : {},
   };
+}
+
+/** 그 날짜 스냅샷의 줄들을 다시 저장할 행으로 — 상품 속성은 그날 효력 있던 값(없으면 지금 값). */
+async function itemsToRows(items: StoredItem[], snapshotDate: Date): Promise<ParsedInventoryRow[]> {
+  const date = dateOnlyToString(snapshotDate);
+  const history = await loadSkuAttributeHistory(items.map((i) => i.skuId), date);
+  return items.map((item, index) => {
+    const current: SkuAttributes = {
+      productName: item.sku.currentProductName,
+      option: item.sku.currentOption,
+      barcode: item.sku.currentBarcode,
+      location: item.sku.currentLocation,
+      warningQty: item.sku.currentWarningQty,
+      dangerQty: item.sku.currentDangerQty,
+    };
+    return itemToRow(item, attributesAt(history.get(item.skuId), date) ?? current, index + 1);
+  });
 }
 
 /**
@@ -45,8 +77,8 @@ function itemToRow(item: StoredItem, rowNumber: number): ParsedInventoryRow {
  * 이 줄들을 새 버전에 합쳐 넣는다(엑셀에 같은 상품이 있으면 엑셀 값이 이긴다).
  */
 export async function manualRowsForDate(warehouseId: string, snapshotDate: Date): Promise<ParsedInventoryRow[]> {
-  const snapshot = await prisma.inventorySnapshot.findFirst({ where: { warehouseId, snapshotDate, status: 'ACTIVE' }, include: { items: true } });
-  return (snapshot?.items ?? []).filter((i) => isManualLine(i.extra)).map((i, index) => itemToRow(i, index + 1));
+  const snapshot = await prisma.inventorySnapshot.findFirst({ where: { warehouseId, snapshotDate, status: 'ACTIVE' }, include: { items: { include: storedItemInclude } } });
+  return itemsToRows((snapshot?.items ?? []).filter((i) => isManualLine(i.extra)), snapshotDate);
 }
 
 export interface MissingSku {
@@ -94,13 +126,13 @@ export async function recordCounts(orgId: string, input: { warehouseId: string; 
   const snapshotDate = toDateOnly(input.date);
   const existing = await prisma.inventorySnapshot.findFirst({
     where: { warehouseId: input.warehouseId, snapshotDate, status: 'ACTIVE' },
-    include: { items: true },
+    include: { items: { include: storedItemInclude } },
   });
   const knownSkus = await prisma.sku.findMany({ where: { warehouseId: input.warehouseId, productCode: { in: input.lines.map((l) => l.productCode) } } });
   const skuByCode = new Map(knownSkus.map((s) => [s.productCode, s]));
 
   const rows = new Map<string, ParsedInventoryRow>();
-  for (const item of existing?.items ?? []) rows.set(item.productCode, itemToRow(item, rows.size + 1));
+  for (const row of existing ? await itemsToRows(existing.items, snapshotDate) : []) rows.set(row.productCode, row);
   for (const line of input.lines) {
     const sku = skuByCode.get(line.productCode);
     const prev = rows.get(line.productCode);

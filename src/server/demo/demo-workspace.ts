@@ -105,11 +105,8 @@ async function seedWarehouseSeries(
       data: plans.map((p) => ({
         snapshotId: snapshot.id,
         skuId: skuId.get(p.code)!,
-        productCode: p.code,
-        productName: p.name,
         unitCost: p.unitCost,
         normalStock: stock.get(p.code)!,
-        availableStock: stock.get(p.code)!,
       })),
     });
   }
