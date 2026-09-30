@@ -146,10 +146,8 @@ SKU와 재고 항목을 1,000행 단위로 저장합니다. 일별 추이는 Pos
    (카페 데모 데이터가 필요하면 Render Shell에서 `npm run db:seed-store -- --org-id <워크스페이스 id>`)
 
 주의:
-- Render 무료 PostgreSQL은 워크스페이스당 1개까지라 기존 `scm-inventory-db`가 무료 슬롯을 쓰고 있으면
-  `baskit-db` 생성이 실패합니다. 이 경우 `render.yaml`의 `baskit-db` `plan`을 유료(`basic-256mb` 등)로 바꾸거나,
-  `databases` 블록을 지우고 Neon·Supabase 같은 외부 Postgres 주소를 `DATABASE_URL`에 직접 넣으세요.
-- 무료 PostgreSQL은 생성 후 일정 기간이 지나면 만료되므로 실제 고객 데이터를 넣기 전에는 유료 플랜으로 옮기세요.
+- `baskit-db`는 유료 `basic-256mb`(0.1 CPU · 256MB)로 운영합니다. DB 요금제는 대시보드가 아니라 `render.yaml`의 `plan`에서 바꾸세요 —
+  둘이 다르면 Blueprint 동기화가 실패하거나(예: "cannot downgrade database … to Free") 요금제가 되돌아갈 수 있습니다.
 - 가입(`/signup`)은 누구나 호출할 수 있습니다. 공개 전에 요청 횟수 제한·이메일 인증을 추가하세요.
 
 ### 운영자 콘솔 (`/admin`)
