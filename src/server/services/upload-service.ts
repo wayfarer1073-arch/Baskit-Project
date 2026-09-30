@@ -9,6 +9,7 @@ import { validateAgainstPreviousSnapshot } from '@/domain/excel/validator';
 import { applyStockFileExtras } from '@/server/repositories/stock-extras-repository';
 import { storeUploadFile } from '@/server/repositories/upload-file-repository';
 import type { ParsedInventoryRow, ValidationIssue } from '@/domain/excel/types';
+import { manualRowsForDate, skusMissingFromUpload, type MissingSku } from '@/server/repositories/count-repository';
 import { createSnapshot, findActiveSnapshot, getLatestActiveSnapshotBefore, getSnapshotProductCodes, SnapshotConflictError } from '@/server/repositories/snapshot-repository';
 
 export interface UploadRequest {
@@ -96,13 +97,15 @@ export interface UploadPreview {
   issues: ValidationIssue[];
   /** 창고에 처음 들어오는 상품코드(창고를 지정한 경우). */
   newCodes: string[];
+  /** 이대로 올리면 품절로 처리될 기존 SKU(창고·날짜를 지정한 경우) — 저장 전에 한 번 더 확인시킨다. */
+  missingSkus: MissingSku[];
 }
 
 /**
  * 파일을 저장하지 않고 양식만 확인한다. 양식을 주지 않으면 저장된 템플릿 → 자동 인식 순으로 정한다.
  * 사용자가 화면에서 시트·헤더 행·열을 바꾸면 그 양식으로 다시 미리보기를 요청한다.
  */
-export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout, warehouseId?: string): Promise<UploadPreview | { error: string }> {
+export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout, warehouseId?: string, snapshotDate?: string): Promise<UploadPreview | { error: string }> {
   const sheets = readSheets(fileBuffer);
   if (sheets.length === 0) return { error: '파일에서 표 데이터를 찾을 수 없습니다.' };
   const template = layout ? null : await findMatchingTemplate(orgId, sheets);
@@ -114,6 +117,10 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
   const normalized = parsed.issues.some((i) => i.level === 'ERROR')
     ? { rows: parsed.rows, issues: [], newCodes: [] }
     : await normalizeForWarehouse(warehouseId, parsed.rows, chosen);
+  const canCompare = warehouseId && snapshotDate && normalized.rows.length > 0 && !parsed.issues.some((i) => i.level === 'ERROR');
+  const missingSkus = canCompare
+    ? await skusMissingFromUpload(warehouseId, new Date(`${snapshotDate}T00:00:00.000Z`), normalized.rows.map((r) => r.productCode))
+    : [];
   return {
     sheets: sheets.map((s) => ({ name: s.name, rowCount: s.aoa.length })),
     layout: chosen,
@@ -128,6 +135,7 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
     fileDates: parsed.fileDates,
     issues: [...parsed.issues, ...normalized.issues],
     newCodes: normalized.newCodes,
+    missingSkus,
   };
 }
 
@@ -192,6 +200,13 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
 
   // 사전 확인 이후 다른 요청이 저장했을 수 있으므로, 창고 잠금 안에서 교체 허용 여부를
   // 다시 확인한다. 잠금을 사용하지 않는 외부 쓰기의 unique 충돌도 명시적인 오류로 돌려준다.
+  // 같은 날 직접 입력한 상품 중 이번 파일에 없는 것은 교체해도 남긴다(합치기) — 엑셀에 있으면 엑셀 값이 이긴다.
+  const fileCodes = new Set(parseResult.rows.map((r) => r.productCode));
+  const keptManualRows = existingForDate ? (await manualRowsForDate(request.warehouseId, request.snapshotDate)).filter((r) => !fileCodes.has(r.productCode)) : [];
+  const rowsToSave = keptManualRows.length
+    ? [...parseResult.rows, ...keptManualRows.map((r, i) => ({ ...r, rowNumber: parseResult.rows.length + i + 1 }))]
+    : parseResult.rows;
+
   let snapshot;
   try {
     snapshot = await createSnapshot({
@@ -201,7 +216,7 @@ export async function processUpload(request: UploadRequest): Promise<UploadResul
       fileHash: contentSignature,
       uploadedById: request.uploadedById,
       isMock: request.isMock ?? false,
-      rows: parseResult.rows,
+      rows: rowsToSave,
       replaceExisting: request.replaceExisting,
     });
   } catch (err) {

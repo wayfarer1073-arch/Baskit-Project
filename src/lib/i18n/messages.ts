@@ -159,6 +159,8 @@ const baseKo = {
     unitBOX: '박스 — 입수량(EA/BOX)으로 환산',
     unitPLT: '팔레트 — 입수량(EA/PLT)으로 환산',
     newCodes: '처음 보는 상품코드 {count}개: {codes}',
+    missingTitle: '기존 SKU 일부가 엑셀에 등록되지 않았습니다.',
+    missingBody: '이대로 올리면 아래 {count}개 SKU는 품절로 처리돼요. 빠뜨린 거라면 파일을 고치거나, 올린 뒤 직접 입력에서 수량을 적어 주세요.',
   },
   templates: {
     title: '업로드 양식',
@@ -574,6 +576,8 @@ const baseEn: Dictionary<typeof baseKo> = {
     unitBOX: 'Boxes — converted with units per box',
     unitPLT: 'Pallets — converted with units per pallet',
     newCodes: '{count} new product codes: {codes}',
+    missingTitle: 'Some existing SKUs aren’t in this Excel file.',
+    missingBody: 'If you upload it as is, the {count} SKUs below will be treated as sold out. If they were left out by mistake, fix the file or enter their quantities under Enter directly after uploading.',
   },
   templates: {
     title: 'Upload layouts',

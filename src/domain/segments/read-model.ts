@@ -17,15 +17,19 @@ export interface CountLot {
   quantity: number;
 }
 
-/** 직접 입력 화면의 "최근 센 상품" — 골라서 수량만 고치거나 롯트를 더할 수 있게 마지막 실사 값을 함께 준다. */
-export interface RecentCountSku {
+/** 직접 입력 화면의 재고 현황 한 줄. */
+export interface CountSheetRow {
   skuId: string;
   productCode: string;
   productName: string;
-  lastCountDate: string | null;
-  lastQuantity: number | null;
+  /** 지금 품절로 표시된 상품(최근 엑셀 전체 실사에서 빠짐). */
+  soldOut: boolean;
+  /** SKU에 기억된 단위원가 — 이 날짜 줄에 원가가 없을 때 저장에 쓴다. */
   unitCost: number | null;
-  lots: CountLot[];
+  /** 이 날짜에 기록된 실사(없으면 null). */
+  day: { quantity: number; source: 'manual' | 'excel'; lots: CountLot[]; unitCost: number | null } | null;
+  /** 이 날짜보다 앞선 가장 가까운 실사. */
+  previous: { date: string; quantity: number; lots: CountLot[] } | null;
 }
 
 export interface PeriodicCountEntry {

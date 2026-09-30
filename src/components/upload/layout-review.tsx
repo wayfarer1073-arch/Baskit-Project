@@ -12,6 +12,7 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { LAYOUT_FIELDS, REQUIRED_LAYOUT_FIELDS, type ImportLayout, type LayoutField, type MatchConfidence } from '@/domain/excel/layout-types';
 import { cn } from '@/lib/utils';
+import { Paged } from '@/components/ui/paged';
 
 /** 서버 미리보기 응답(upload-service의 UploadPreview와 같은 모양). */
 export interface LayoutPreview {
@@ -26,6 +27,7 @@ export interface LayoutPreview {
   fileDates: string[];
   issues: { level: 'ERROR' | 'WARNING'; code: string; message: string }[];
   newCodes: string[];
+  missingSkus?: { productCode: string; productName: string }[];
 }
 
 const colLetter = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : `${String.fromCharCode(64 + Math.floor(i / 26))}${String.fromCharCode(65 + (i % 26))}`);
@@ -297,6 +299,28 @@ export function LayoutReview({ preview, loading, date, onLayoutChange, saveTempl
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {preview.missingSkus && preview.missingSkus.length > 0 && (
+        <div role="alert" className="space-y-2 rounded-md border border-status-warning/40 bg-status-warning-bg px-3 py-2.5 text-xs">
+          <p className="flex items-center gap-1.5 font-semibold text-status-warning">
+            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+            {t.missingTitle}
+          </p>
+          <p className="text-status-warning">{format(t.missingBody, { count: preview.missingSkus.length })}</p>
+          <Paged items={preview.missingSkus} pagerClassName="pt-1">
+            {(pageItems) => (
+              <ul className="divide-y divide-status-warning/20 rounded border border-status-warning/30 bg-background">
+                {pageItems.map((sku) => (
+                  <li key={sku.productCode} className="flex gap-2 px-2 py-1">
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{sku.productCode}</span>
+                    <span className="truncate">{sku.productName}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Paged>
         </div>
       )}
 

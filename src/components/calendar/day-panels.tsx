@@ -40,12 +40,15 @@ function WarehouseUploadTabs({
   entryByWarehouseId,
   blocked,
   isAdmin,
+  checkMissing,
 }: {
   date: string;
   warehouses: WarehouseOption[];
   entryByWarehouseId: Map<string, CalendarEntry>;
   blocked: boolean;
   isAdmin: boolean;
+  /** 비정기 실사 엑셀: 이 파일로 품절 처리될 기존 SKU를 미리 보여준다. */
+  checkMissing?: boolean;
 }) {
   const { m } = useI18n();
   const [active, setActive] = useState(warehouses[0]?.id ?? '');
@@ -71,7 +74,7 @@ function WarehouseUploadTabs({
       </TabsList>
       {warehouses.map((w) => (
         <TabsContent key={w.id} value={w.id}>
-          <WarehouseDayPanel warehouseId={w.id} warehouseName={w.name} date={date} existing={toExisting(entryByWarehouseId.get(w.id))} blocked={blocked} isAdmin={isAdmin} />
+          <WarehouseDayPanel warehouseId={w.id} warehouseName={w.name} date={date} existing={toExisting(entryByWarehouseId.get(w.id))} blocked={blocked} isAdmin={isAdmin} checkMissing={checkMissing} />
         </TabsContent>
       ))}
     </Tabs>
@@ -145,7 +148,7 @@ export function PeriodicDayPanel({
           )}
         </TabsContent>
         <TabsContent value="excel" className="pt-2">
-          <WarehouseUploadTabs date={date} warehouses={warehouses} entryByWarehouseId={entryByWarehouseId} blocked={blocked} isAdmin={isAdmin} />
+          <WarehouseUploadTabs date={date} warehouses={warehouses} entryByWarehouseId={entryByWarehouseId} blocked={blocked} isAdmin={isAdmin} checkMissing />
         </TabsContent>
       </Tabs>
     </div>

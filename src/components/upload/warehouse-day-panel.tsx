@@ -27,10 +27,12 @@ interface WarehouseDayPanelProps {
   existing: { uploadedByName: string; uploadedAt: string; rowCount: number; snapshotId?: string; sourceFile?: { fileName: string; size: number } | null } | null;
   blocked: boolean;
   isAdmin: boolean;
+  /** 미리보기에서 이 파일로 품절 처리될 기존 SKU를 함께 받는다(비정기 실사). */
+  checkMissing?: boolean;
 }
 
 /** 하루·한 창고 분량의 업로드 폼 + 입고 특이사항. 날짜 패널(DayDetailDialog)의 탭 하나의 내용이다. */
-export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, blocked, isAdmin }: WarehouseDayPanelProps) {
+export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, blocked, isAdmin, checkMissing }: WarehouseDayPanelProps) {
   const router = useRouter();
   const { m } = useI18n();
   const [file, setFile] = useState<File | null>(null);
@@ -52,6 +54,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
     const formData = new FormData();
     formData.append('file', target);
     formData.append('warehouseId', warehouseId);
+    if (checkMissing) formData.append('date', date);
     if (layout) formData.append('layout', JSON.stringify(layout));
     try {
       const res = await fetch('/api/upload/preview', { method: 'POST', body: formData });

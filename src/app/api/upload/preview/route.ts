@@ -21,7 +21,9 @@ export async function POST(request: Request) {
 
   const warehouseIdRaw = formData.get('warehouseId');
   const warehouseId = typeof warehouseIdRaw === 'string' && (await getWarehouseInOrg(tenant.orgId, warehouseIdRaw)) ? warehouseIdRaw : undefined;
-  const preview = await previewUpload(tenant.orgId, Buffer.from(await file.arrayBuffer()), layout, warehouseId);
+  const dateRaw = formData.get('date');
+  const date = typeof dateRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : undefined;
+  const preview = await previewUpload(tenant.orgId, Buffer.from(await file.arrayBuffer()), layout, warehouseId, date);
   if ('error' in preview) return NextResponse.json(preview, { status: 422 });
   return NextResponse.json(preview);
 }

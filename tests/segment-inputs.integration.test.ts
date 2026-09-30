@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, requireTestDatabase, row } from './db-fixtures';
 import { createSnapshot } from '../src/server/repositories/snapshot-repository';
-import { listRecentCountedSkus, recordCounts } from '../src/server/repositories/count-repository';
+import { loadCountSheet, recordCounts } from '../src/server/repositories/count-repository';
 import { getPeriodicRows, getPeriodicSkuDetail } from '../src/server/services/periodic-service';
 import { addPurchaseOrders, createStoreItem, createSupplier, upsertDailySales } from '../src/server/repositories/store-repository';
 import { getStoreDashboard } from '../src/server/services/store-service';
@@ -79,12 +79,13 @@ it('merges a hand-entered count into that day and never marks uncounted SKUs as 
   });
   expect(detail?.counts[1]).toMatchObject({ date: '2026-09-01', manual: false });
 
-  const recent = await listRecentCountedSkus(a.org.id, a.warehouse.id);
-  expect(recent.find((s) => s.productCode === 'A')?.lots).toHaveLength(2);
+  const sheet = await loadCountSheet(a.org.id, a.warehouse.id, '2026-09-10');
+  expect(sheet?.find((s) => s.productCode === 'A')?.day).toMatchObject({ quantity: 70, source: 'manual' });
+  expect(sheet?.find((s) => s.productCode === 'A')?.day?.lots).toHaveLength(2);
 
   // 다른 조직은 이 창고에 쓰거나 읽을 수 없다.
   expect(await recordCounts(b.org.id, { warehouseId: a.warehouse.id, date: '2026-09-11', userId: b.user.id, lines: [line('A', 1)] })).toBeNull();
-  expect(await listRecentCountedSkus(b.org.id, a.warehouse.id)).toEqual([]);
+  expect(await loadCountSheet(b.org.id, a.warehouse.id, '2026-09-10')).toBeNull();
   expect(await getPeriodicSkuDetail(b.org.id, skus[0].id, '2026-09-12')).toBeNull();
 });
 

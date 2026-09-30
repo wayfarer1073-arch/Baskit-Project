@@ -1,7 +1,8 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
 import type { ParsedInventoryRow } from '@/domain/excel/types';
-import { readLots, type CountLot, type PeriodicCountEntry, type RecentCountSku } from '@/domain/segments/read-model';
+import { readLots, type CountLot, type CountSheetRow, type PeriodicCountEntry } from '@/domain/segments/read-model';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import { createSnapshot } from '@/server/repositories/snapshot-repository';
 
@@ -12,6 +13,61 @@ const toDateOnly = (date: string) => new Date(`${date}T00:00:00.000Z`);
 
 function isManualLine(extra: unknown) {
   return !!extra && typeof extra === 'object' && (extra as { manual?: unknown }).manual === true;
+}
+
+type StoredItem = Prisma.InventoryItemGetPayload<object>;
+
+/** 저장된 실사 줄을 다시 저장할 수 있는 행으로 되돌린다(같은 날 새 버전을 만들 때 기존 줄을 옮겨 담는 용도). */
+function itemToRow(item: StoredItem, rowNumber: number): ParsedInventoryRow {
+  return {
+    rowNumber,
+    productCode: item.productCode,
+    productName: item.productName,
+    option: item.option,
+    barcode: item.barcode,
+    location: item.location,
+    category: item.category,
+    unitCost: Number(item.unitCost),
+    costMissing: !item.unitCostProvided,
+    totalCost: item.totalCost === null ? null : Number(item.totalCost),
+    normalStock: item.normalStock,
+    availableStock: item.availableStock,
+    incomingStock: item.incomingStock,
+    defectiveStock: item.defectiveStock,
+    warningQty: item.warningQty,
+    dangerQty: item.dangerQty,
+    extra: item.extra && typeof item.extra === 'object' && !Array.isArray(item.extra) ? (item.extra as Record<string, unknown>) : {},
+  };
+}
+
+/**
+ * 그 날짜 실사에서 직접 입력한 줄. 같은 날 엑셀을 다시 올려 교체할 때, 엑셀에 없는 직접 입력 상품은 사라지지 않게
+ * 이 줄들을 새 버전에 합쳐 넣는다(엑셀에 같은 상품이 있으면 엑셀 값이 이긴다).
+ */
+export async function manualRowsForDate(warehouseId: string, snapshotDate: Date): Promise<ParsedInventoryRow[]> {
+  const snapshot = await prisma.inventorySnapshot.findFirst({ where: { warehouseId, snapshotDate, status: 'ACTIVE' }, include: { items: true } });
+  return (snapshot?.items ?? []).filter((i) => isManualLine(i.extra)).map((i, index) => itemToRow(i, index + 1));
+}
+
+export interface MissingSku {
+  productCode: string;
+  productName: string;
+}
+
+/**
+ * 이 목록(엑셀)을 그 날짜로 올리면 품절로 처리될 기존 SKU — 지금 재고가 있다고 보는 SKU 중 파일에 없는 것.
+ * 같은 날 직접 입력한 상품은 합쳐서 남기므로 빼고, 그 날짜보다 뒤의 실사가 이미 있으면 품절 처리를 하지 않으므로 빈 목록이다.
+ */
+export async function skusMissingFromUpload(warehouseId: string, snapshotDate: Date, fileCodes: string[]): Promise<MissingSku[]> {
+  const later = await prisma.inventorySnapshot.findFirst({ where: { warehouseId, status: 'ACTIVE', snapshotDate: { gt: snapshotDate } }, select: { id: true } });
+  if (later) return [];
+  const kept = new Set([...fileCodes, ...(await manualRowsForDate(warehouseId, snapshotDate)).map((r) => r.productCode)]);
+  const active = await prisma.sku.findMany({
+    where: { warehouseId, isActive: true, isHiddenFromDashboard: false },
+    orderBy: { productCode: 'asc' },
+    select: { productCode: true, currentProductName: true },
+  });
+  return active.filter((s) => !kept.has(s.productCode)).map((s) => ({ productCode: s.productCode, productName: s.currentProductName }));
 }
 
 export interface CountLineInput {
@@ -44,27 +100,7 @@ export async function recordCounts(orgId: string, input: { warehouseId: string; 
   const skuByCode = new Map(knownSkus.map((s) => [s.productCode, s]));
 
   const rows = new Map<string, ParsedInventoryRow>();
-  for (const item of existing?.items ?? []) {
-    rows.set(item.productCode, {
-      rowNumber: rows.size + 1,
-      productCode: item.productCode,
-      productName: item.productName,
-      option: item.option,
-      barcode: item.barcode,
-      location: item.location,
-      category: item.category,
-      unitCost: Number(item.unitCost),
-      costMissing: !item.unitCostProvided,
-      totalCost: item.totalCost === null ? null : Number(item.totalCost),
-      normalStock: item.normalStock,
-      availableStock: item.availableStock,
-      incomingStock: item.incomingStock,
-      defectiveStock: item.defectiveStock,
-      warningQty: item.warningQty,
-      dangerQty: item.dangerQty,
-      extra: item.extra && typeof item.extra === 'object' && !Array.isArray(item.extra) ? (item.extra as Record<string, unknown>) : {},
-    });
-  }
+  for (const item of existing?.items ?? []) rows.set(item.productCode, itemToRow(item, rows.size + 1));
   for (const line of input.lines) {
     const sku = skuByCode.get(line.productCode);
     const prev = rows.get(line.productCode);
@@ -103,33 +139,58 @@ export async function recordCounts(orgId: string, input: { warehouseId: string; 
   });
 }
 
-/** 창고에서 최근에 센 순으로 상품과 마지막 실사 값(수량·원가·롯트). */
-export async function listRecentCountedSkus(orgId: string, warehouseId: string, limit = 300): Promise<RecentCountSku[]> {
+/**
+ * 직접 입력 화면의 재고 현황 표 — 창고에서 그 날짜까지 인식한 상품마다 그날 기록값과 직전 실사.
+ * 그날 기록한 상품이 먼저, 그다음 최근에 센 순. 지난 날짜를 고칠 때도 같은 표를 쓴다.
+ */
+export async function loadCountSheet(orgId: string, warehouseId: string, date: string): Promise<CountSheetRow[] | null> {
+  const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, organizationId: orgId }, select: { id: true } });
+  if (!warehouse) return null;
+  const day = toDateOnly(date);
   const skus = await prisma.sku.findMany({
-    where: { warehouseId, warehouse: { organizationId: orgId }, isHiddenFromDashboard: false },
-    orderBy: [{ lastSeenDate: 'desc' }, { productCode: 'asc' }],
-    take: limit,
-    include: {
+    where: { warehouseId, isHiddenFromDashboard: false, firstSeenDate: { lte: day } },
+    select: {
+      id: true,
+      productCode: true,
+      currentProductName: true,
+      currentUnitCost: true,
+      isActive: true,
       items: {
-        where: { snapshot: { status: 'ACTIVE' } },
+        where: { snapshot: { status: 'ACTIVE', snapshotDate: { lte: day } } },
         orderBy: { snapshot: { snapshotDate: 'desc' } },
-        take: 1,
+        take: 2,
         select: { normalStock: true, unitCost: true, unitCostProvided: true, extra: true, snapshot: { select: { snapshotDate: true } } },
       },
     },
   });
-  return skus.map((s) => {
-    const last = s.items[0];
+  const rows = skus.map((s): CountSheetRow => {
+    const [first, second] = s.items;
+    const firstDate = first ? dateOnlyToString(first.snapshot.snapshotDate) : null;
+    const dayItem = firstDate === date ? first : null;
+    const prevItem = dayItem ? second : first;
     return {
       skuId: s.id,
       productCode: s.productCode,
       productName: s.currentProductName,
-      lastCountDate: last ? dateOnlyToString(last.snapshot.snapshotDate) : null,
-      lastQuantity: last ? last.normalStock : null,
+      soldOut: !s.isActive,
       unitCost: Number(s.currentUnitCost) > 0 ? Number(s.currentUnitCost) : null,
-      lots: last ? readLots(last.extra) : [],
+      day: dayItem
+        ? {
+            quantity: dayItem.normalStock,
+            source: isManualLine(dayItem.extra) ? 'manual' : 'excel',
+            lots: readLots(dayItem.extra),
+            unitCost: dayItem.unitCostProvided ? Number(dayItem.unitCost) : null,
+          }
+        : null,
+      previous: prevItem ? { date: dateOnlyToString(prevItem.snapshot.snapshotDate), quantity: prevItem.normalStock, lots: readLots(prevItem.extra) } : null,
     };
   });
+  return rows.sort(
+    (a, b) =>
+      Number(!!b.day) - Number(!!a.day) ||
+      (b.previous?.date ?? '').localeCompare(a.previous?.date ?? '') ||
+      a.productCode.localeCompare(b.productCode),
+  );
 }
 
 export interface CountedSku {
