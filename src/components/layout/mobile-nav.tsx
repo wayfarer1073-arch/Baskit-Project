@@ -7,10 +7,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { SegmentNavLinks, SegmentSwitcher, useActiveSegment } from '@/components/layout/segment-nav';
+import { AppNav, useActiveSegment, type NavRecentPost } from '@/components/layout/segment-nav';
 import type { Segment } from '@/lib/segments';
 import { useI18n } from '@/components/i18n/i18n-provider';
-import { LanguageSwitcher } from '@/components/i18n/language-switcher';
 
 interface MobileNavProps {
   userName: string;
@@ -18,10 +17,11 @@ interface MobileNavProps {
   defaultSegment: Segment;
   enabledSegments: Segment[];
   isPlatformAdmin?: boolean;
+  recentPosts?: NavRecentPost[];
 }
 
 /** sm 미만 화면 전용 — 좁은 폭에서 가로 탭 4개+사용자 정보가 글자 단위로 줄바꿈되며 깨지는 문제를 드로어로 해결한다. */
-export function MobileNav({ userName, userRole, defaultSegment, enabledSegments, isPlatformAdmin }: MobileNavProps) {
+export function MobileNav({ userName, userRole, defaultSegment, enabledSegments, isPlatformAdmin, recentPosts }: MobileNavProps) {
   const segment = useActiveSegment(defaultSegment, enabledSegments);
   const router = useRouter();
   const { m } = useI18n();
@@ -58,13 +58,9 @@ export function MobileNav({ userName, userRole, defaultSegment, enabledSegments,
           </SheetTitle>
           <SheetDescription className="sr-only">{m.nav.siteMenu}</SheetDescription>
         </SheetHeader>
-        <SegmentSwitcher segment={segment} enabled={enabledSegments} variant="drawer" onNavigate={() => setOpen(false)} className="px-3 pt-3" />
-        <nav className="flex flex-col gap-1 p-3">
-          <SegmentNavLinks segment={segment} variant="drawer" onNavigate={() => setOpen(false)} isPlatformAdmin={isPlatformAdmin} />
+        <nav className="flex flex-col gap-1 p-3" aria-label={m.nav.siteMenu}>
+          <AppNav segment={segment} enabled={enabledSegments} variant="drawer" recentPosts={recentPosts} isPlatformAdmin={isPlatformAdmin} onNavigate={() => setOpen(false)} />
         </nav>
-        <div className="px-4 pb-2">
-          <LanguageSwitcher tone="light" />
-        </div>
         <div className="mt-auto flex items-center justify-between gap-3 border-t p-4">
           <div className="text-xs leading-tight">
             <div className="font-medium text-foreground">{userName}</div>

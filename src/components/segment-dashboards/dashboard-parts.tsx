@@ -61,13 +61,12 @@ export function SectionPanel({
 }) {
   return (
     <section id={id} className="scroll-mt-20 rounded-xl border border-border bg-card" aria-label={title}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3.5">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
-        </div>
-        {action}
+      <div className="rounded-t-[11px] bg-sidebar px-5 py-3.5 text-sidebar-foreground">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {description && <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{description}</p>}
       </div>
+      {/* 검색·필터 같은 조작은 어두운 머리글 대신 바로 아래 줄에 둬서 입력칸이 제 색으로 보이게 한다. */}
+      {action && <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-5 py-2.5">{action}</div>}
       {children}
     </section>
   );

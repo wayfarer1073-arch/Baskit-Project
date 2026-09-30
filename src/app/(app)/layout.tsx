@@ -11,6 +11,8 @@ import { getSegmentContext } from '@/server/segments';
 import { getAccountStatus } from '@/server/repositories/account-repository';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
 import { Suspense } from 'react';
+import Link from 'next/link';
+import { CALENDAR_HREF } from '@/lib/segments';
 import { NavigationOverlay } from '@/components/layout/navigation-overlay';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -42,12 +44,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {tenant.actingAs && <ActingAsBanner workspaceName={organization.name} />}
         {!tenant.actingAs && account && !account.emailVerifiedAt && <VerifyEmailBanner email={account.email} />}
         <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 sm:hidden">
-          <MobileNav userName={session.user.name ?? ''} userRole={roleLabel} defaultSegment={defaultSegment} enabledSegments={enabledSegments} isPlatformAdmin={tenant.isPlatformAdmin} />
-          <span className="inline-flex items-center gap-2.5">
+          <MobileNav userName={session.user.name ?? ''} userRole={roleLabel} defaultSegment={defaultSegment} enabledSegments={enabledSegments} isPlatformAdmin={tenant.isPlatformAdmin} recentPosts={recentPosts} />
+          <Link href={CALENDAR_HREF} className="inline-flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="" className="size-8 shrink-0" />
             <span className="text-sm font-semibold tracking-tight text-foreground">Limenote</span>
-          </span>
+          </Link>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1840px] flex-1 px-4 py-7 outline-none sm:px-6 lg:px-8 lg:py-9">
           {children}

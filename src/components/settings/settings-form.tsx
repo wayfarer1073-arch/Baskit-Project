@@ -32,6 +32,7 @@ import type { RiskThresholdSettings } from '@/domain/inventory/types';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
+import { LanguageSettings } from '@/components/settings/language-settings';
 
 interface SkuVisibilityRow {
   skuId: string;
@@ -100,6 +101,7 @@ export function CommonSettings({
   return (
     <div className="space-y-6">
       <EnabledSegments isAdmin={isAdmin} enabled={enabledSegments} />
+      <LanguageSettings />
       {usesStock && <WarehouseManagement key={warehouses.map((w) => `${w.id}:${w.name}`).join('|')} isAdmin={isAdmin} warehouses={warehouses} />}
       {usesStock && <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />}
       <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
