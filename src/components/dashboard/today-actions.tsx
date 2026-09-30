@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Pagination } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePaged } from '@/lib/use-paged';
@@ -48,6 +49,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
   const t = m.today;
   const [kind, setKind] = useState<TodayActionKind | 'all'>('all');
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [open, setOpen] = useState(true);
   const counts = useMemo(() => {
     const map = new Map<TodayActionKind, number>();
     for (const a of actions) map.set(a.kind, (map.get(a.kind) ?? 0) + 1);
@@ -80,17 +82,38 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
 
   return (
     <section aria-labelledby="today-actions-title" className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="bg-sidebar px-5 py-3.5 text-sidebar-foreground">
-        <h2 id="today-actions-title" className="text-base font-semibold">
-          {t.title}
-          {actions.length > 0 && <span className="ml-2 text-sm font-normal text-sidebar-muted-foreground tabular-nums">{actions.length}</span>}
-        </h2>
-        <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 id="today-actions-title" className="text-base font-semibold">
+              {t.title}
+            </h2>
+            {/* 눌리는 버튼이 아니라 개수를 눈에 띄게 보여주는 표시다. */}
+            <span className="inline-flex items-center rounded-full bg-brand-accent px-2.5 py-0.5 text-xs font-semibold text-black tabular-nums">
+              {format(t.skuCount, { count: actions.length.toLocaleString() })}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-sidebar-muted-foreground">{t.subtitle}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-foreground hover:text-brand-accent"
+          aria-expanded={open}
+          aria-controls="today-actions-body"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? <ChevronUp className="size-3.5" aria-hidden="true" /> : <ChevronDown className="size-3.5" aria-hidden="true" />}
+          {open ? t.hide : t.show}
+        </Button>
       </div>
-      {actions.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted-foreground">{t.empty}</p>
+      {!open ? null : actions.length === 0 ? (
+        <p id="today-actions-body" className="px-5 py-6 text-sm text-muted-foreground">
+          {t.empty}
+        </p>
       ) : (
-        <>
+        <div id="today-actions-body">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-3" role="group" aria-label={t.filterAria}>
             {chip('all', t.all, actions.length)}
             {KIND_ORDER.filter((k) => counts.has(k)).map((k) => chip(k, t.kinds[k], counts.get(k) ?? 0))}
@@ -136,7 +159,7 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
             </div>
             <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </div>
-        </>
+        </div>
       )}
     </section>
   );
