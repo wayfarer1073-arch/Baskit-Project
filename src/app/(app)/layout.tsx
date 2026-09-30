@@ -43,24 +43,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Suspense>
         {tenant.actingAs && <ActingAsBanner workspaceName={organization.name} />}
         {!tenant.actingAs && account && !account.emailVerifiedAt && <VerifyEmailBanner email={account.email} />}
-        {/* 모바일 머리글 — 데스크톱 사이드바와 같은 매트 블랙 바탕. */}
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground sm:hidden">
+        <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 sm:hidden">
           <MobileNav
             userName={session.user.name ?? ''}
             userRole={roleLabel}
+            workspaceName={organization.name}
             defaultSegment={defaultSegment}
             enabledSegments={enabledSegments}
             isPlatformAdmin={tenant.isPlatformAdmin}
             recentPosts={recentPosts}
-            triggerClassName="text-sidebar-foreground hover:bg-sidebar-hover-bg hover:text-sidebar-foreground"
           />
-          <Link href={CALENDAR_HREF} className="inline-flex min-w-0 items-center gap-2.5">
+          <Link href={CALENDAR_HREF} className="inline-flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-icon.png" alt="" className="size-8 shrink-0" />
-            <span className="min-w-0 leading-tight">
-              <span className="block text-sm font-semibold tracking-tight">Limenote</span>
-              <span className="block truncate text-[11px] text-sidebar-muted-foreground">{organization.name}</span>
-            </span>
+            <span className="text-sm font-semibold tracking-tight text-foreground">Limenote</span>
           </Link>
         </header>
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1840px] flex-1 px-4 py-7 outline-none sm:px-6 lg:px-8 lg:py-9">
