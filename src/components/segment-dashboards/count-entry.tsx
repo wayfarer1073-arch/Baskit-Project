@@ -54,11 +54,25 @@ function lotTotal(line: LineDraft) {
   return line.lots.reduce((s, l) => s + (Number(l.quantity) || 0), 0);
 }
 
-export function CountEntry({ today, warehouses }: { today: string; warehouses: { id: string; name: string }[] }) {
+/**
+ * 실사 입력 폼. 캘린더의 날짜 패널 안에 넣을 때는 fixedDate로 날짜를 고정하고(날짜 칸·페이지 머리글 없음)
+ * 최근 센 상품 목록을 폼 아래로 쌓는다.
+ */
+export function CountEntry({
+  today,
+  warehouses,
+  fixedDate,
+  onSaved,
+}: {
+  today: string;
+  warehouses: { id: string; name: string }[];
+  fixedDate?: string;
+  onSaved?: () => void;
+}) {
   const t = useI18n().m.periodic.entry;
   const router = useRouter();
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '');
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(fixedDate ?? today);
   const [lines, setLines] = useState<LineDraft[]>([blankLine(0)]);
   const [recent, setRecent] = useState<RecentCountSku[] | null>(null);
   const [query, setQuery] = useState('');
@@ -136,6 +150,7 @@ export function CountEntry({ today, warehouses }: { today: string; warehouses: {
       setLines([blankLine()]);
       loadRecent(warehouseId);
       router.refresh();
+      onSaved?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t.saveFailed);
     } finally {
@@ -145,18 +160,20 @@ export function CountEntry({ today, warehouses }: { today: string; warehouses: {
 
   return (
     <div className="space-y-6">
-      <SegmentDashboardHeader
-        title={t.title}
-        description={t.description}
-        action={
-          <Link href="/upload" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            <FileSpreadsheet className="size-4" aria-hidden="true" />
-            {t.excel}
-          </Link>
-        }
-      />
+      {!fixedDate && (
+        <SegmentDashboardHeader
+          title={t.title}
+          description={t.description}
+          action={
+            <Link href="/upload" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+              <FileSpreadsheet className="size-4" aria-hidden="true" />
+              {t.excel}
+            </Link>
+          }
+        />
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className={cn('grid gap-6', !fixedDate && 'lg:grid-cols-[minmax(0,1fr)_320px]')}>
         <SectionPanel title={t.countedTitle} description={t.countedDescription}>
           <form onSubmit={submit} className="space-y-4 px-5 py-4">
             <div className="flex flex-wrap items-end gap-3">
@@ -177,10 +194,12 @@ export function CountEntry({ today, warehouses }: { today: string; warehouses: {
                   </Select>
                 </div>
               )}
-              <div className="space-y-1.5">
+              {!fixedDate && (
+                <div className="space-y-1.5">
                 <Label htmlFor="count-date">{t.date}</Label>
                 <Input id="count-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
               </div>
+              )}
             </div>
 
             <ol className="space-y-2">
@@ -354,7 +373,7 @@ export function CountEntry({ today, warehouses }: { today: string; warehouses: {
               <Input aria-label={t.recentSearchAria} placeholder={t.recentSearchPlaceholder} value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
             </div>
           </div>
-          <ul className="max-h-[560px] divide-y divide-border overflow-y-auto">
+          <ul className={cn('divide-y divide-border overflow-y-auto', fixedDate ? 'max-h-64' : 'max-h-[560px]')}>
             {recent === null &&
               Array.from({ length: 5 }, (_, i) => (
                 <li key={i} className="px-4 py-3">

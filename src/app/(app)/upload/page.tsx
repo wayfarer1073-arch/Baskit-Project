@@ -10,9 +10,28 @@ import { listUploadFileInfo } from '@/server/repositories/upload-file-repository
 import { ViewerNotice } from '@/components/auth/viewer-notice';
 import { getMessages } from '@/server/i18n';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
+import { getSegmentContext } from '@/server/segments';
+import { listDailySales, listRecentOrders } from '@/server/repositories/store-repository';
+import { getStoreItemLearning } from '@/server/services/store-service';
+import { MANUAL_COUNT_SOURCE } from '@/server/repositories/count-repository';
+import { isDateString, todayKstDateString } from '@/lib/date';
+import { isSegment } from '@/lib/segments';
+import { getPeriodicRows } from '@/server/services/periodic-service';
+import { missingSalesDates } from '@/domain/segments/calendar-todo';
+import type { CalendarTodo } from '@/components/upload/upload-calendar';
 
-export default async function UploadPage() {
+/** 공용 캘린더 — 날짜를 누르면 켜 둔 방식별 업로드·입력 패널이 뜬다. ?date=&mode=로 특정 날짜 패널을 바로 연다. */
+export default async function UploadPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const tenant = await requireTenant();
+  const params = await searchParams;
+  const { enabled: enabledSegments, active: activeSegment } = await getSegmentContext(tenant.orgId);
+  const today = todayKstDateString();
+  const usesStore = enabledSegments.includes('ORDER_CYCLE');
+  const [sales, orders, storeItems] = usesStore
+    ? await Promise.all([listDailySales(tenant.orgId), listRecentOrders(tenant.orgId, 5000), getStoreItemLearning(tenant.orgId, today)])
+    : [[], [], []];
+  const initialDate = typeof params.date === 'string' && isDateString(params.date) ? params.date : null;
+  const initialMode = isSegment(params.mode) && enabledSegments.includes(params.mode) ? params.mode : null;
   const isAdmin = tenant.isAdmin;
   const warehouses = await listWarehouses(tenant.orgId);
   const inboundCounts = await listInboundCountsByWarehouseAndDate(tenant.orgId);
@@ -38,11 +57,31 @@ export default async function UploadPage() {
             inboundCount: inboundCounts.get(`${w.id}|${date}`) ?? 0,
             snapshotId: s.id,
             sourceFile: files.get(s.id) ?? null,
+            isManual: s.sourceFileName === MANUAL_COUNT_SOURCE,
           };
         });
       }),
     )
   ).flat();
+
+  // 캘린더 위 할 일 — 켜 둔 방식마다 밀린 것 하나씩. 누르면 그 날짜·방식의 패널이 열린다.
+  const todos: CalendarTodo[] = [];
+  if (enabledSegments.includes('DAILY_SYNC')) {
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const todayClosed = weekday === 0 || weekday === 6 || holidays.some((h) => h.date === today);
+    const missing = warehouses.filter((w) => !calendarEntries.some((e) => e.warehouseId === w.id && e.date === today)).length;
+    if ((!todayClosed || allowNonWorkingDayUploads) && missing > 0) todos.push({ kind: 'dailyMissing', count: missing, date: today, mode: 'DAILY_SYNC' });
+  }
+  if (enabledSegments.includes('PERIODIC_COUNT')) {
+    const { rows } = await getPeriodicRows(tenant.orgId, today);
+    const recount = rows.filter((r) => r.estimate.recountReasons.length > 0).length;
+    if (recount > 0) todos.push({ kind: 'periodicRecount', count: recount, date: today, mode: 'PERIODIC_COUNT' });
+  }
+  if (usesStore) {
+    const firstActivity = [sales[0]?.date, ...orders.map((o) => o.date)].filter((d): d is string => !!d).sort()[0] ?? null;
+    const missing = missingSalesDates(new Set(sales.map((s) => s.date)), firstActivity, today);
+    if (missing.length > 0) todos.push({ kind: 'storeMissing', count: missing.length, date: missing[0], mode: 'ORDER_CYCLE' });
+  }
 
   return (
     <div className="space-y-6">
@@ -54,6 +93,15 @@ export default async function UploadPage() {
         schedules={schedules}
         isAdmin={isAdmin}
         allowNonWorkingDayUploads={allowNonWorkingDayUploads}
+        enabledSegments={enabledSegments}
+        activeSegment={activeSegment}
+        canEdit={tenant.role !== 'VIEWER'}
+        sales={sales}
+        orders={orders}
+        storeItems={storeItems}
+        initialDate={initialDate}
+        initialMode={initialMode}
+        todos={todos}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 /** 설정/업로드 화면의 "샘플파일 다운로드" 버튼이 내려주는 업로드 양식. 각 파서의 헤더 별칭 중
  * 가장 표준적인 이름을 헤더로 쓰고, 실제로 채워 넣을 형태를 보여주는 예시 행 2개를 둔다. */
 
-export const TEMPLATE_TYPES = ['inventory', 'expiration', 'packaging'] as const;
+export const TEMPLATE_TYPES = ['inventory', 'expiration', 'packaging', 'sales'] as const;
 export type TemplateType = (typeof TEMPLATE_TYPES)[number];
 
 export interface TemplateSheet {
@@ -33,6 +33,14 @@ const TEMPLATE_BUILDERS: Record<TemplateType, () => TemplateSheet> = {
     rows: [
       ['00001', '샘플상품 A 200g', 24, 480, '8801234567890'],
       ['00002', '샘플상품 B 500ml', 12, 240, '8801234567891'],
+    ],
+  }),
+  sales: () => ({
+    fileName: '매출_업로드_양식.xlsx',
+    headers: ['날짜', '매출'],
+    rows: [
+      ['2026-09-01', 1250000],
+      ['2026-09-02', 980000],
     ],
   }),
 };

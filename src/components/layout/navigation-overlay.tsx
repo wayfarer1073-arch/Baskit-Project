@@ -69,7 +69,7 @@ export function NavigationOverlay() {
     <div className="absolute inset-0 z-30 bg-background/40 backdrop-blur-[2px] animate-in fade-in duration-150" role="status" aria-live="polite">
       <div className="sticky top-0 flex h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3 rounded-2xl bg-background/80 px-6 py-5 shadow-lg">
-          <span className="size-9 animate-spin rounded-full border-[3px] border-brand-accent/25 border-t-brand-accent" aria-hidden="true" />
+          <span className="size-9 animate-spin rounded-full border-[3px] border-muted border-t-foreground" aria-hidden="true" />
           <span className="text-xs font-medium text-muted-foreground">{m.dashboard.ui.loading}</span>
         </div>
       </div>

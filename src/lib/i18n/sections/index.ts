@@ -10,6 +10,7 @@ import * as settingsScreens from './settings-screens';
 import * as periodic from './periodic';
 import * as store from './store';
 import * as platform from './platform';
+import * as calendar from './calendar';
 
 export const ko = {
   dashboard: dashboard.ko,
@@ -20,6 +21,7 @@ export const ko = {
   periodic: periodic.ko,
   store: store.ko,
   platform: platform.ko,
+  calendar: calendar.ko,
 };
 
 export const en = {
@@ -31,4 +33,5 @@ export const en = {
   periodic: periodic.en,
   store: store.en,
   platform: platform.en,
+  calendar: calendar.en,
 };

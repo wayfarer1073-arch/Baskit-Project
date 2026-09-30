@@ -9,21 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SectionPanel, SegmentDashboardHeader } from '@/components/segment-dashboards/dashboard-parts';
+import { SectionPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { OPEN_UNIT_OPTIONS, describeUnitsText } from '@/components/segment-dashboards/coverage-parts';
-import type { OrderEntryRow, SalesEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
+import type { OrderEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
 import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 
 type ItemSummary = StoreItemLearning;
 
-interface StoreRecordsProps {
-  today: string;
-  items: ItemSummary[];
-  orders: OrderEntryRow[];
-  sales: SalesEntryRow[];
-}
 
 async function send(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -36,11 +30,14 @@ async function send(url: string, method: string, body?: unknown) {
   return data;
 }
 
-export function StoreRecords({ today, items, orders, sales }: StoreRecordsProps) {
-  const t = useI18n().m.store.records;
+
+export type Run = (action: () => Promise<unknown>, success: string) => Promise<boolean>;
+
+/** 저장 요청을 보내고 알림·새로고침까지 하는 공용 실행기 — 기록 화면과 캘린더 패널이 함께 쓴다. */
+export function useStoreRunner(): { busy: boolean; run: Run } {
+  const requestFailed = useI18n().m.store.records.requestFailed;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
     try {
@@ -49,31 +46,14 @@ export function StoreRecords({ today, items, orders, sales }: StoreRecordsProps)
       router.refresh();
       return true;
     } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t.requestFailed);
+      toast.error(e instanceof Error && e.message ? e.message : requestFailed);
       return false;
     } finally {
       setBusy(false);
     }
   }
-
-  return (
-    <div className="space-y-6">
-      <SegmentDashboardHeader
-        title={t.title}
-        description={t.description}
-        action={
-          <Link href="/settings?tab=store" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            {t.settingsLink}
-          </Link>
-        }
-      />
-      <OrderSection today={today} items={items} orders={orders} busy={busy} run={run} />
-      <SalesSection today={today} sales={sales} busy={busy} run={run} />
-    </div>
-  );
+  return { busy, run };
 }
-
-type Run = (action: () => Promise<unknown>, success: string) => Promise<boolean>;
 
 interface DraftLine {
   key: number;
@@ -105,12 +85,28 @@ function leftoverDraft(units: number): Pick<DraftLine, 'leftWhole' | 'leftOpen'>
   };
 }
 
-function OrderSection({ today, items, orders, busy, run }: { today: string; items: ItemSummary[]; orders: OrderEntryRow[]; busy: boolean; run: Run }) {
+/** 발주 기록. 캘린더 패널에서는 fixedDate로 날짜를 고정하고, 목록도 그날 발주만 보여준다. */
+export function OrderSection({
+  today,
+  items,
+  orders,
+  busy,
+  run,
+  fixedDate,
+}: {
+  today: string;
+  items: ItemSummary[];
+  orders: OrderEntryRow[];
+  busy: boolean;
+  run: Run;
+  fixedDate?: string;
+}) {
   const { m, locale } = useI18n();
   const t = m.store.records;
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(fixedDate ?? today);
   const [lines, setLines] = useState<DraftLine[]>([newLine(items[0]?.id ?? '', 0)]);
   const byId = new Map(items.map((i) => [i.id, i]));
+  const shownOrders = fixedDate ? orders.filter((o) => o.date === fixedDate) : orders;
 
   function update(key: number, patch: Partial<DraftLine>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -158,12 +154,14 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-3 border-b border-border px-5 py-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="order-date">{t.orderDate}</Label>
-              <Input id="order-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          {!fixedDate && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="order-date">{t.orderDate}</Label>
+                <Input id="order-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+              </div>
             </div>
-          </div>
+          )}
           <div className="space-y-2">
             {lines.map((line, index) => {
               const item = byId.get(line.itemId);
@@ -321,8 +319,8 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
         </form>
       )}
       <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-        {orders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noOrders}</li>}
-        {orders.map((o) => (
+        {shownOrders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noOrders}</li>}
+        {shownOrders.map((o) => (
           <li key={o.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
             <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{o.date}</span>
             <span className="min-w-0 flex-1 truncate">{o.itemName}</span>
@@ -341,63 +339,6 @@ function OrderSection({ today, items, orders, busy, run }: { today: string; item
               disabled={busy}
               aria-label={format(t.deleteOrderAria, { date: o.date, item: o.itemName })}
               onClick={() => confirm(t.deleteOrderConfirm) && run(() => send(`/api/store/orders/${o.id}`, 'DELETE'), t.deleted)}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </SectionPanel>
-  );
-}
-
-function SalesSection({ today, sales, busy, run }: { today: string; sales: SalesEntryRow[]; busy: boolean; run: Run }) {
-  const { locale, m } = useI18n();
-  const t = m.store.records;
-  const [date, setDate] = useState(today);
-  const [amount, setAmount] = useState('');
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const ok = await run(
-      () =>
-        send('/api/store/sales', 'PUT', {
-          date,
-          amount: Number(amount.replace(/,/g, '')),
-        }),
-      t.salesSaved,
-    );
-    if (ok) setAmount('');
-  }
-
-  return (
-    <SectionPanel title={t.salesTitle} description={t.salesDescription}>
-      <form onSubmit={submit} className="grid grid-cols-2 gap-3 border-b border-border px-5 py-4 sm:grid-cols-[1fr_1.2fr_auto] sm:items-end">
-        <div className="space-y-1.5">
-          <Label htmlFor="sales-date">{t.date}</Label>
-          <Input id="sales-date" type="date" max={today} required value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="sales-amount">{t.salesAmount}</Label>
-          <Input id="sales-amount" inputMode="numeric" required pattern="[0-9,]+" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1,250,000" />
-        </div>
-        <Button type="submit" disabled={busy} className="col-span-2 sm:col-span-1">
-          {t.save}
-        </Button>
-      </form>
-      <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-        {sales.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noSales}</li>}
-        {sales.map((s) => (
-          <li key={s.date} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-            <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{s.date}</span>
-            <span className="flex-1 text-right tabular-nums">{formatMoney(s.amount, locale)}</span>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              disabled={busy}
-              aria-label={format(t.deleteSalesAria, { date: s.date })}
-              onClick={() => confirm(format(t.deleteSalesConfirm, { date: s.date })) && run(() => send(`/api/store/sales?date=${s.date}`, 'DELETE'), t.deleted)}
             >
               <Trash2 className="size-3.5" />
             </Button>

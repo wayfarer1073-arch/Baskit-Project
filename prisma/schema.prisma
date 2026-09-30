@@ -388,8 +388,13 @@ model EventSchedule {
   startDate      DateTime     @db.Date
   endDate        DateTime     @db.Date
   color          String       @default("red") // SCHEDULE_COLORS(빨강/주황/연분홍/라임/cyan/연보라) 중 하나
+  // 캘린더 일정 패널에서 적은 상세 내용(연결된 SKU 메모에도 같은 내용이 들어간다).
+  note           String       @default("")
+  // 캘린더 일정 패널에서 만든 일정 — 연결된 SKU·품목이 없어도 캘린더에 보인다(삭제는 패널에서만).
+  managed        Boolean      @default(false)
 
-  events InventoryEvent[]
+  events     InventoryEvent[]
+  storeItems ScheduleStoreItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -500,7 +505,8 @@ model StoreItem {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  orders PurchaseOrder[]
+  orders        PurchaseOrder[]
+  scheduleLinks ScheduleStoreItem[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -711,4 +717,18 @@ model UploadFile {
 
   @@index([organizationId, createdAt])
   @@map("upload_files")
+}
+
+/// 일정에 연결한 매장 품목(매장 발주 예측). 재고 SKU는 InventoryEvent로 연결하고, 창고가 없는 매장 품목은 여기로.
+model ScheduleStoreItem {
+  id          String        @id @default(cuid())
+  scheduleId  String
+  schedule    EventSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  storeItemId String
+  storeItem   StoreItem     @relation(fields: [storeItemId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+
+  @@unique([scheduleId, storeItemId])
+  @@index([storeItemId])
+  @@map("schedule_store_items")
 }

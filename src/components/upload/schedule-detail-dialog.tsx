@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { formatKstDate } from '@/lib/date';
@@ -17,9 +18,10 @@ interface ScheduleDetailDialogProps {
   schedule: ScheduleRow | null;
   onOpenChange: (open: boolean) => void;
   onColorChanged: (scheduleId: string, color: ScheduleColor) => void;
+  onEdit?: (schedule: ScheduleRow) => void;
 }
 
-export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged }: ScheduleDetailDialogProps) {
+export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged, onEdit }: ScheduleDetailDialogProps) {
   const { m } = useI18n();
   const t = m.work.schedule;
   const [savingColor, setSavingColor] = useState<ScheduleColor | null>(null);
@@ -58,6 +60,13 @@ export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged }:
           </div>
           <DialogDescription>{dateLabel}</DialogDescription>
         </DialogHeader>
+        {onEdit && (
+          <Button size="sm" variant="outline" className="absolute top-3 right-12 gap-1.5" onClick={() => onEdit(schedule)}>
+            <Pencil className="size-3.5" aria-hidden="true" />
+            {m.calendar.schedule.edit}
+          </Button>
+        )}
+        {schedule.note && <p className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">{schedule.note}</p>}
 
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -83,8 +92,20 @@ export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged }:
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground">{format(t.memos, { count: schedule.events.length })}</p>
+            <p className="text-xs font-semibold text-muted-foreground">
+              {schedule.events.length + schedule.storeItems.length === 0
+                ? m.calendar.schedule.noItems
+                : format(m.calendar.schedule.detailItems, { count: schedule.events.length + schedule.storeItems.length })}
+            </p>
             <div className="max-h-64 space-y-1.5 overflow-y-auto">
+              {schedule.storeItems.map((i) => (
+                <div key={i.storeItemId} className="flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-sm">
+                  <Badge variant="increase" className="shrink-0 text-[11px]">
+                    {m.calendar.schedule.storeItem}
+                  </Badge>
+                  <span className="truncate font-medium">{i.name}</span>
+                </div>
+              ))}
               {schedule.events.map((e) => (
                 <div key={e.id} className="rounded-md border px-2.5 py-2 text-sm">
                   <div className="flex items-center gap-1.5">
@@ -93,7 +114,7 @@ export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged }:
                     {e.productCode && <span className="shrink-0 text-xs text-muted-foreground">{e.productCode}</span>}
                     {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.quantity, { count: e.quantity })}</span>}
                   </div>
-                  {e.note && <p className="mt-1 text-xs text-muted-foreground">{e.note}</p>}
+                  {e.note && e.note !== schedule.note && <p className="mt-1 text-xs text-muted-foreground">{e.note}</p>}
                 </div>
               ))}
             </div>
