@@ -2,7 +2,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { analyzeCoverage, compareCoverageUrgency, summarizeSales, type CoverageOptions } from '@/domain/segments/sales-coverage';
 import type { StoreDashboardData, StoreItemDetail, StoreItemLearning } from '@/domain/segments/read-model';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
-import { listDailySales, listRecentOrders, listStoreItemsWithOrders } from '@/server/repositories/store-repository';
+import { findStoreWarehouse, listDailySales, listRecentOrders, listStoreItemsWithOrders } from '@/server/repositories/store-repository';
 
 /** 학습(발주 사이 매출)과 최근 평균 매출에는 최근 1년치 매출이면 충분하다. */
 const SALES_HISTORY_DAYS = 365;
@@ -33,12 +33,18 @@ export async function getStoreDashboard(orgId: string, asOfDate: string): Promis
 }
 
 export async function getStoreItemDetail(orgId: string, itemId: string, asOfDate: string): Promise<StoreItemDetail | null> {
-  const [items, sales, options] = await Promise.all([listStoreItemsWithOrders(orgId, asOfDate), loadSales(orgId, asOfDate), loadOptions(orgId)]);
+  const [items, sales, options, warehouse] = await Promise.all([
+    listStoreItemsWithOrders(orgId, asOfDate),
+    loadSales(orgId, asOfDate),
+    loadOptions(orgId),
+    findStoreWarehouse(orgId),
+  ]);
   const item = items.find((i) => i.id === itemId);
-  if (!item) return null;
+  if (!item || !warehouse) return null;
   const orders = await listRecentOrders(orgId, 100, itemId);
   return {
     itemId: item.id,
+    warehouseId: warehouse.id,
     name: item.name,
     unit: item.unit,
     leadTimeDays: item.leadTimeDays,

@@ -11,7 +11,7 @@ export interface MergeLinkRow {
 /** 창고 간 같은 품목으로 직접 묶어 둔 품목(상품코드가 같아 자동으로 묶이는 경우는 제외). */
 export async function listMergeLinks(orgId: string): Promise<MergeLinkRow[]> {
   const rows = await prisma.sku.findMany({
-    where: { mergeKey: { not: null }, warehouse: { organizationId: orgId, isArchived: false } },
+    where: { mergeKey: { not: null }, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } },
     orderBy: [{ mergeKey: 'asc' }, { productCode: 'asc' }],
     select: { id: true, productCode: true, currentProductName: true, mergeKey: true, warehouse: { select: { name: true } } },
   });

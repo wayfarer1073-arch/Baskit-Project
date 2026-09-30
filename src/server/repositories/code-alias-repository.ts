@@ -16,7 +16,7 @@ export class CodeAliasError extends Error {}
 
 export async function listCodeAliases(orgId: string): Promise<CodeAliasRow[]> {
   const rows = await prisma.skuCodeAlias.findMany({
-    where: { warehouse: { organizationId: orgId, isArchived: false } },
+    where: { warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } },
     include: { warehouse: { select: { name: true } }, sku: { select: { productCode: true, currentProductName: true } } },
     orderBy: [{ warehouseId: 'asc' }, { externalCode: 'asc' }],
   });

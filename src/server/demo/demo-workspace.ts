@@ -185,9 +185,20 @@ export async function seedStoreData(tx: Prisma.TransactionClient, orgId: string,
     supplierIds.set(sup.key, row.id);
   }
 
-  for (const spec of STORE_ITEMS) {
-    const item = await tx.storeItem.create({
-      data: { organizationId: orgId, name: spec.name, unit: spec.unit, leadTimeDays: spec.leadTimeDays, supplierId: spec.supplier ? supplierIds.get(spec.supplier) : null },
+  // 매장 품목은 '매장 품목' 가상 창고의 SKU다.
+  const storeWarehouse = await tx.warehouse.create({ data: { organizationId: orgId, code: 'STORE', name: '매장 품목', kind: 'STORE', sortOrder: 9999 } });
+  for (const [index, spec] of STORE_ITEMS.entries()) {
+    const item = await tx.sku.create({
+      data: {
+        warehouseId: storeWarehouse.id,
+        productCode: `S${String(index + 1).padStart(4, '0')}`,
+        currentProductName: spec.name,
+        unit: spec.unit,
+        reorderLeadTimeDays: spec.leadTimeDays,
+        supplierId: spec.supplier ? supplierIds.get(spec.supplier) : null,
+        firstSeenDate: days[0].date,
+        lastSeenDate: today,
+      },
     });
     // 이 품목 1단위가 실제로 감당하는 매출 — 평소 발주 간격만큼 팔면 발주량을 다 쓰도록 맞춘다.
     const salesPerUnit = (BASE_DAILY_SALES * 1.09 * spec.everyDays) / spec.qty;
@@ -202,7 +213,7 @@ export async function seedStoreData(tx: Prisma.TransactionClient, orgId: string,
       if (i === firstDay || stock <= reorderAt) {
         const leftover = Math.max(0, Math.round(stock * 4) / 4);
         orders.push({
-          itemId: item.id,
+          skuId: item.id,
           orderDate: day.date,
           quantity: spec.qty,
           coverageAmount: Math.round((spec.qty * salesPerUnit * 0.85) / 10_000) * 10_000,

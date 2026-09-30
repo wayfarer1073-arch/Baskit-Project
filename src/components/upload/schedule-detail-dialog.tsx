@@ -94,35 +94,30 @@ export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged, o
 
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-muted-foreground">
-              {schedule.events.length + schedule.storeItems.length === 0
-                ? m.calendar.schedule.noItems
-                : format(m.calendar.schedule.detailItems, { count: schedule.events.length + schedule.storeItems.length })}
+              {schedule.events.length === 0 ? m.calendar.schedule.noItems : format(m.calendar.schedule.detailItems, { count: schedule.events.length })}
             </p>
-            <Paged items={[...schedule.storeItems.map((item) => ({ kind: 'store' as const, item })), ...schedule.events.map((event) => ({ kind: 'event' as const, event }))]}>
+            <Paged items={schedule.events}>
               {(pageItems) => (
                 <div className="space-y-1.5">
-                  {pageItems.map((row) =>
-                    row.kind === 'store' ? (
-                      <div key={row.item.storeItemId} className="flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-sm">
-                        <Badge variant="increase" className="shrink-0 text-[11px]">
-                          {m.calendar.schedule.storeItem}
-                        </Badge>
-                        <span className="truncate font-medium">{row.item.name}</span>
-                      </div>
-                    ) : (
-                      <div key={row.event.id} className="rounded-md border px-2.5 py-2 text-sm">
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="outline" className="shrink-0 text-[11px]">
-                            {row.event.warehouseCode}
+                  {pageItems.map((event) => (
+                    <div key={event.id} className="rounded-md border px-2.5 py-2 text-sm">
+                      <div className="flex items-center gap-1.5">
+                        {event.isStore ? (
+                          <Badge variant="increase" className="shrink-0 text-[11px]">
+                            {m.calendar.schedule.storeItem}
                           </Badge>
-                          <span className="truncate font-medium">{row.event.productName ?? t.wholeWarehouse}</span>
-                          {row.event.productCode && <span className="shrink-0 text-xs text-muted-foreground">{row.event.productCode}</span>}
-                          {row.event.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.quantity, { count: row.event.quantity })}</span>}
-                        </div>
-                        {row.event.note && row.event.note !== schedule.note && <p className="mt-1 text-xs text-muted-foreground">{row.event.note}</p>}
+                        ) : (
+                          <Badge variant="outline" className="shrink-0 text-[11px]">
+                            {event.warehouseCode}
+                          </Badge>
+                        )}
+                        <span className="truncate font-medium">{event.productName ?? t.wholeWarehouse}</span>
+                        {event.productCode && !event.isStore && <span className="shrink-0 text-xs text-muted-foreground">{event.productCode}</span>}
+                        {event.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.quantity, { count: event.quantity })}</span>}
                       </div>
-                    ),
-                  )}
+                      {event.note && event.note !== schedule.note && <p className="mt-1 text-xs text-muted-foreground">{event.note}</p>}
+                    </div>
+                  ))}
                 </div>
               )}
             </Paged>

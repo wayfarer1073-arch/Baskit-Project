@@ -31,17 +31,17 @@ enum BusinessSegment {
 }
 
 model Organization {
-  id          String          @id @default(cuid())
-  name        String
-  segment     BusinessSegment @default(DAILY_SYNC)
+  id               String            @id @default(cuid())
+  name             String
+  segment          BusinessSegment   @default(DAILY_SYNC)
   // 설정에서 끈 대시보드 유형. 비어 있으면 모두 사용. 끄면 화면에서만 숨기고 데이터는 그대로 둔다.
   disabledSegments BusinessSegment[] @default([])
   // 운영자가 정지하면 소속 사용자는 로그인·이용이 막힌다(데이터는 그대로). null이면 정상.
-  suspendedAt DateTime?
+  suspendedAt      DateTime?
   // 운영자 콘솔에서 만든 샘플 데이터용 워크스페이스. 가입 통계에서 제외한다.
-  isDemo      Boolean         @default(false)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  isDemo           Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   users           User[]
   warehouses      Warehouse[]
@@ -49,7 +49,6 @@ model Organization {
   holidays        Holiday[]
   posts           Post[]
   schedules       EventSchedule[]
-  storeItems      StoreItem[]
   suppliers       Supplier[]
   importTemplates ImportTemplate[]
   dailySales      DailySales[]
@@ -120,24 +119,30 @@ model User {
   authTokens        AuthToken[]
   sentInvites       Invitation[]
   uploadJobs        UploadJob[]
-  storeItemMemos    StoreItemMemo[]
 
   @@index([organizationId])
   @@map("users")
 }
 
+enum WarehouseKind {
+  STOCK
+  STORE
+}
+
 model Warehouse {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id])
   code           String // 조직 안에서의 내부 고정 식별자: A, B, C, D…
   name           String // 화면 표시명 (설정에서 변경 가능)
-  sortOrder      Int          @default(0)
+  sortOrder      Int           @default(0)
+  // STOCK: 재고 파일·실사를 받는 실제 창고. STORE: 매장 발주 예측의 품목을 담는 가상 창고(조직마다 하나, 재고 화면에는 안 나옴).
+  kind           WarehouseKind @default(STOCK)
   // 이력(스냅샷·이벤트)이 있어 행을 지울 수 없으므로 "삭제"는 보관으로 처리한다. 보관된 창고는
   // 대시보드·업로드·설정 목록에서 빠지고 데이터는 그대로 남는다.
-  isArchived     Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  isArchived     Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   skus            Sku[]
   snapshots       InventorySnapshot[]
@@ -175,9 +180,9 @@ model Sku {
 
   // 관리자가 SKU 상세에서 직접 지정하는 '특수 관리 재고' 마커(정기 발주·B2B 납품·무상 제공 등). 업로드/자동판정 없이
   // 수동 토글로만 바뀐다. 컬럼 이름은 처음 B2B 마커로 도입될 때 그대로 두었다.
-  isB2B Boolean @default(false)
+  isB2B       Boolean @default(false)
   // 특수 관리 재고로 두는 이유·일정 메모(예: 매주 월요일 정기 발주). 표시를 꺼도 지우지 않는다.
-  specialNote String @default("")
+  specialNote String  @default("")
 
   firstSeenDate DateTime @db.Date
   lastSeenDate  DateTime @db.Date
@@ -198,6 +203,9 @@ model Sku {
   // true면 대시보드(KPI/차트/재고 테이블/Action Center/리포트)에서 이 SKU를 완전히 제외한다.
   // 데이터 자체는 계속 쌓이며 설정 화면에서 언제든 다시 노출로 되돌릴 수 있다.
   isHiddenFromDashboard Boolean @default(false)
+
+  // 매장 품목(STORE 창고)의 발주 단위(박스·kg·팩 등). 재고 창고 SKU는 비어 있다.
+  unit String?
 
   // 이 SKU에 등록된 로트 중 가장 이른(soonest) 소비기한 — expirationLots가 바뀔 때마다
   // 자동으로 다시 계산되는 캐시값이다. 위험 판정 등 도메인 계산은 로트를 직접 보지 않고
@@ -232,6 +240,7 @@ model Sku {
   expirationLots   SkuExpirationLot[]
   favoritedBy      SkuFavorite[]
   codeAliases      SkuCodeAlias[]
+  purchaseOrders   PurchaseOrder[]
 
   @@unique([warehouseId, productCode])
   @@index([warehouseId])
@@ -397,8 +406,7 @@ model EventSchedule {
   // 캘린더 일정 패널에서 만든 일정 — 연결된 SKU·품목이 없어도 캘린더에 보인다(삭제는 패널에서만).
   managed        Boolean      @default(false)
 
-  events     InventoryEvent[]
-  storeItems ScheduleStoreItem[]
+  events InventoryEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -495,44 +503,23 @@ model Settings {
 // 매출 증감으로 보정해 다음 발주일을 예측한다.
 
 /// 발주하는 품목(원두, 우유, 컵 등). 이름은 조직 안에서 유일하다.
-model StoreItem {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  name           String
-  unit           String       @default("개") // 박스, kg, 팩 등 발주 단위
-  leadTimeDays   Int          @default(1) // 발주 후 도착까지 걸리는 일수 — 권장 발주일을 이만큼 앞당긴다
-  /// 발주처를 지정하면 발주처의 리드타임을 우선 쓴다.
-  supplierId     String?
-  supplier       Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  isArchived     Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  orders        PurchaseOrder[]
-  scheduleLinks ScheduleStoreItem[]
-  memos         StoreItemMemo[]
-
-  @@unique([organizationId, name])
-  @@index([organizationId])
-  @@map("store_items")
-}
 
 model PurchaseOrder {
-  id               String    @id @default(cuid())
-  itemId           String
-  item             StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  orderDate        DateTime  @db.Date
-  quantity         Decimal   @db.Decimal(12, 2)
+  id               String   @id @default(cuid())
+  /// 매장 품목 — '매장 품목' 가상 창고(STORE)의 SKU.
+  skuId            String
+  sku              Sku      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  orderDate        DateTime @db.Date
+  quantity         Decimal  @db.Decimal(12, 2)
   /// 사용자가 입력한 \"이 발주량으로 감당할 수 있는 매출액\"(원). 비워 두면 과거 기록으로 학습한 값으로 추정한다.
-  coverageAmount   Decimal?  @db.Decimal(14, 0)
+  coverageAmount   Decimal? @db.Decimal(14, 0)
   /// 이 발주를 넣을 때(받기 전) 남아 있던 양. 비우면 다 쓴 것으로 본다. 입력하면 실제 사용량 기반으로 더 정확히 학습한다.
-  leftoverQuantity Decimal?  @db.Decimal(12, 2)
+  leftoverQuantity Decimal? @db.Decimal(12, 2)
   createdById      String
-  createdBy        User      @relation(fields: [createdById], references: [id])
-  createdAt        DateTime  @default(now())
+  createdBy        User     @relation(fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
 
-  @@index([itemId, orderDate])
+  @@index([skuId, orderDate])
   @@map("purchase_orders")
 }
 
@@ -581,8 +568,7 @@ model Supplier {
   minOrderQty   Int?
   orderMultiple Int?
 
-  items StoreItem[]
-  skus  Sku[]
+  skus Sku[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -722,38 +708,4 @@ model UploadFile {
 
   @@index([organizationId, createdAt])
   @@map("upload_files")
-}
-
-/// 일정에 연결한 매장 품목(매장 발주 예측). 재고 SKU는 InventoryEvent로 연결하고, 창고가 없는 매장 품목은 여기로.
-model ScheduleStoreItem {
-  id          String        @id @default(cuid())
-  scheduleId  String
-  schedule    EventSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  storeItemId String
-  storeItem   StoreItem     @relation(fields: [storeItemId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now())
-
-  @@unique([scheduleId, storeItemId])
-  @@index([storeItemId])
-  @@map("schedule_store_items")
-}
-
-/// 매장 품목 상세의 메모 — 제목 없이 남기는 메모만 여기에 둔다. 제목을 붙인 메모는 캘린더 일정(EventSchedule)이 되고
-/// ScheduleStoreItem으로 품목과 이어진다(일일 재고 SKU의 메모/일정과 같은 규칙).
-model StoreItemMemo {
-  id          String    @id @default(cuid())
-  storeItemId String
-  storeItem   StoreItem @relation(fields: [storeItemId], references: [id], onDelete: Cascade)
-  eventType   EventType
-  note        String
-  startDate   DateTime  @db.Date
-  endDate     DateTime? @db.Date
-  createdById String
-  createdBy   User      @relation(fields: [createdById], references: [id])
-  isDeleted   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([storeItemId, startDate])
-  @@map("store_item_memos")
 }

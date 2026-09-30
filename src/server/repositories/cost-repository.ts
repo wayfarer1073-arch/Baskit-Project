@@ -15,7 +15,7 @@ export interface RegisteredCostRow {
 /** 원가가 한 번이라도 등록된(현재 원가 > 0) 품목. 보관한 창고는 뺀다. */
 export async function listRegisteredCosts(orgId: string): Promise<RegisteredCostRow[]> {
   const skus = await prisma.sku.findMany({
-    where: { currentUnitCost: { gt: 0 }, warehouse: { organizationId: orgId, isArchived: false } },
+    where: { currentUnitCost: { gt: 0 }, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } },
     orderBy: [{ warehouse: { sortOrder: 'asc' } }, { productCode: 'asc' }],
     select: {
       id: true,

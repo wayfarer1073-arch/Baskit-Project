@@ -30,11 +30,13 @@ interface Member {
 }
 
 function membersOf(schedule: ScheduleRow): Member[] {
-  const skus: Member[] = schedule.events
+  return schedule.events
     .filter((e) => e.skuId)
-    .map((e) => ({ kind: 'sku', id: e.skuId!, name: e.productName ?? '', code: e.productCode, warehouseCode: e.warehouseCode, warehouseName: e.warehouseName }));
-  const items: Member[] = schedule.storeItems.map((i) => ({ kind: 'store', id: i.storeItemId, name: i.name, code: null, warehouseCode: null, warehouseName: null }));
-  return [...skus, ...items];
+    .map((e) =>
+      e.isStore
+        ? { kind: 'store' as const, id: e.skuId!, name: e.productName ?? '', code: null, warehouseCode: null, warehouseName: null }
+        : { kind: 'sku' as const, id: e.skuId!, name: e.productName ?? '', code: e.productCode, warehouseCode: e.warehouseCode, warehouseName: e.warehouseName },
+    );
 }
 
 /** 이 항목이 어느 방식의 것인지 — 매장 품목은 매장 발주 예측, 재고 SKU는 켜 둔 재고 방식(들)과 창고. */
@@ -110,8 +112,8 @@ export function ScheduleFormDialog({ schedule, defaultDate, enabledSegments, can
         endDate: range.end,
         color,
         note: note.trim(),
-        skuIds: members.filter((mb) => mb.kind === 'sku').map((mb) => mb.id),
-        storeItemIds: members.filter((mb) => mb.kind === 'store').map((mb) => mb.id),
+        // 매장 품목도 '매장 품목' 창고의 SKU라 한 목록으로 보낸다.
+        skuIds: members.map((mb) => mb.id),
       };
       const res = await fetch(schedule ? `/api/schedules/${schedule.id}` : '/api/schedules', {
         method: schedule ? 'PUT' : 'POST',

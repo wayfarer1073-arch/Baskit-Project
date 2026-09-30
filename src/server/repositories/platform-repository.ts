@@ -10,6 +10,7 @@ type OrgAgg = { org: string; n: number; last: Date | null };
 
 async function aggregateByOrg(): Promise<{
   skus: Map<string, number>;
+  storeItems: Map<string, number>;
   snapshots: Map<string, OrgAgg>;
   orders: Map<string, OrgAgg>;
   sales: Map<string, Date>;
@@ -20,15 +21,17 @@ async function aggregateByOrg(): Promise<{
   storedRows: Map<string, number>;
 }> {
   const since30 = addDays(new Date(), -30);
-  const [skus, snapshots, orders, sales, events, logins, uploads30d, activeUsers30d, storedRows] = await Promise.all([
+  const [skus, storeItems, snapshots, orders, sales, events, logins, uploads30d, activeUsers30d, storedRows] = await Promise.all([
     prisma.$queryRaw<{ org: string; n: number }[]>`
-      SELECT w."organizationId" AS org, COUNT(*)::int AS n FROM skus s JOIN warehouses w ON w.id = s."warehouseId" GROUP BY 1`,
+      SELECT w."organizationId" AS org, COUNT(*)::int AS n FROM skus s JOIN warehouses w ON w.id = s."warehouseId" WHERE w.kind = 'STOCK' GROUP BY 1`,
+    prisma.$queryRaw<{ org: string; n: number }[]>`
+      SELECT w."organizationId" AS org, COUNT(*)::int AS n FROM skus s JOIN warehouses w ON w.id = s."warehouseId" WHERE w.kind = 'STORE' AND s."isActive" GROUP BY 1`,
     prisma.$queryRaw<OrgAgg[]>`
       SELECT w."organizationId" AS org, COUNT(*)::int AS n, MAX(s."uploadedAt") AS last
       FROM inventory_snapshots s JOIN warehouses w ON w.id = s."warehouseId" WHERE s.status = 'ACTIVE' GROUP BY 1`,
     prisma.$queryRaw<OrgAgg[]>`
-      SELECT i."organizationId" AS org, COUNT(*)::int AS n, MAX(o."createdAt") AS last
-      FROM purchase_orders o JOIN store_items i ON i.id = o."itemId" GROUP BY 1`,
+      SELECT w."organizationId" AS org, COUNT(*)::int AS n, MAX(o."createdAt") AS last
+      FROM purchase_orders o JOIN skus s ON s.id = o."skuId" JOIN warehouses w ON w.id = s."warehouseId" GROUP BY 1`,
     prisma.$queryRaw<{ org: string; last: Date }[]>`SELECT "organizationId" AS org, MAX("updatedAt") AS last FROM daily_sales GROUP BY 1`,
     prisma.$queryRaw<{ org: string; last: Date }[]>`
       SELECT w."organizationId" AS org, MAX(e."createdAt") AS last FROM inventory_events e JOIN warehouses w ON w.id = e."warehouseId" GROUP BY 1`,
@@ -43,6 +46,7 @@ async function aggregateByOrg(): Promise<{
   ]);
   return {
     skus: new Map(skus.map((r) => [r.org, r.n])),
+    storeItems: new Map(storeItems.map((r) => [r.org, r.n])),
     snapshots: new Map(snapshots.map((r) => [r.org, r])),
     orders: new Map(orders.map((r) => [r.org, r])),
     sales: new Map(sales.map((r) => [r.org, r.last])),
@@ -64,7 +68,7 @@ export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
     prisma.organization.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: { select: { users: true, storeItems: true, dailySales: true, warehouses: { where: { isArchived: false } }, invitations: { where: { acceptedAt: null } } } },
+        _count: { select: { users: true, dailySales: true, warehouses: { where: { isArchived: false, kind: 'STOCK' } }, invitations: { where: { acceptedAt: null } } } },
         users: { where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' }, take: 1, select: { email: true, name: true } },
       },
     }),
@@ -89,7 +93,7 @@ export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
       warehouseCount: o._count.warehouses,
       skuCount: agg.skus.get(o.id) ?? 0,
       snapshotCount: snap?.n ?? 0,
-      storeItemCount: o._count.storeItems,
+      storeItemCount: agg.storeItems.get(o.id) ?? 0,
       orderCount: orders?.n ?? 0,
       salesDays: o._count.dailySales,
       lastActivityAt: lastActivity?.toISOString() ?? null,
@@ -131,7 +135,7 @@ export async function getWorkspaceDetail(orgId: string) {
   if (!org) return null;
   const [users, warehouses, skuCounts, lastSnapshots, summary] = await Promise.all([
     prisma.user.findMany({ where: { organizationId: orgId }, orderBy: { createdAt: 'asc' } }),
-    prisma.warehouse.findMany({ where: { organizationId: orgId }, orderBy: { sortOrder: 'asc' } }),
+    prisma.warehouse.findMany({ where: { organizationId: orgId, kind: 'STOCK' }, orderBy: { sortOrder: 'asc' } }),
     prisma.sku.groupBy({ by: ['warehouseId'], where: { warehouse: { organizationId: orgId } }, _count: { _all: true } }),
     prisma.inventorySnapshot.groupBy({ by: ['warehouseId'], where: { warehouse: { organizationId: orgId }, status: 'ACTIVE' }, _max: { snapshotDate: true } }),
     listWorkspaceSummaries().then((all) => all.find((w) => w.id === orgId) ?? null),
@@ -180,9 +184,8 @@ export async function deleteWorkspace(orgId: string) {
       await tx.eventSchedule.deleteMany({ where: { organizationId: orgId } });
       await tx.inventorySnapshot.deleteMany({ where: inOrgWarehouse }); // 스냅샷 품목은 DB cascade
       await tx.skuPackagingUpload.deleteMany({ where: inOrgWarehouse });
-      await tx.sku.deleteMany({ where: inOrgWarehouse }); // 소비기한 로트·즐겨찾기는 DB cascade
+      await tx.sku.deleteMany({ where: inOrgWarehouse }); // 소비기한 로트·즐겨찾기·매장 발주 기록은 DB cascade
       await tx.warehouse.deleteMany({ where: { organizationId: orgId } });
-      await tx.storeItem.deleteMany({ where: { organizationId: orgId } }); // 발주 기록은 DB cascade
       await tx.supplier.deleteMany({ where: { organizationId: orgId } });
       await tx.importTemplate.deleteMany({ where: { organizationId: orgId } });
       await tx.dailySales.deleteMany({ where: { organizationId: orgId } });

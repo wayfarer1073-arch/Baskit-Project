@@ -22,17 +22,16 @@ export async function createFixture() {
 
 export async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFixture>>) {
   // Delete only the randomly named fixture, never truncate the database.
-  const warehouseId = fixture.warehouse.id;
-  await prisma.snapshotInbound.deleteMany({ where: { sku: { warehouseId } } });
-  await prisma.inventoryEvent.deleteMany({ where: { warehouseId } });
-  await prisma.inventorySnapshot.deleteMany({ where: { warehouseId } });
-  await prisma.sku.deleteMany({ where: { warehouseId } });
-  await prisma.warehouse.delete({ where: { id: warehouseId } });
+  // 테스트가 만든 매장 품목 가상 창고까지 조직의 창고를 모두 지운다(발주 기록은 SKU와 함께 cascade).
+  const inOrg = { warehouse: { organizationId: fixture.org.id } };
+  await prisma.snapshotInbound.deleteMany({ where: { sku: inOrg } });
+  await prisma.inventoryEvent.deleteMany({ where: inOrg });
+  await prisma.inventorySnapshot.deleteMany({ where: inOrg });
+  await prisma.sku.deleteMany({ where: inOrg });
+  await prisma.warehouse.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.eventSchedule.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.holiday.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.settings.deleteMany({ where: { organizationId: fixture.org.id } });
-  await prisma.purchaseOrder.deleteMany({ where: { item: { organizationId: fixture.org.id } } });
-  await prisma.storeItem.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.supplier.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.dailySales.deleteMany({ where: { organizationId: fixture.org.id } });
   await prisma.importTemplate.deleteMany({ where: { organizationId: fixture.org.id } });

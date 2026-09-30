@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ events });
   }
   if (warehouseId) {
-    if (!(await getWarehouseInOrg(tenant.orgId, warehouseId))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
+    if (!(await getWarehouseInOrg(tenant.orgId, warehouseId, { includeStore: true }))) return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
     const events = await listEventsForWarehouse(warehouseId);
     return NextResponse.json({ events });
   }
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '입력값이 올바르지 않습니다.', issues: parsed.error.issues }, { status: 400 });
   }
 
-  if (!(await getWarehouseInOrg(tenant.orgId, parsed.data.warehouseId))) {
+  if (!(await getWarehouseInOrg(tenant.orgId, parsed.data.warehouseId, { includeStore: true }))) {
     return NextResponse.json({ error: '창고를 찾을 수 없습니다.' }, { status: 404 });
   }
   if (parsed.data.skuId) {

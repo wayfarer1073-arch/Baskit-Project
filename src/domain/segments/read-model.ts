@@ -79,6 +79,8 @@ export interface StoreDashboardData {
 }
 
 export interface StoreItemDetail extends StoreCoverageRow {
+  /** 매장 품목 가상 창고 id — 메모/이벤트를 이 창고의 SKU 기록으로 남긴다. */
+  warehouseId: string;
   orders: OrderEntryRow[];
   checkRemainingPct: number;
 }

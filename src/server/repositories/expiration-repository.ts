@@ -50,7 +50,7 @@ function generateAutoLabels(exclude: Set<string>, count: number): string[] {
 /** 오래된 데이터(로트 없이 Sku.expirationDate만 있던 시절) 하나를 로트 A로 옮겨 심는다. 멱등적이라 여러 번 불러도 안전하다. */
 async function backfillLegacyExpirationDates(orgId: string): Promise<void> {
   const legacySkus = await prisma.sku.findMany({
-    where: { warehouse: { organizationId: orgId }, expirationDate: { not: null }, expirationLots: { none: {} } },
+    where: { warehouse: { organizationId: orgId, kind: 'STOCK' }, expirationDate: { not: null }, expirationLots: { none: {} } },
     select: { id: true, expirationDate: true },
   });
   if (legacySkus.length === 0) return;
@@ -115,7 +115,7 @@ export async function listExpirationLots(orgId: string): Promise<ExpirationLotRo
   await backfillLegacyExpirationDates(orgId);
 
   const lots = await prisma.skuExpirationLot.findMany({
-    where: { sku: { isActive: true, warehouse: { organizationId: orgId, isArchived: false } } },
+    where: { sku: { isActive: true, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } } },
     include: { sku: { include: { warehouse: { select: { code: true, name: true } } } } },
     orderBy: [{ sku: { productCode: 'asc' } }, { sku: { warehouse: { code: 'asc' } } }, { expirationDate: 'asc' }],
   });

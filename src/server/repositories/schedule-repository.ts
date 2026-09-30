@@ -4,7 +4,7 @@ import { dateOnlyToString } from '@/lib/date';
 import { isScheduleColor, type ScheduleColor } from '@/lib/schedule-colors';
 import type { ScheduleRow } from '@/domain/events/schedule-types';
 
-export type { ScheduleRow, ScheduleEventRow, ScheduleStoreItemRow } from '@/domain/events/schedule-types';
+export type { ScheduleRow, ScheduleEventRow } from '@/domain/events/schedule-types';
 
 const toDateOnly = (date: string) => new Date(`${date}T00:00:00.000Z`);
 
@@ -22,15 +22,14 @@ export async function listSchedules(orgId: string): Promise<ScheduleRow[]> {
         where: { isDeleted: false },
         include: {
           sku: { select: { productCode: true, currentProductName: true } },
-          warehouse: { select: { code: true, name: true } },
+          warehouse: { select: { code: true, name: true, kind: true } },
         },
       },
-      storeItems: { include: { storeItem: { select: { name: true, unit: true } } } },
     },
   });
 
   return schedules
-    .filter((s) => s.managed || s.events.length > 0 || s.storeItems.length > 0)
+    .filter((s) => s.managed || s.events.length > 0)
     .map((s) => ({
       id: s.id,
       eventType: s.eventType,
@@ -45,12 +44,12 @@ export async function listSchedules(orgId: string): Promise<ScheduleRow[]> {
         warehouseId: e.warehouseId,
         warehouseCode: e.warehouse.code,
         warehouseName: e.warehouse.name,
+        isStore: e.warehouse.kind === 'STORE',
         productCode: e.sku?.productCode ?? null,
         productName: e.sku?.currentProductName ?? null,
         note: e.note,
         quantity: e.quantity,
       })),
-      storeItems: s.storeItems.map((i) => ({ storeItemId: i.storeItemId, name: i.storeItem.name, unit: i.storeItem.unit })),
     }));
 }
 
@@ -70,10 +69,8 @@ export interface ScheduleInput {
   endDate: string;
   color: ScheduleColor;
   note: string;
-  /** 재고 SKU(일일 재고 연동·비정기 실사) — SKU마다 메모(InventoryEvent)를 만들어 SKU 상세에도 보이게 한다. */
+  /** 재고 SKU와 매장 품목('매장 품목' 창고 SKU) — 항목마다 메모(InventoryEvent)를 만들어 상세에도 보이게 한다. */
   skuIds: string[];
-  /** 매장 품목(매장 발주 예측). */
-  storeItemIds: string[];
 }
 
 export class ScheduleError extends Error {
@@ -89,12 +86,9 @@ type Tx = Prisma.TransactionClient;
 
 async function resolveMembers(tx: Tx, orgId: string, input: ScheduleInput) {
   const skuIds = [...new Set(input.skuIds)];
-  const storeItemIds = [...new Set(input.storeItemIds)];
   const skus = await tx.sku.findMany({ where: { id: { in: skuIds }, warehouse: { organizationId: orgId } }, select: { id: true, warehouseId: true } });
-  if (skus.length !== skuIds.length) throw new ScheduleError('선택한 SKU를 찾을 수 없습니다.', 400);
-  const items = await tx.storeItem.findMany({ where: { id: { in: storeItemIds }, organizationId: orgId }, select: { id: true } });
-  if (items.length !== storeItemIds.length) throw new ScheduleError('선택한 매장 품목을 찾을 수 없습니다.', 400);
-  return { skus, storeItemIds };
+  if (skus.length !== skuIds.length) throw new ScheduleError('선택한 항목을 찾을 수 없습니다.', 400);
+  return { skus };
 }
 
 function eventFields(input: ScheduleInput) {
@@ -115,7 +109,7 @@ function isUniqueViolation(e: unknown) {
 export async function createSchedule(orgId: string, userId: string, input: ScheduleInput): Promise<{ id: string }> {
   try {
     return await prisma.$transaction(async (tx) => {
-      const { skus, storeItemIds } = await resolveMembers(tx, orgId, input);
+      const { skus } = await resolveMembers(tx, orgId, input);
       const schedule = await tx.eventSchedule.create({
         data: {
           organizationId: orgId,
@@ -132,7 +126,6 @@ export async function createSchedule(orgId: string, userId: string, input: Sched
       for (const sku of skus) {
         await tx.inventoryEvent.create({ data: { ...fields, warehouseId: sku.warehouseId, skuId: sku.id, scheduleId: schedule.id, createdById: userId } });
       }
-      if (storeItemIds.length) await tx.scheduleStoreItem.createMany({ data: storeItemIds.map((storeItemId) => ({ scheduleId: schedule.id, storeItemId })) });
       return { id: schedule.id };
     });
   } catch (e) {
@@ -169,7 +162,7 @@ export async function updateSchedule(orgId: string, userId: string, id: string, 
     await prisma.$transaction(async (tx) => {
       const schedule = await tx.eventSchedule.findFirst({ where: { id, organizationId: orgId } });
       if (!schedule) throw new ScheduleError('일정을 찾을 수 없습니다.', 404);
-      const { skus, storeItemIds } = await resolveMembers(tx, orgId, input);
+      const { skus } = await resolveMembers(tx, orgId, input);
       await tx.eventSchedule.update({
         where: { id },
         data: {
@@ -198,8 +191,6 @@ export async function updateSchedule(orgId: string, userId: string, id: string, 
       for (const sku of wanted.values()) {
         await tx.inventoryEvent.create({ data: { ...fields, warehouseId: sku.warehouseId, skuId: sku.id, scheduleId: id, createdById: userId } });
       }
-      await tx.scheduleStoreItem.deleteMany({ where: { scheduleId: id } });
-      if (storeItemIds.length) await tx.scheduleStoreItem.createMany({ data: storeItemIds.map((storeItemId) => ({ scheduleId: id, storeItemId })) });
     });
   } catch (e) {
     if (isUniqueViolation(e)) throw new ScheduleError('같은 카테고리·제목·기간의 일정이 이미 있어요.', 409);
@@ -243,7 +234,7 @@ export async function searchScheduleMembers(orgId: string, query: string, opts: 
   if (opts.stock) {
     const skus = await prisma.sku.findMany({
       where: {
-        warehouse: { organizationId: orgId, isArchived: false },
+        warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' },
         isHiddenFromDashboard: false,
         OR: [{ productCode: { contains: q, mode: 'insensitive' } }, { currentProductName: { contains: q, mode: 'insensitive' } }],
       },
@@ -255,13 +246,13 @@ export async function searchScheduleMembers(orgId: string, query: string, opts: 
       results.push({ kind: 'sku', id: s.id, name: s.currentProductName, code: s.productCode, warehouseCode: s.warehouse.code, warehouseName: s.warehouse.name });
   }
   if (opts.store) {
-    const items = await prisma.storeItem.findMany({
-      where: { organizationId: orgId, isArchived: false, name: { contains: q, mode: 'insensitive' } },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
+    const items = await prisma.sku.findMany({
+      where: { isActive: true, warehouse: { organizationId: orgId, kind: 'STORE' }, currentProductName: { contains: q, mode: 'insensitive' } },
+      select: { id: true, currentProductName: true },
+      orderBy: { currentProductName: 'asc' },
       take: limit,
     });
-    for (const i of items) results.push({ kind: 'store', id: i.id, name: i.name, code: null, warehouseCode: null, warehouseName: null });
+    for (const i of items) results.push({ kind: 'store', id: i.id, name: i.currentProductName, code: null, warehouseCode: null, warehouseName: null });
   }
   return results;
 }

@@ -13,9 +13,9 @@ import { NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calend
 type CalendarInput = ClosedDays | ((warehouseId: string) => ClosedDays);
 const calendarOf = (input: CalendarInput, warehouseId: string) => (typeof input === 'function' ? input(warehouseId) : input);
 
-/** 조직의 사용 중인(보관되지 않은) 창고에 속한 데이터만 보도록 하는 공통 조건. */
+/** 조직의 사용 중인(보관되지 않은) 실재고 창고에 속한 데이터만 보도록 하는 공통 조건. 매장 품목 가상 창고는 뺀다. */
 function activeWarehouseOf(orgId: string) {
-  return { organizationId: orgId, isArchived: false };
+  return { organizationId: orgId, isArchived: false, kind: 'STOCK' as const };
 }
 
 /** 품절 인식일로부터 정확히 1개월 뒤(유예기간 종료일, 이 날짜부터는 더 이상 노출하지 않음). */

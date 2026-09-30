@@ -21,12 +21,18 @@ async function main() {
   const user = await prisma.user.findFirst({ where: { organizationId: org.id }, orderBy: { createdAt: 'asc' } });
   if (!user) throw new Error('워크스페이스에 사용자가 없습니다.');
 
-  const existing = await prisma.storeItem.count({ where: { organizationId: org.id } });
+  const storeWarehouse = await prisma.warehouse.findFirst({ where: { organizationId: org.id, kind: 'STORE' } });
+  const existing = storeWarehouse ? await prisma.sku.count({ where: { warehouseId: storeWarehouse.id } }) : 0;
   if (existing > 0 && !process.argv.includes('--force')) {
     console.log(`[${org.name}] 이미 품목이 ${existing}개 있습니다. 다시 만들려면 --force를 붙이세요.`);
     return;
   }
-  await prisma.storeItem.deleteMany({ where: { organizationId: org.id } });
+  // 매장 품목 창고(품목·발주 기록·메모)를 통째로 지우고 다시 만든다.
+  if (storeWarehouse) {
+    await prisma.inventoryEvent.deleteMany({ where: { warehouseId: storeWarehouse.id } });
+    await prisma.sku.deleteMany({ where: { warehouseId: storeWarehouse.id } });
+    await prisma.warehouse.delete({ where: { id: storeWarehouse.id } });
+  }
   await prisma.dailySales.deleteMany({ where: { organizationId: org.id } });
   await prisma.$transaction((tx) => seedStoreData(tx, org.id, user.id, makeRand(20260928)), { timeout: 120_000 });
   console.log(`[${org.name}] 카페 데모 품목·발주·매출 데이터를 만들었습니다.`);
