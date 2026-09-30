@@ -56,7 +56,7 @@ it('keeps B2B cost and earliest lot dates while suppressing repeated-demand pred
   ]);
   const rows = await getInventoryRows({ orgId: fixture.org.id, warehouseId: fixture.warehouse.id, asOfDate: '2026-09-18' });
   expect(rows[0].descriptor.expirationDate).toBe('2026-09-20');
-  expect(rows[0].analysis.operating?.reason).toBe('B2B 개별 판단');
+  expect(rows[0].analysis.operating?.reason).toBe('특수 관리 개별 판단');
   expect(rows[0].analysis.coverage.coverageDays).toBeNull();
   expect(rows[0].analysis.expirationRisk.isAtRisk).toBe(true);
   expect(calculateCompanyKpis(rows, 30).snapshot.knownInventoryValue).toBe(1000);

@@ -16,8 +16,10 @@ export interface SkuDescriptor {
   expirationDate: string | null;
   /** 소비기한 위험 판정 일수. null이면 앱의 기본값(DEFAULT_EXPIRATION_RISK_DAYS)을 쓴다. */
   expirationRiskDays: number | null;
-  /** 관리자가 직접 지정하는 B2B 상품 마커. */
+  /** 관리자가 직접 지정하는 '특수 관리 재고' 마커(정기 발주·B2B 납품·무상 제공 등). */
   isB2B: boolean;
+  /** 특수 관리 이유·일정 메모. 없으면 빈 문자열. */
+  specialNote?: string;
   /** 이 SKU가 이 창고에서 처음 관측된 날짜(최초 업로드로 인식된 시점). */
   firstSeenDate: string;
   /** 최신 업로드 목록에는 없지만 품절 인식 후 1개월 유예기간 이내라 마지막 관측 그대로 노출 중인지. */

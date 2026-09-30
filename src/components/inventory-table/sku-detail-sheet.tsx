@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Building2, PackageX, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { ClipboardList, PackageX, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,9 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
   const [warningInput, setWarningInput] = useState('');
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [togglingB2B, setTogglingB2B] = useState(false);
+  const [specialNoteInput, setSpecialNoteInput] = useState<string | null>(null);
+  const [savingSpecialNote, setSavingSpecialNote] = useState(false);
+  const router = useRouter();
 
   async function reload() {
     if (!skuId) return;
@@ -151,10 +155,37 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
       if (!res.ok) throw new Error();
       toast.success(checked ? t.b2bOn : t.b2bOff);
       reload();
+      // 대시보드의 특수 관리 재고 표·운영 유형 카드가 바로 따라오도록 서버 데이터를 다시 읽는다.
+      router.refresh();
     } catch {
       toast.error(t.changeFailed);
     } finally {
       setTogglingB2B(false);
+    }
+  }
+
+  async function saveSpecialNote() {
+    if (!skuId || specialNoteInput === null) return;
+    if (specialNoteInput.trim() === (detail?.descriptor.specialNote ?? '')) {
+      setSpecialNoteInput(null);
+      return;
+    }
+    setSavingSpecialNote(true);
+    try {
+      const res = await fetch(`/api/sku/${skuId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ specialNote: specialNoteInput }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(t.specialNoteSaved);
+      setSpecialNoteInput(null);
+      reload();
+      router.refresh();
+    } catch {
+      toast.error(t.saveFailed);
+    } finally {
+      setSavingSpecialNote(false);
     }
   }
 
@@ -288,8 +319,8 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 {detail.descriptor.isB2B && (
                   <>
                     <Badge variant="outline" className="gap-1">
-                      <Building2 className="size-3" aria-hidden="true" />
-                      B2B
+                      <ClipboardList className="size-3" aria-hidden="true" />
+                      {m.inventory.special}
                     </Badge>
                     <InfoTooltip>
                       {t.b2bTip}
@@ -410,17 +441,46 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 {!editingThresholds && <p className="mt-2 text-[11px] text-muted-foreground">{thresholdSourceLabel(detail.analysis.riskThresholds.source, t)}</p>}
               </section>
 
-              {isAdmin && (
-                <section className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
-                  <div className="flex items-center gap-1.5">
-                    <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                    <span className="text-xs font-semibold">{t.b2bTitle}</span>
-                    <InfoTooltip>
-                      {t.b2bSwitchTip}
-                    </InfoTooltip>
+              {isAdmin ? (
+                <section className="rounded-xl border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <ClipboardList className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                      <span className="text-xs font-semibold">{t.b2bTitle}</span>
+                      <InfoTooltip>{t.b2bSwitchTip}</InfoTooltip>
+                    </div>
+                    <Switch checked={detail.descriptor.isB2B} onCheckedChange={toggleB2B} disabled={togglingB2B} aria-label={t.b2bSwitch} />
                   </div>
-                  <Switch checked={detail.descriptor.isB2B} onCheckedChange={toggleB2B} disabled={togglingB2B} aria-label={t.b2bSwitch} />
+                  {detail.descriptor.isB2B && (
+                    <form
+                      className="mt-2.5 flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        saveSpecialNote();
+                      }}
+                    >
+                      <Input
+                        value={specialNoteInput ?? detail.descriptor.specialNote ?? ''}
+                        onChange={(e) => setSpecialNoteInput(e.target.value)}
+                        placeholder={t.specialNotePlaceholder}
+                        aria-label={t.specialNote}
+                        maxLength={200}
+                        className="h-8 bg-background text-xs"
+                      />
+                      <Button type="submit" size="sm" variant="outline" className="h-8 shrink-0" disabled={specialNoteInput === null || savingSpecialNote}>
+                        {t.save}
+                      </Button>
+                    </form>
+                  )}
                 </section>
+              ) : (
+                detail.descriptor.isB2B &&
+                detail.descriptor.specialNote && (
+                  <section className="rounded-xl border bg-muted/30 p-3 text-xs">
+                    <span className="font-semibold">{t.specialNote}</span>
+                    <p className="mt-1 text-muted-foreground">{detail.descriptor.specialNote}</p>
+                  </section>
+                )
               )}
 
               {fromDate && (

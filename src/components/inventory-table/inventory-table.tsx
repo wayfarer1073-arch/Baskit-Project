@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Columns3, Download, FileSpreadsheet, PackageX, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ClipboardList, Columns3, Download, FileSpreadsheet, PackageX, Search, X } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -318,7 +318,7 @@ export function InventoryTable({
           </label>
           <label className="flex items-center gap-1.5">
             <Checkbox checked={showB2B} onCheckedChange={(c) => setShowB2B(c === true)} />
-            B2B
+            {t.special}
           </label>
         </div>
 
@@ -595,8 +595,8 @@ export function InventoryTableRow({
           {r.descriptor.isB2B && (
             <>
               <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
-                <Building2 className="size-2.5" aria-hidden="true" />
-                B2B
+                <ClipboardList className="size-2.5" aria-hidden="true" />
+                {m.inventory.special}
               </Badge>
               <InfoTooltip>
                 {t.b2bTip}

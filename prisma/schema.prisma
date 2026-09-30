@@ -172,8 +172,11 @@ model Sku {
   manualWarningQty Int?
   manualDangerQty  Int?
 
-  // 관리자가 SKU 상세에서 직접 지정하는 B2B 상품 마커. 업로드/자동판정 없이 수동 토글로만 바뀐다.
+  // 관리자가 SKU 상세에서 직접 지정하는 '특수 관리 재고' 마커(정기 발주·B2B 납품·무상 제공 등). 업로드/자동판정 없이
+  // 수동 토글로만 바뀐다. 컬럼 이름은 처음 B2B 마커로 도입될 때 그대로 두었다.
   isB2B Boolean @default(false)
+  // 특수 관리 재고로 두는 이유·일정 메모(예: 매주 월요일 정기 발주). 표시를 꺼도 지우지 않는다.
+  specialNote String @default("")
 
   firstSeenDate DateTime @db.Date
   lastSeenDate  DateTime @db.Date

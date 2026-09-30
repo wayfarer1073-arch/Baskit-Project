@@ -5,6 +5,7 @@ import { loadDailyWarehouseTotals } from '@/server/repositories/inventory-reposi
 import { getLatestActiveSnapshot } from '@/server/repositories/snapshot-repository';
 import { listHolidayDateStrings } from '@/server/repositories/holiday-repository';
 import { listFavoriteSkuIds } from '@/server/repositories/favorite-repository';
+import { listUpcomingSkuEvents } from '@/server/repositories/event-repository';
 import { todayKstDateString, dateOnlyToString, isDateString } from '@/lib/date';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
 import { requireTenant } from '@/server/tenant';
@@ -29,6 +30,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     listFavoriteSkuIds(tenant.userId),
   ]);
   const isAdmin = tenant.isAdmin;
+  const specialSchedules = await listUpcomingSkuEvents(
+    tenant.orgId,
+    rows.filter((r) => r.descriptor.isB2B).map((r) => r.descriptor.skuId),
+    asOfDate,
+  );
 
   const latestUploads = await Promise.all(
     warehouses.map(async (w) => {
@@ -53,6 +59,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       isAdmin={isAdmin}
       holidays={holidays}
       favoriteSkuIds={favoriteSkuIds}
+      specialSchedules={specialSchedules}
     />
   );
 }

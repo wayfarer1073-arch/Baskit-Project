@@ -12,6 +12,7 @@ import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { OperatingSummary } from '@/components/dashboard/operating-summary';
 import { WarehouseSummaryCards } from '@/components/dashboard/warehouse-summary-cards';
 import { FavoritesSummary } from '@/components/dashboard/favorites-summary';
+import { SpecialStockSummary, type SpecialSchedule } from '@/components/dashboard/special-stock-summary';
 import { ChartsSection } from '@/components/dashboard/charts/charts-section';
 import { InventoryTable } from '@/components/inventory-table/inventory-table';
 import { SkuDetailSheet } from '@/components/inventory-table/sku-detail-sheet';
@@ -45,9 +46,10 @@ interface DashboardClientProps {
   isAdmin: boolean;
   holidays: string[];
   favoriteSkuIds: string[];
+  specialSchedules: Record<string, SpecialSchedule>;
 }
 
-export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows, dailyTotals, latestUploads, isAdmin, holidays, favoriteSkuIds }: DashboardClientProps) {
+export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows, dailyTotals, latestUploads, isAdmin, holidays, favoriteSkuIds, specialSchedules }: DashboardClientProps) {
   const [warehouseFilter, setWarehouseFilter] = useState<string | 'ALL'>('ALL');
   const [tableTab, setTableTab] = useState<TableTab>('ALL');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
@@ -66,6 +68,7 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
   // 즐겨찾기한 SKU는 위쪽 즐겨찾기 섹션에서 보이므로, 아래 전체 재고 표에서는 중복 노출하지 않는다.
   // 품절 SKU는 1개월 동안 표에도 품절 배지로 남겨 둔다 — 품절이 이슈일 때 놓치지 않고 팔로우하도록.
   const tableRows = useMemo(() => rows.filter((r) => !favorites.has(r.descriptor.skuId)), [rows, favorites]);
+  const specialRows = useMemo(() => rows.filter((r) => r.descriptor.isB2B), [rows]);
   const soldOutRows = useMemo(() => rows.filter((r) => r.descriptor.isSoldOut), [rows]);
 
   async function toggleFavorite(skuId: string, next: boolean) {
@@ -151,6 +154,7 @@ export function DashboardClient({ asOfDate, fromDate, warehouses, settings, rows
         asOfDate={asOfDate}
       />
       <FavoritesSummary rows={favoriteRows} onSelectSku={setSelectedSkuId} fromDate={fromDate} />
+      <SpecialStockSummary rows={specialRows} schedules={specialSchedules} asOfDate={asOfDate} onSelectSku={setSelectedSkuId} />
       <div id="inventory-table-section" className="space-y-3">
         {warehouses.length > 1 && (
           <div role="group" aria-label={m.merged.toggleLabel} className="inline-flex rounded-lg border border-border p-0.5 text-xs">

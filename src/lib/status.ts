@@ -60,10 +60,10 @@ export function isStaleDepletionTag(tag: string): boolean {
   return tag === '[소진 미관측]';
 }
 
-/** "[B2B 개별 판단]" 태그인지. 상품명 옆에 이미 B2B 뱃지가 뜨므로 같은 의미를 태그로 다시 보여줄
+/** "[특수 관리 개별 판단]" 태그인지. 상품명 옆에 이미 특수 관리 뱃지가 뜨므로 같은 의미를 태그로 다시 보여줄
  * 필요가 없다 — 엑셀 내보내기 원본에는 그대로 남는다. */
 export function isB2BTag(tag: string): boolean {
-  return tag === '[B2B 개별 판단]';
+  return tag === '[특수 관리 개별 판단]';
 }
 
 /** 소비기한까지 남은 일수를 "D-7"/"D-DAY"/"D+3"(이미 지남) 형태로 표시한다. */
@@ -92,7 +92,7 @@ export function humanizeTag(tag: string): string {
   const known: Record<string, string> = {
     '[입고 보정 추정·반품/조정 미분리]': '[추정치 · 반품/조정 포함 가능]',
     '[품절]': '[품절]',
-    '[B2B 개별 판단]': '[대량납품 상품 · 개별 확인 필요]',
+    '[특수 관리 개별 판단]': '[특수 관리 재고 · 개별 확인 필요]',
     '[자료 갱신 필요]': '[최근 자료 없음]',
     '[재고 정합성 확인]': '[재고 수치 확인 필요]',
     '[입고·조정 확인]': '[입고/조정 내역 확인 필요]',
@@ -111,7 +111,7 @@ type DomainMessages = import('@/lib/i18n/messages').Messages['domain'];
 
 const REASON_KEYS: Record<string, keyof DomainMessages['reasons']> = {
   품절: 'soldOut',
-  'B2B 개별 판단': 'b2b',
+  '특수 관리 개별 판단': 'b2b',
   '자료 갱신 필요': 'stale',
   '재고 정합성 확인': 'invalid',
   '입고·조정 확인': 'movement',
@@ -144,7 +144,7 @@ export function dataReliabilityText(level: DataReliability, d: DomainMessages): 
 const TAG_KEYS: Record<string, keyof DomainMessages['tags']> = {
   '[입고 보정 추정·반품/조정 미분리]': 'estimate',
   '[품절]': 'soldOut',
-  '[B2B 개별 판단]': 'b2b',
+  '[특수 관리 개별 판단]': 'b2b',
   '[자료 갱신 필요]': 'stale',
   '[재고 정합성 확인]': 'invalid',
   '[입고·조정 확인]': 'movement',

@@ -22,7 +22,7 @@ describe('humanizeTag', () => {
     expect(humanizeTag('[최근 7일 중 5출고일]')).toBe('[최근 7일 중 실제 자료 5일]');
     expect(humanizeTag('[재고 정체 12출고일]')).toBe('[12일째 재고 변화 없음]');
     expect(humanizeTag('[입고 보정 추정·반품/조정 미분리]')).toBe('[추정치 · 반품/조정 포함 가능]');
-    expect(humanizeTag('[B2B 개별 판단]')).toBe('[대량납품 상품 · 개별 확인 필요]');
+    expect(humanizeTag('[특수 관리 개별 판단]')).toBe('[특수 관리 재고 · 개별 확인 필요]');
     expect(humanizeTag('[자료 갱신 필요]')).toBe('[최근 자료 없음]');
     expect(humanizeTag('[신규 위험]')).toBe('[오늘 새로 위험 단계]');
     expect(humanizeTag('[소비기한 확인 필요]')).toBe('[소비기한 임박]');
@@ -63,7 +63,7 @@ describe('isSoldOutTag / isStaleDepletionTag / isB2BTag', () => {
     expect(isSoldOutTag('[관측 무재고]')).toBe(false);
     expect(isStaleDepletionTag('[소진 미관측]')).toBe(true);
     expect(isStaleDepletionTag('[재고 정체 34출고일]')).toBe(false);
-    expect(isB2BTag('[B2B 개별 판단]')).toBe(true);
+    expect(isB2BTag('[특수 관리 개별 판단]')).toBe(true);
     expect(isB2BTag('[품절]')).toBe(false);
   });
 });

@@ -87,7 +87,7 @@ export function analyzeOperationalSku(
   const reason = context.isMissing
     ? '품절'
     : context.isB2B
-      ? 'B2B 개별 판단'
+      ? '특수 관리 개별 판단'
       : staleDays > 0
         ? '자료 갱신 필요'
         : invalid

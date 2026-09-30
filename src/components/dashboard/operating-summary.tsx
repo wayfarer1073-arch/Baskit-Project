@@ -1,6 +1,6 @@
 'use client';
 
-import { ShoppingCart, Building2 } from 'lucide-react';
+import { ShoppingCart, ClipboardList } from 'lucide-react';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import { formatCurrency } from '@/lib/format';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
@@ -34,7 +34,7 @@ export function OperatingSummary({ rows }: { rows: InventoryRow[] }) {
         </div>
         <div className="rounded-2xl bg-sidebar p-5 text-sidebar-foreground">
           <span className="flex size-9 items-center justify-center rounded-full bg-brand-accent text-brand-accent-foreground">
-            <Building2 className="size-[18px]" aria-hidden="true" />
+            <ClipboardList className="size-[18px]" aria-hidden="true" />
           </span>
           <p className="mt-4 text-sm text-sidebar-muted-foreground">{format(t.b2b, { count: b2b.length })}</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{value(b2b)}</p>

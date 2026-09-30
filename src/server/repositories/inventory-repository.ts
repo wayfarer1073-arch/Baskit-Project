@@ -310,6 +310,7 @@ export async function loadActiveSkusWithSeries(
         expirationDate: sku.expirationDate ? dateOnlyToString(sku.expirationDate) : null,
         expirationRiskDays: sku.expirationRiskDays,
         isB2B: sku.isB2B,
+        specialNote: sku.specialNote,
         firstSeenDate: dateOnlyToString(sku.firstSeenDate),
         isSoldOut: soldOutSkuIds.has(sku.id),
         soldOutDetectedDate: zeroSoldOutSince.get(sku.id) ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
@@ -457,6 +458,7 @@ export async function loadSkuWithSeries(
       expirationDate: sku.expirationDate ? dateOnlyToString(sku.expirationDate) : null,
       expirationRiskDays: sku.expirationRiskDays,
       isB2B: sku.isB2B,
+      specialNote: sku.specialNote,
       firstSeenDate: dateOnlyToString(sku.firstSeenDate),
       isSoldOut,
       soldOutDetectedDate: zeroSoldOutSince ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
@@ -519,6 +521,11 @@ export async function setSkuHiddenFromDashboard(orgId: string, skuId: string, hi
 export async function setSkuB2B(orgId: string, skuId: string, isB2B: boolean) {
   await assertSkuInOrg(orgId, skuId);
   return prisma.sku.update({ where: { id: skuId }, data: { isB2B } });
+}
+
+export async function setSkuSpecialNote(orgId: string, skuId: string, specialNote: string) {
+  await assertSkuInOrg(orgId, skuId);
+  return prisma.sku.update({ where: { id: skuId }, data: { specialNote } });
 }
 
 /** 위험/경고수량 직접 설정. 필드별로 null을 넘기면 그 필드만 자동계산으로 되돌린다. */

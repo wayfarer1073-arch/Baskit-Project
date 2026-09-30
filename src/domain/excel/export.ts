@@ -25,7 +25,7 @@ export function buildInventorySheetRows(rows: ExportRowInput[]): Record<string, 
     현재가용재고: r.analysis.operating?.isMissing ? 0 : r.analysis.latest.availableStock,
     정상재고: r.analysis.operating?.isMissing ? 0 : r.analysis.latest.normalStock,
     마지막관측재고: r.analysis.latest.normalStock,
-    운영유형: r.analysis.operating?.isB2B ? '직납 B2B' : '일반 판매',
+    운영유형: r.analysis.operating?.isB2B ? '특수 관리' : '일반 판매',
     재고관측일: r.analysis.latest.date,
     기준일미관측: (r.analysis.operating
       ? r.analysis.operating.isMissing || r.analysis.operating.staleShippingDays > 0

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { forbidViewer, getTenant } from '@/server/tenant';
 import { getSkuDetail } from '@/server/services/inventory-analysis-service';
 import { getSettings } from '@/server/repositories/settings-repository';
-import { setSkuB2B, setSkuHiddenFromDashboard, setSkuManualThresholds } from '@/server/repositories/inventory-repository';
+import { setSkuB2B, setSkuHiddenFromDashboard, setSkuManualThresholds, setSkuSpecialNote } from '@/server/repositories/inventory-repository';
 import { todayKstDateString } from '@/lib/date';
 
 export async function GET(request: Request, { params }: { params: Promise<{ skuId: string }> }) {
@@ -27,6 +27,7 @@ const patchSchema = z
   .object({
     isHiddenFromDashboard: z.boolean().optional(),
     isB2B: z.boolean().optional(),
+    specialNote: z.string().trim().max(200).optional(),
     manualDangerQty: z.number().int().min(0).nullable().optional(),
     manualWarningQty: z.number().int().min(0).nullable().optional(),
   })
@@ -52,6 +53,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sk
     if (parsed.data.isB2B !== undefined) {
       const sku = await setSkuB2B(tenant.orgId, skuId, parsed.data.isB2B);
       return NextResponse.json({ skuId: sku.id, isB2B: sku.isB2B });
+    }
+    if (parsed.data.specialNote !== undefined) {
+      const sku = await setSkuSpecialNote(tenant.orgId, skuId, parsed.data.specialNote);
+      return NextResponse.json({ skuId: sku.id, specialNote: sku.specialNote });
     }
     const sku = await setSkuManualThresholds(tenant.orgId, skuId, {
       dangerQty: parsed.data.manualDangerQty ?? null,
