@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { forbidViewer, getTenant } from '@/server/tenant';
 import { upsertDailySales } from '@/server/repositories/store-repository';
-import { bufferToAoa } from '@/domain/excel/aoa-reader';
+import { bufferToAoa, SpreadsheetRejectedError, tooManyRowsMessage } from '@/domain/excel/aoa-reader';
+import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
 import { parseSalesAoa } from '@/domain/excel/sales-parser';
 import { todayKstDateString } from '@/lib/date';
 
@@ -23,10 +24,13 @@ export async function POST(request: Request) {
   let aoa: string[][];
   try {
     aoa = bufferToAoa(Buffer.from(await file.arrayBuffer()));
-  } catch {
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return NextResponse.json({ error: e.message }, { status: 400 });
     return NextResponse.json({ error: '파일을 읽을 수 없습니다. 엑셀(.xlsx, .xls) 또는 CSV로 올려 주세요.' }, { status: 400 });
   }
   const { rows, skipped } = parseSalesAoa(aoa, todayKstDateString());
+  // 헤더를 뺀 줄 수(읽은 줄 + 건너뛴 줄)로 한 번에 올릴 수 있는 행 수를 제한한다.
+  if (rows.length + skipped > MAX_UPLOAD_DATA_ROWS) return NextResponse.json({ error: tooManyRowsMessage(rows.length + skipped) }, { status: 400 });
   if (rows.length === 0) return NextResponse.json({ error: '읽을 수 있는 날짜·매출 줄이 없습니다. 양식을 확인해 주세요.', skipped }, { status: 400 });
   if (rows.length > MAX_DAYS) return NextResponse.json({ error: `한 번에 ${MAX_DAYS}일까지만 올릴 수 있습니다.` }, { status: 400 });
 

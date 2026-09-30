@@ -12,6 +12,7 @@ import { LayoutReview, type LayoutPreview } from '@/components/upload/layout-rev
 import type { ImportLayout } from '@/domain/excel/layout-types';
 import { formatKstDate, formatKstDateTime } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
 import { format } from '@/lib/i18n/locales';
 
 interface ValidationIssue {
@@ -204,6 +205,7 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
         <div className="space-y-1.5">
           <Label htmlFor={`warehouse-day-file-${warehouseId}`}>{m.upload.fileLabel}</Label>
           <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} />
+          <p className="text-xs text-muted-foreground">{format(m.upload.rowLimit, { rows: MAX_UPLOAD_DATA_ROWS })}</p>
           {file && (
             <LayoutReview
               preview={preview}

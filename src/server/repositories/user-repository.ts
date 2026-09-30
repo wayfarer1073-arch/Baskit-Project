@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
@@ -20,7 +20,7 @@ export function countActiveAdmins(orgId: string) {
 }
 
 export async function createUser(orgId: string, input: { email: string; name: string; password: string; role: Role }) {
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await hashPassword(input.password);
   return prisma.user.create({
     data: { organizationId: orgId, email: input.email.trim().toLowerCase(), name: input.name, passwordHash, role: input.role },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
@@ -44,7 +44,7 @@ export async function deleteUser(userId: string): Promise<{ mode: 'hard' | 'soft
           isActive: false,
           name: '삭제된 사용자',
           email: `deleted-${userId}@deleted.invalid`,
-          passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+          passwordHash: await hashPassword(randomBytes(24).toString('hex')),
           emailVerifiedAt: null,
         },
       });

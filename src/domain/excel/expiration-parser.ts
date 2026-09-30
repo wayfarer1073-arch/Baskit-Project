@@ -1,5 +1,6 @@
 import type { ValidationIssue } from './types';
-import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap } from './aoa-reader';
+import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
+import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
 import {
   EXPIRATION_FIELDS,
   EXPIRATION_HEADER_ALIASES,
@@ -9,7 +10,6 @@ import {
   type ParsedExpirationRow,
 } from './expiration-types';
 
-const MAX_DATA_ROWS = 50_000;
 
 /** "2027-01-01" / "2027.01.01" / "2027/01/01" 등을 모두 허용하고 'yyyy-MM-dd'로 정규화한다. */
 function parseFlexibleDate(value: string): string | null {
@@ -37,7 +37,13 @@ function parseFlexibleDate(value: string): string | null {
  */
 export function parseExpirationWorkbook(buffer: Buffer): ExpirationParseResult {
   const issues: ValidationIssue[] = [];
-  const aoa = bufferToAoa(buffer);
+  let aoa: string[][];
+  try {
+    aoa = bufferToAoa(buffer);
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return { rows: [], issues: [{ level: 'ERROR', code: 'FILE_REJECTED', message: e.message }] };
+    throw e;
+  }
 
   if (aoa.length === 0) {
     issues.push({ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' });
@@ -73,11 +79,11 @@ export function parseExpirationWorkbook(buffer: Buffer): ExpirationParseResult {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 데이터가 한 건도 없습니다.' });
     return { rows: [], issues };
   }
-  if (dataRows.length > MAX_DATA_ROWS) {
+  if (dataRows.length > MAX_UPLOAD_DATA_ROWS) {
     issues.push({
       level: 'ERROR',
       code: 'TOO_MANY_ROWS',
-      message: `행이 ${dataRows.length.toLocaleString()}건으로 처리 가능한 최대치(${MAX_DATA_ROWS.toLocaleString()}건)를 초과합니다.`,
+      message: tooManyRowsMessage(dataRows.length),
     });
     return { rows: [], issues };
   }

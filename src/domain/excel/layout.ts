@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { bufferToAoa, normalizeHeaderCell, normalizeString } from './aoa-reader';
+import { bufferToAoa, normalizeHeaderCell, normalizeString, readWorkbook } from './aoa-reader';
 import { decodeTextTable } from './text-encoding';
 import { HEADER_ALIASES } from './types';
 import { LAYOUT_FIELDS, type ImportLayout, type LayoutField, type MatchConfidence } from './layout-types';
@@ -20,7 +20,7 @@ export function readSheets(buffer: Buffer): SheetData[] {
   }
   // CSV·TSV는 인코딩(UTF-8/EUC-KR 등)을 먼저 맞춰 읽는다. 값은 글자 그대로 두어 상품코드 앞자리 0 등이 사라지지 않게 한다.
   const textTable = decodeTextTable(buffer);
-  const workbook = textTable ? XLSX.read(textTable.text, { type: 'string', raw: true }) : XLSX.read(buffer, { type: 'buffer', raw: false, cellText: true });
+  const workbook = readWorkbook(buffer, textTable);
   return workbook.SheetNames.map((name) => ({
     name,
     aoa: XLSX.utils

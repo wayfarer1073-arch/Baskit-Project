@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { addDays, format } from 'date-fns';
 import type { BusinessSegment, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -219,7 +219,7 @@ export async function resetUserPassword(userId: string): Promise<string> {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
   const bytes = randomBytes(12);
   const password = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10), isActive: true } });
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password), isActive: true } });
   return password;
 }
 

@@ -1,5 +1,6 @@
 import { NUMERIC_FIELDS, type CanonicalField, type ParseResult, type ParsedInventoryRow, type ValidationIssue } from './types';
-import { normalizeString } from './aoa-reader';
+import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
+import { normalizeString, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
 import { detectHeaderRow, parseDateCell, readSheets, REQUIRED_LAYOUT_FIELDS, resolveColumns, suggestColumns, type ImportLayout, type LayoutField, type SheetData } from './layout';
 
 /** 콤마 천단위 구분자, 공백, 통화기호를 제거하고 숫자로 변환한다. 빈 값/파싱 실패는 null. */
@@ -28,7 +29,6 @@ const DECIMAL_14_2_MIN = -DECIMAL_14_2_MAX;
 const DECIMAL_24_2_MAX = 10 ** 22 - 0.01;
 const DECIMAL_24_2_MIN = -DECIMAL_24_2_MAX;
 
-const MAX_DATA_ROWS = 50_000; // 실제 창고 품목 수보다 훨씬 넉넉한 상한 (동기 파싱 리소스 보호용)
 
 const FIELD_LABEL: Record<LayoutField, string> = {
   productCode: '상품코드',
@@ -113,7 +113,13 @@ export function autoLayout(sheets: SheetData[], sheetName?: string | null): Impo
  * 한 셀의 오타 때문에 수백 개 상품이 통째로 사라지지 않도록.
  */
 export function parseInventoryWorkbook(buffer: Buffer, layout?: ImportLayout): ParseResult {
-  const sheets = readSheets(buffer);
+  let sheets: SheetData[];
+  try {
+    sheets = readSheets(buffer);
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return { rows: [], headerMap: {}, issues: [{ level: 'ERROR', code: 'FILE_REJECTED', message: e.message }], fileDates: [] };
+    throw e;
+  }
   if (sheets.length === 0) {
     return { rows: [], headerMap: {}, issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }], fileDates: [] };
   }
@@ -155,11 +161,11 @@ export function parseSheets(sheets: SheetData[], layout: ImportLayout): ParseRes
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 상품 데이터가 한 건도 없습니다.' });
     return { rows: [], headerMap, issues, fileDates: [], layout };
   }
-  if (dataRows.length > MAX_DATA_ROWS) {
+  if (dataRows.length > MAX_UPLOAD_DATA_ROWS) {
     issues.push({
       level: 'ERROR',
       code: 'TOO_MANY_ROWS',
-      message: `상품 행이 ${dataRows.length.toLocaleString()}건으로 처리 가능한 최대치(${MAX_DATA_ROWS.toLocaleString()}건)를 초과합니다.`,
+      message: tooManyRowsMessage(dataRows.length),
     });
     return { rows: [], headerMap, issues, fileDates: [], layout };
   }

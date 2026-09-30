@@ -1,5 +1,31 @@
 import * as XLSX from 'xlsx';
 import { decodeTextTable } from './text-encoding';
+import { zipUncompressedSize } from './zip-guard';
+import { MAX_SHEET_ROWS_READ, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
+
+/** 읽기 전에 거절하는 파일(압축 폭탄 등). 메시지는 그대로 사용자에게 보여 준다. */
+export class SpreadsheetRejectedError extends Error {}
+
+/** 엑셀을 열기 전에 안전한지 확인한다 — 압축을 푼 크기가 상한을 넘으면 거절. */
+export function assertSafeSpreadsheet(buffer: Buffer) {
+  const size = zipUncompressedSize(buffer);
+  if (size !== null && size > MAX_UNCOMPRESSED_BYTES) {
+    throw new SpreadsheetRejectedError('파일 내용이 너무 커서 열 수 없습니다. 필요한 시트만 남기거나 CSV로 저장해 다시 올려 주세요.');
+  }
+}
+
+/** SheetJS로 읽되, 앞쪽 MAX_SHEET_ROWS_READ행까지만 푼다(그 뒤는 어차피 행 수 상한으로 거절된다). */
+export function readWorkbook(buffer: Buffer, textTable: ReturnType<typeof decodeTextTable>) {
+  if (textTable) return XLSX.read(textTable.text, { type: 'string', raw: true, sheetRows: MAX_SHEET_ROWS_READ });
+  assertSafeSpreadsheet(buffer);
+  return XLSX.read(buffer, { type: 'buffer', raw: false, cellText: true, sheetRows: MAX_SHEET_ROWS_READ });
+}
+
+/** 헤더를 뺀 데이터 행이 상한을 넘을 때 보여 줄 문구. */
+export function tooManyRowsMessage(count: number) {
+  const shown = count >= MAX_SHEET_ROWS_READ - 1 ? `${count.toLocaleString()}행 이상` : `${count.toLocaleString()}행`;
+  return `한 번에 최대 ${MAX_UPLOAD_DATA_ROWS.toLocaleString()}행(헤더 제외)까지 올릴 수 있어요. 이 파일은 ${shown}이에요.`;
+}
 
 /**
  * 사내 Excel 익스포트 중 상당수가 실제로는 "HTML table을 .xls 확장자로 저장한" 파일이다
@@ -42,12 +68,12 @@ function parseHtmlTableToAoa(text: string): string[][] {
 export function bufferToAoa(buffer: Buffer): string[][] {
   if (looksLikeHtmlTable(buffer)) {
     const text = buffer.toString('utf-8');
-    const aoa = parseHtmlTableToAoa(text);
+    const aoa = parseHtmlTableToAoa(text).slice(0, MAX_SHEET_ROWS_READ);
     if (aoa.length > 0) return aoa;
   }
 
   const textTable = decodeTextTable(buffer);
-  const workbook = textTable ? XLSX.read(textTable.text, { type: 'string', raw: true }) : XLSX.read(buffer, { type: 'buffer', raw: false, cellText: true });
+  const workbook = readWorkbook(buffer, textTable);
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   const sheet = workbook.Sheets[sheetName];

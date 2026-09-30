@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { Prisma, type Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createOneTimeToken, hashOneTimeToken } from '@/server/one-time-token';
@@ -56,7 +56,7 @@ export async function resetPassword(raw: string, password: string): Promise<bool
   const userId = await consume(raw, 'PASSWORD_RESET');
   if (!userId) return false;
   // 메일로 받은 링크를 열었으니 이메일 주소도 확인된 셈이다.
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: new Date() } });
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(password), emailVerifiedAt: new Date() } });
   await prisma.authToken.updateMany({ where: { userId, type: 'PASSWORD_RESET', usedAt: null }, data: { usedAt: new Date() } });
   return true;
 }
@@ -108,7 +108,7 @@ export async function findInvitation(raw: string) {
 export async function acceptInvitation(raw: string, input: { name: string; password: string }) {
   const invitation = await findInvitation(raw);
   if (!invitation) throw new InvitationError('invalid');
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await hashPassword(input.password);
   const now = new Date();
   try {
     return await prisma.$transaction(async (tx) => {

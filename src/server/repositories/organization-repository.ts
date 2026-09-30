@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { Prisma, type BusinessSegment } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_RISK_SETTINGS } from '@/domain/inventory/types';
@@ -18,7 +18,7 @@ export interface CreateWorkspaceInput {
 /** 가입 = 새 워크스페이스 + 첫 관리자 + 기본 창고 하나 + 기본 설정을 한 트랜잭션으로 만든다. */
 export async function createWorkspace(input: CreateWorkspaceInput) {
   const email = input.email.trim().toLowerCase();
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await hashPassword(input.password);
   try {
     return await prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({ data: { name: input.organizationName, segment: input.segment } });

@@ -74,6 +74,7 @@ const baseKo = {
     downloadOriginal: '원본 파일 받기 · {name} ({size})',
     blockedHoliday: '휴무일(주말·등록 휴무일)에는 업로드할 수 없습니다. 설정 > 공통에서 휴무일 업로드를 켤 수 있어요.',
     fileLabel: 'Excel 파일 (.xls, .xlsx)',
+    rowLimit: '한 번에 최대 {rows}행(헤더 제외)까지 올릴 수 있어요.',
     requiredColumns: '업체마다 다른 양식도 열을 자동으로 찾아요. 상품코드·상품명·재고수량만 있으면 되고, 원가·원가합계·기준일은 선택이에요.',
     missingItemNotice:
       '파일에 없는 품목은 재고 0(품절)으로 인식해요. 3PL이 재고 0인 품목을 빼고 내려주는지, 0으로 포함하는지 확인해 주세요. 일부 품목만 담긴 파일을 올리면 나머지가 품절로 잡혀요.',
@@ -490,6 +491,7 @@ const baseEn: Dictionary<typeof baseKo> = {
     downloadOriginal: 'Download original · {name} ({size})',
     blockedHoliday: 'Uploads are closed on non-working days (weekends and registered holidays). You can allow them under Settings > General.',
     fileLabel: 'Excel file (.xls, .xlsx)',
+    rowLimit: 'Up to {rows} rows per upload (excluding the header).',
     requiredColumns:
       'Columns are detected automatically, whatever your provider’s layout. Only product code, name and stock quantity are required; unit cost, total cost and date are optional.',
     missingItemNotice:

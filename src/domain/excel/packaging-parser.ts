@@ -1,5 +1,6 @@
 import type { ValidationIssue } from './types';
-import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap } from './aoa-reader';
+import { MAX_UPLOAD_DATA_ROWS } from '@/lib/upload-limits';
+import { bufferToAoa, normalizeString, findHeaderRowIndex, buildHeaderMap, SpreadsheetRejectedError, tooManyRowsMessage } from './aoa-reader';
 import {
   PACKAGING_FIELDS,
   PACKAGING_HEADER_ALIASES,
@@ -9,7 +10,6 @@ import {
   type ParsedPackagingRow,
 } from './packaging-types';
 
-const MAX_DATA_ROWS = 50_000;
 
 /** 빈 값은 null(갱신 안 함), 정수가 아니거나 음수면 파싱 실패로 null 처리하고 WARNING을 남긴다. */
 function parseOptionalCount(value: string): { value: number | null; invalid: boolean } {
@@ -27,7 +27,13 @@ function parseOptionalCount(value: string): { value: number | null; invalid: boo
  */
 export function parsePackagingWorkbook(buffer: Buffer): PackagingParseResult {
   const issues: ValidationIssue[] = [];
-  const aoa = bufferToAoa(buffer);
+  let aoa: string[][];
+  try {
+    aoa = bufferToAoa(buffer);
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return { rows: [], issues: [{ level: 'ERROR', code: 'FILE_REJECTED', message: e.message }] };
+    throw e;
+  }
 
   if (aoa.length === 0) {
     issues.push({ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' });
@@ -63,11 +69,11 @@ export function parsePackagingWorkbook(buffer: Buffer): PackagingParseResult {
     issues.push({ level: 'ERROR', code: 'NO_DATA_ROWS', message: '헤더는 있지만 데이터가 한 건도 없습니다.' });
     return { rows: [], issues };
   }
-  if (dataRows.length > MAX_DATA_ROWS) {
+  if (dataRows.length > MAX_UPLOAD_DATA_ROWS) {
     issues.push({
       level: 'ERROR',
       code: 'TOO_MANY_ROWS',
-      message: `행이 ${dataRows.length.toLocaleString()}건으로 처리 가능한 최대치(${MAX_DATA_ROWS.toLocaleString()}건)를 초과합니다.`,
+      message: tooManyRowsMessage(dataRows.length),
     });
     return { rows: [], issues };
   }

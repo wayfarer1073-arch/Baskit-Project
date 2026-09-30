@@ -5,7 +5,7 @@
  * 새 계정은 --org-id로 지정한 워크스페이스에, 없으면 --org 이름으로 새 워크스페이스를 만들어 넣는다.
  * (일반 사용자는 /signup 화면에서 워크스페이스와 관리자 계정을 함께 만든다.)
  */
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../src/lib/password';
 import { prisma } from '../src/lib/prisma';
 
 function getArg(name: string): string | undefined {
@@ -40,7 +40,7 @@ async function main() {
     process.exit(1);
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await hashPassword(password);
 
   if (existing) {
     const user = await prisma.user.update({ where: { email }, data: { passwordHash, name, role: 'ADMIN' } });

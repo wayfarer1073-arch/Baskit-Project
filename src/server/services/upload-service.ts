@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { autoLayout, parseSheets } from '@/domain/excel/parser';
-import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField } from '@/domain/excel/layout';
+import { readSheets, suggestColumns, type ImportLayout, type MatchConfidence, type LayoutField, type SheetData } from '@/domain/excel/layout';
+import { SpreadsheetRejectedError } from '@/domain/excel/aoa-reader';
 import { applyCodeAliases, assignAutoCodes, convertStockUnit, markZeroStock } from '@/domain/excel/normalize';
 import { loadAliasMap, loadWarehouseSkuInfo } from '@/server/repositories/code-alias-repository';
 import { findMatchingTemplate, layoutFingerprint, saveImportTemplate, touchImportTemplate } from '@/server/repositories/import-template-repository';
@@ -106,7 +107,13 @@ export interface UploadPreview {
  * 사용자가 화면에서 시트·헤더 행·열을 바꾸면 그 양식으로 다시 미리보기를 요청한다.
  */
 export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: ImportLayout, warehouseId?: string, snapshotDate?: string): Promise<UploadPreview | { error: string }> {
-  const sheets = readSheets(fileBuffer);
+  let sheets: SheetData[];
+  try {
+    sheets = readSheets(fileBuffer);
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return { error: e.message };
+    throw e;
+  }
   if (sheets.length === 0) return { error: '파일에서 표 데이터를 찾을 수 없습니다.' };
   const template = layout ? null : await findMatchingTemplate(orgId, sheets);
   const chosen = layout ?? template?.layout ?? autoLayout(sheets);
@@ -140,7 +147,13 @@ export async function previewUpload(orgId: string, fileBuffer: Buffer, layout?: 
 }
 
 export async function processUpload(request: UploadRequest): Promise<UploadResult> {
-  const sheets = readSheets(request.fileBuffer);
+  let sheets: SheetData[];
+  try {
+    sheets = readSheets(request.fileBuffer);
+  } catch (e) {
+    if (e instanceof SpreadsheetRejectedError) return { status: 'ERROR', issues: [{ level: 'ERROR', code: 'FILE_REJECTED', message: e.message }] };
+    throw e;
+  }
   if (sheets.length === 0) return { status: 'ERROR', issues: [{ level: 'ERROR', code: 'EMPTY_FILE', message: '파일에서 표 데이터를 찾을 수 없습니다.' }] };
   const template = !request.layout && request.orgId ? await findMatchingTemplate(request.orgId, sheets) : null;
   const layout = request.layout ?? template?.layout ?? autoLayout(sheets);
