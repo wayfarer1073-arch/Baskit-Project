@@ -17,6 +17,9 @@ export const ko = {
     noWarehouse: '등록된 창고가 없어요',
     uploaded: '업로드함',
     missing: '미업로드',
+    dailyAll: '일일 업로드 전체',
+    dailyPartial: '일일 업로드 일부',
+    moreEvents: '외 {count}건',
   },
   panel: {
     title: '{date}',
@@ -129,6 +132,9 @@ export const en: Dictionary<typeof ko> = {
     noWarehouse: 'No warehouses yet',
     uploaded: 'Uploaded',
     missing: 'missing',
+    dailyAll: 'All daily uploads',
+    dailyPartial: 'Some daily uploads',
+    moreEvents: '+{count} more',
   },
   panel: {
     title: '{date}',

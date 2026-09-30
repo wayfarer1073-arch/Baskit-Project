@@ -14,8 +14,10 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format as fill } from '@/lib/i18n/locales';
 
 /** 모바일 칸의 점 색 — 방식마다 하나. 범례와 같은 값을 쓴다. */
-const DOT = { DAILY_SYNC: 'bg-foreground', PERIODIC_COUNT: 'bg-sky-500', ORDER_CYCLE: 'bg-amber-500' } as const;
+const DOT: Record<Segment, string> = { DAILY_SYNC: 'bg-foreground', PERIODIC_COUNT: 'bg-sky-500', ORDER_CYCLE: 'bg-amber-500' };
 const SWIPE_MIN_PX = 50;
+/** 날짜 칸 아래에 보이는 일정 막대 수. 더 많으면 마지막 막대에 '외 n건'을 적는다. */
+const MAX_BARS = 2;
 
 export interface MobileCalendarProps {
   weeks: Date[][];
@@ -90,7 +92,7 @@ export function MobileCalendar(props: MobileCalendarProps) {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-1">
+        <div className="grid grid-cols-7 border-t border-l border-border/60">
           {weeks.flat().map((day) => {
             const date = format(day, 'yyyy-MM-dd');
             const inMonth = isSameMonth(day, month);
@@ -98,12 +100,15 @@ export function MobileCalendar(props: MobileCalendarProps) {
             const isSelected = date === selectedDate;
             const offDay = getDay(day) === 0 || getDay(day) === 6 || holidayByDate.has(date);
             const uploaded = show('DAILY_SYNC') && dailyWarehouses.length > 0 ? dailyUploaded(date).length : 0;
-            const dots = [
-              uploaded > 0 && { key: 'daily', className: uploaded === dailyWarehouses.length ? DOT.DAILY_SYNC : 'border border-foreground bg-transparent' },
-              show('PERIODIC_COUNT') && props.periodicCodesByDate.has(date) && { key: 'periodic', className: DOT.PERIODIC_COUNT },
-              show('ORDER_CYCLE') && props.salesByDate.has(date) && { key: 'store', className: DOT.ORDER_CYCLE },
-            ].filter((d): d is { key: string; className: string } => !!d);
-            const lines = schedulesOn(date).slice(0, 2);
+            // 일일 업로드: 모든 창고 = 원, 일부만 = 세모. 비정기 실사·매장 매출은 기록이 있으면 원.
+            const marks = [
+              uploaded > 0 && { key: 'daily', color: DOT.DAILY_SYNC, triangle: uploaded < dailyWarehouses.length },
+              show('PERIODIC_COUNT') && props.periodicCodesByDate.has(date) && { key: 'periodic', color: DOT.PERIODIC_COUNT, triangle: false },
+              show('ORDER_CYCLE') && props.salesByDate.has(date) && { key: 'store', color: DOT.ORDER_CYCLE, triangle: false },
+            ].filter((d): d is { key: string; color: string; triangle: boolean } => !!d);
+            const daySchedules = schedulesOn(date);
+            const bars = daySchedules.slice(0, MAX_BARS);
+            const more = daySchedules.length - MAX_BARS;
             return (
               <button
                 key={date}
@@ -111,11 +116,18 @@ export function MobileCalendar(props: MobileCalendarProps) {
                 onClick={() => props.onSelectDate(date)}
                 aria-pressed={isSelected}
                 aria-label={format(day, 'yyyy-MM-dd')}
-                className="flex aspect-square flex-col items-center justify-start gap-1 pt-1"
+                className={cn('relative flex min-h-14 flex-col items-center border-r border-b border-border/60 pt-1', !inMonth && 'bg-muted/30')}
               >
+                {marks.length > 0 && (
+                  <span className={cn('absolute top-1 left-1 flex flex-col items-center gap-[2px]', !inMonth && 'opacity-40')} aria-hidden="true">
+                    {marks.map((mk) => (
+                      <span key={mk.key} className={cn(mk.color, mk.triangle ? 'h-[5px] w-[6px] [clip-path:polygon(50%_0,100%_100%,0_100%)]' : 'size-[5px] rounded-full')} />
+                    ))}
+                  </span>
+                )}
                 <span
                   className={cn(
-                    'flex size-8 items-center justify-center rounded-full text-sm tabular-nums transition-colors',
+                    'flex size-7 items-center justify-center rounded-full text-[13px] tabular-nums transition-colors',
                     !inMonth && 'text-muted-foreground/40',
                     inMonth && offDay && 'text-status-danger',
                     isToday && 'bg-foreground font-semibold text-background',
@@ -125,27 +137,46 @@ export function MobileCalendar(props: MobileCalendarProps) {
                 >
                   {format(day, 'd')}
                 </span>
-                <span className="flex h-1.5 items-center gap-0.5" aria-hidden="true">
-                  {dots.map((d) => (
-                    <span key={d.key} className={cn('size-1.5 rounded-full', d.className, !inMonth && 'opacity-40')} />
-                  ))}
-                </span>
-                <span className="flex w-full flex-col gap-px px-1" aria-hidden="true">
-                  {lines.map((s) => (
-                    <span key={s.id} className={cn('h-[3px] rounded-full', SCHEDULE_COLOR_CLASSNAMES[s.color as ScheduleColor]?.swatch ?? SCHEDULE_COLOR_CLASSNAMES.red.swatch)} />
-                  ))}
-                </span>
+                {bars.length > 0 && (
+                  <span className={cn('mt-auto flex w-full flex-col gap-[2px] px-[3px] pb-1', !inMonth && 'opacity-40')} aria-hidden="true">
+                    {bars.map((s, i) => {
+                      const color = SCHEDULE_COLOR_CLASSNAMES[s.color as ScheduleColor] ?? SCHEDULE_COLOR_CLASSNAMES.red;
+                      // 일정이 둘보다 많으면 두 번째 막대에 '외 n건'을 작게 적는다.
+                      return i === MAX_BARS - 1 && more > 0 ? (
+                        <span key={s.id} className={cn('flex h-[10px] items-center justify-center rounded-sm text-[8px] leading-none font-medium whitespace-nowrap', color.bar)}>
+                          {fill(c.mobile.moreEvents, { count: more })}
+                        </span>
+                      ) : (
+                        <span key={s.id} className={cn('h-[3px] rounded-full', color.swatch)} />
+                      );
+                    })}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground" aria-hidden="true">
-          {enabledSegments.map((s) => (
-            <span key={s} className="inline-flex items-center gap-1">
-              <span className={cn('size-1.5 rounded-full', DOT[s])} />
-              {c.mobile.legend[s]}
-            </span>
-          ))}
+          {show('DAILY_SYNC') && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <span className={cn('size-[5px] rounded-full', DOT.DAILY_SYNC)} />
+                {c.mobile.dailyAll}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className={cn('h-[5px] w-[6px] [clip-path:polygon(50%_0,100%_100%,0_100%)]', DOT.DAILY_SYNC)} />
+                {c.mobile.dailyPartial}
+              </span>
+            </>
+          )}
+          {enabledSegments
+            .filter((s) => s !== 'DAILY_SYNC')
+            .map((s) => (
+              <span key={s} className="inline-flex items-center gap-1">
+                <span className={cn('size-[5px] rounded-full', DOT[s])} />
+                {c.mobile.legend[s]}
+              </span>
+            ))}
         </div>
       </div>
 
