@@ -141,11 +141,11 @@ export function MobileCalendar(props: MobileCalendarProps) {
                   <span className={cn('mt-auto flex w-full flex-col gap-[2px] px-[3px] pb-1', !inMonth && 'opacity-40')} aria-hidden="true">
                     {bars.map((s, i) => {
                       const color = SCHEDULE_COLOR_CLASSNAMES[s.color as ScheduleColor] ?? SCHEDULE_COLOR_CLASSNAMES.red;
-                      // 일정이 둘보다 많으면 두 번째 막대를 절반 길이로 줄이고 남는 자리에 '+n'을 작게 적는다.
+                      // 일정이 둘보다 많으면 두 번째 막대 끝에 '+n'을 작게 붙인다(막대+글자 길이가 다른 막대와 같게).
                       return i === MAX_BARS - 1 && more > 0 ? (
                         <span key={s.id} className="flex h-[3px] items-center gap-[2px]">
-                          <span className={cn('h-[3px] w-1/2 shrink-0 rounded-full', color.swatch)} />
-                          <span className="text-[7px] leading-none font-medium text-muted-foreground">{fill(c.mobile.moreEvents, { count: more })}</span>
+                          <span className={cn('h-[3px] min-w-0 flex-1 rounded-full', color.swatch)} />
+                          <span className="shrink-0 text-[7px] leading-none font-medium text-muted-foreground">{fill(c.mobile.moreEvents, { count: more })}</span>
                         </span>
                       ) : (
                         <span key={s.id} className={cn('h-[3px] rounded-full', color.swatch)} />
