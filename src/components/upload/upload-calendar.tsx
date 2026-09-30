@@ -113,11 +113,16 @@ export function UploadCalendar({
   const showStore = enabledSegments.includes('ORDER_CYCLE');
   const salesByDate = useMemo(() => new Map(sales.map((s) => [s.date, s.amount])), [sales]);
   const dailyWarehouses = useMemo(() => warehouses.filter((w) => w.segment === 'DAILY_SYNC'), [warehouses]);
-  // 비정기 실사 표시는 비정기 실사 창고의 기록만 센다(일일 업로드 창고의 파일과 섞이지 않게).
-  const skusByDate = useMemo(() => {
-    const periodicIds = new Set(warehouses.filter((w) => w.segment === 'PERIODIC_COUNT').map((w) => w.id));
-    const map = new Map<string, number>();
-    for (const e of entries) if (periodicIds.has(e.warehouseId)) map.set(e.date, (map.get(e.date) ?? 0) + e.rowCount);
+  // 비정기 실사 표시는 비정기 실사 창고의 기록만 본다(일일 업로드 창고의 파일과 섞이지 않게) — 그날 실사한 창고 코드(PA, PB …).
+  const periodicCodesByDate = useMemo(() => {
+    const periodic = warehouses.filter((w) => w.segment === 'PERIODIC_COUNT');
+    const counted = new Set(entries.map((e) => `${e.warehouseId}|${e.date}`));
+    const map = new Map<string, string[]>();
+    for (const e of entries) {
+      if (map.has(e.date)) continue;
+      const codes = periodic.filter((w) => counted.has(`${w.id}|${e.date}`)).map((w) => w.code);
+      if (codes.length) map.set(e.date, codes);
+    }
     return map;
   }, [entries, warehouses]);
   const [colorOverrides, setColorOverrides] = useState<Record<string, ScheduleColor>>({});
@@ -185,11 +190,23 @@ export function UploadCalendar({
           <InfoTooltip tone="header">{c.description}</InfoTooltip>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => subMonths(m, 1))} aria-label={t.calendar.prevMonth}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="text-foreground hover:text-brand-accent"
+            onClick={() => setMonth((m) => subMonths(m, 1))}
+            aria-label={t.calendar.prevMonth}
+          >
             <ChevronLeft className="size-4" />
           </Button>
           <span className="w-24 text-center text-sm font-semibold tabular-nums">{format(month, t.calendar.monthFormat)}</span>
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => setMonth((m) => addMonths(m, 1))} aria-label={t.calendar.nextMonth}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="text-foreground hover:text-brand-accent"
+            onClick={() => setMonth((m) => addMonths(m, 1))}
+            aria-label={t.calendar.nextMonth}
+          >
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -262,14 +279,11 @@ export function UploadCalendar({
                       const isWeekendDay = getDay(day) === 0 || getDay(day) === 6;
                       const isBlocked = isWeekendDay || holidayName !== undefined;
                       const uploadedCodes = showDaily ? dailyWarehouses.filter((w) => entryByKey.has(`${w.id}|${dateStr}`)).map((w) => w.code) : [];
-                      const countedSkus = showPeriodic ? (skusByDate.get(dateStr) ?? 0) : 0;
+                      const countedCodes = showPeriodic ? (periodicCodesByDate.get(dateStr) ?? []) : [];
                       const salesAmount = showStore ? salesByDate.get(dateStr) : undefined;
                       const markerTone = isToday ? 'text-background/80 group-hover:text-black/70' : 'text-muted-foreground';
-                      const markers = [
-                        uploadedCodes.join(' '),
-                        countedSkus > 0 ? fill(c.markers.skus, { count: countedSkus.toLocaleString() }) : '',
-                        salesAmount !== undefined ? fill(c.markers.sales, { amount: compactAmount(salesAmount, locale) }) : '',
-                      ].filter(Boolean);
+                      // 날짜 옆: 그날 업로드한 일일 창고 / 실사한 비정기 창고 코드(예: DA DB / PA). 매장 매출은 칸 아래쪽에 따로.
+                      const markers = [uploadedCodes.join(' '), countedCodes.join(' ')].filter(Boolean);
                       return (
                         <button
                           key={dateStr}
@@ -298,7 +312,7 @@ export function UploadCalendar({
                               >
                                 {format(day, 'd')}
                               </span>
-                              {/* 날짜 바로 옆 한 줄에 일일 업로드 / 비정기 실사 / 매장 매출 순으로 — 시선이 위아래로 흩어지지 않게. */}
+                              {/* 날짜 바로 옆 한 줄에 일일 업로드 창고 / 비정기 실사 창고 순으로. */}
                               {markers.length > 0 && (
                                 <span className={cn('min-w-0 truncate text-[10px] font-semibold tabular-nums', markerTone)} title={markers.join(' / ')}>
                                   {markers.map((marker, i) => (
@@ -322,6 +336,14 @@ export function UploadCalendar({
                             )}
                           </div>
                           {barsSpacerHeight > 0 && <div style={{ height: barsSpacerHeight }} aria-hidden="true" />}
+                          {salesAmount !== undefined && (
+                            <span
+                              className={cn('mt-auto truncate text-right text-[10px] font-semibold tabular-nums', markerTone)}
+                              title={fill(c.markers.sales, { amount: salesAmount.toLocaleString() })}
+                            >
+                              {fill(c.markers.sales, { amount: compactAmount(salesAmount, locale) })}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -357,9 +379,7 @@ export function UploadCalendar({
                               {seg.schedule.title}
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>
-                            {fill(t.upload.scheduleBar, { title: seg.schedule.title, count: seg.schedule.events.length })}
-                          </TooltipContent>
+                          <TooltipContent>{fill(t.upload.scheduleBar, { title: seg.schedule.title, count: seg.schedule.events.length })}</TooltipContent>
                         </Tooltip>
                       ))}
                     </div>
