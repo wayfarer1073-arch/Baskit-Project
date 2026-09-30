@@ -261,6 +261,11 @@ export function UploadCalendar({
                       const countedSkus = showPeriodic ? (skusByDate.get(dateStr) ?? 0) : 0;
                       const salesAmount = showStore ? salesByDate.get(dateStr) : undefined;
                       const markerTone = isToday ? 'text-background/80 group-hover:text-black/70' : 'text-muted-foreground';
+                      const markers = [
+                        uploadedCodes.join(' '),
+                        countedSkus > 0 ? fill(c.markers.skus, { count: countedSkus.toLocaleString() }) : '',
+                        salesAmount !== undefined ? fill(c.markers.sales, { amount: compactAmount(salesAmount, locale) }) : '',
+                      ].filter(Boolean);
                       return (
                         <button
                           key={dateStr}
@@ -278,10 +283,10 @@ export function UploadCalendar({
                           )}
                         >
                           <div className="flex h-4 items-start justify-between gap-1">
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex min-w-0 items-baseline gap-1">
                               <span
                                 className={cn(
-                                  'text-xs tabular-nums',
+                                  'shrink-0 text-xs tabular-nums',
                                   inMonth ? 'text-foreground' : 'text-muted-foreground/60',
                                   isBlocked && !isToday && (inMonth ? 'text-status-danger' : 'text-status-danger/40'),
                                   isToday && 'font-semibold text-background group-hover:text-black',
@@ -289,16 +294,22 @@ export function UploadCalendar({
                               >
                                 {format(day, 'd')}
                               </span>
-                              {uploadedCodes.length > 0 && (
-                                <span className={cn('text-[9px] font-semibold', isToday ? 'text-background/80 group-hover:text-black/70' : 'text-muted-foreground')}>
-                                  {uploadedCodes.join(' ')}
+                              {/* 날짜 바로 옆 한 줄에 일일 업로드 / 비정기 실사 / 매장 매출 순으로 — 시선이 위아래로 흩어지지 않게. */}
+                              {markers.length > 0 && (
+                                <span className={cn('min-w-0 truncate text-[10px] font-semibold tabular-nums', markerTone)} title={markers.join(' / ')}>
+                                  {markers.map((marker, i) => (
+                                    <span key={i}>
+                                      {i > 0 && <span className="px-0.5 font-normal opacity-60">/</span>}
+                                      {marker}
+                                    </span>
+                                  ))}
                                 </span>
                               )}
                             </div>
                             {holidayName && (
                               <span
                                 className={cn(
-                                  'truncate text-[9px] font-medium',
+                                  'max-w-[45%] shrink-0 truncate text-[9px] font-medium',
                                   isToday ? 'text-background/80 group-hover:text-black/70' : inMonth ? 'text-status-danger' : 'text-status-danger/40',
                                 )}
                               >
@@ -307,12 +318,6 @@ export function UploadCalendar({
                             )}
                           </div>
                           {barsSpacerHeight > 0 && <div style={{ height: barsSpacerHeight }} aria-hidden="true" />}
-                          {(countedSkus > 0 || salesAmount !== undefined) && (
-                            <div className={cn('mt-auto flex flex-wrap gap-x-1.5 text-[10px] leading-tight font-semibold tabular-nums', markerTone)}>
-                              {countedSkus > 0 && <span>{fill(c.markers.skus, { count: countedSkus.toLocaleString() })}</span>}
-                              {salesAmount !== undefined && <span>{fill(c.markers.sales, { amount: compactAmount(salesAmount, locale) })}</span>}
-                            </div>
-                          )}
                         </button>
                       );
                     })}
