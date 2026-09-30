@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import type { ScheduleRow } from '@/domain/events/schedule-types';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface ScheduleDetailDialogProps {
   schedule: ScheduleRow | null;
@@ -97,27 +98,34 @@ export function ScheduleDetailDialog({ schedule, onOpenChange, onColorChanged, o
                 ? m.calendar.schedule.noItems
                 : format(m.calendar.schedule.detailItems, { count: schedule.events.length + schedule.storeItems.length })}
             </p>
-            <div className="max-h-64 space-y-1.5 overflow-y-auto">
-              {schedule.storeItems.map((i) => (
-                <div key={i.storeItemId} className="flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-sm">
-                  <Badge variant="increase" className="shrink-0 text-[11px]">
-                    {m.calendar.schedule.storeItem}
-                  </Badge>
-                  <span className="truncate font-medium">{i.name}</span>
+            <Paged items={[...schedule.storeItems.map((item) => ({ kind: 'store' as const, item })), ...schedule.events.map((event) => ({ kind: 'event' as const, event }))]}>
+              {(pageItems) => (
+                <div className="space-y-1.5">
+                  {pageItems.map((row) =>
+                    row.kind === 'store' ? (
+                      <div key={row.item.storeItemId} className="flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-sm">
+                        <Badge variant="increase" className="shrink-0 text-[11px]">
+                          {m.calendar.schedule.storeItem}
+                        </Badge>
+                        <span className="truncate font-medium">{row.item.name}</span>
+                      </div>
+                    ) : (
+                      <div key={row.event.id} className="rounded-md border px-2.5 py-2 text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="shrink-0 text-[11px]">
+                            {row.event.warehouseCode}
+                          </Badge>
+                          <span className="truncate font-medium">{row.event.productName ?? t.wholeWarehouse}</span>
+                          {row.event.productCode && <span className="shrink-0 text-xs text-muted-foreground">{row.event.productCode}</span>}
+                          {row.event.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.quantity, { count: row.event.quantity })}</span>}
+                        </div>
+                        {row.event.note && row.event.note !== schedule.note && <p className="mt-1 text-xs text-muted-foreground">{row.event.note}</p>}
+                      </div>
+                    ),
+                  )}
                 </div>
-              ))}
-              {schedule.events.map((e) => (
-                <div key={e.id} className="rounded-md border px-2.5 py-2 text-sm">
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="shrink-0 text-[11px]">{e.warehouseCode}</Badge>
-                    <span className="truncate font-medium">{e.productName ?? t.wholeWarehouse}</span>
-                    {e.productCode && <span className="shrink-0 text-xs text-muted-foreground">{e.productCode}</span>}
-                    {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.quantity, { count: e.quantity })}</span>}
-                  </div>
-                  {e.note && e.note !== schedule.note && <p className="mt-1 text-xs text-muted-foreground">{e.note}</p>}
-                </div>
-              ))}
-            </div>
+              )}
+            </Paged>
           </div>
         </div>
       </DialogContent>

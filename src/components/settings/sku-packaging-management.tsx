@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatKstDateTime } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface PackagingUploadStatus {
   warehouseId: string;
@@ -113,23 +114,27 @@ export function SkuPackagingManagement({ isAdmin, warehouses, initialStatuses }:
           </div>
         )}
 
-        <div className="space-y-1.5">
-          {statuses.map((s) => (
-            <div key={s.warehouseId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5">
-                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{s.warehouseCode}</span>
-                <span className="font-medium">{s.warehouseName}</span>
-              </div>
-              {s.lastUpload ? (
-                <span className="text-xs text-muted-foreground">
-                  {format(t.packaging.lastUpdate, { date: formatKstDateTime(s.lastUpload.uploadedAt), user: s.lastUpload.uploadedByName, file: s.lastUpload.sourceFileName, count: s.lastUpload.rowCount })}
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">{t.packaging.noHistory}</span>
-              )}
+        <Paged items={statuses} pagerClassName="mt-2">
+          {(pageItems) => (
+            <div className="space-y-1.5">
+              {pageItems.map((s) => (
+                <div key={s.warehouseId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{s.warehouseCode}</span>
+                    <span className="font-medium">{s.warehouseName}</span>
+                  </div>
+                  {s.lastUpload ? (
+                    <span className="text-xs text-muted-foreground">
+                      {format(t.packaging.lastUpdate, { date: formatKstDateTime(s.lastUpload.uploadedAt), user: s.lastUpload.uploadedByName, file: s.lastUpload.sourceFileName, count: s.lastUpload.rowCount })}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{t.packaging.noHistory}</span>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </Paged>
       </CardContent>
     </Card>
   );

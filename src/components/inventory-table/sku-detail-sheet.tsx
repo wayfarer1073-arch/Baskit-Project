@@ -28,6 +28,7 @@ import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import type { ReorderSuggestion } from '@/domain/reorder/reorder';
 import { ReorderPanel, type Turnover30 } from './reorder-panel';
 import { ReliabilityInfo } from '@/components/ui/reliability-info';
+import { Paged } from '@/components/ui/paged';
 
 interface SkuDetailResponse {
   descriptor: SkuDescriptor;
@@ -559,25 +560,31 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
               {unclassifiedIncreases.length > 0 && (
                 <div className="space-y-2 rounded-md border border-status-increase/30 bg-status-increase-bg p-3">
                   <div className="text-xs font-medium text-status-increase">{t.increaseDetected}</div>
-                  {unclassifiedIncreases.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span>
-                        {format(t.increaseOn, { date: formatKstDate(d.toDate), qty: formatNumber(d.increase) })}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-[11px]"
-                        onClick={() => {
-                          setEditingEvent(null);
-                          setFormPrefill({ quantity: d.increase, date: d.toDate });
-                          setFormOpen(true);
-                        }}
-                      >
-                        {t.classify}
-                      </Button>
-                    </div>
-                  ))}
+                  <Paged items={unclassifiedIncreases} pagerClassName="mt-2">
+                    {(pageItems) => (
+                      <>
+                        {pageItems.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span>
+                              {format(t.increaseOn, { date: formatKstDate(d.toDate), qty: formatNumber(d.increase) })}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[11px]"
+                              onClick={() => {
+                                setEditingEvent(null);
+                                setFormPrefill({ quantity: d.increase, date: d.toDate });
+                                setFormOpen(true);
+                              }}
+                            >
+                              {t.classify}
+                            </Button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </Paged>
                 </div>
               )}
 
@@ -600,52 +607,58 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 </div>
                 <div className="space-y-2">
                   {events.length === 0 && <p className="text-sm text-muted-foreground">{t.noEvents}</p>}
-                  {events.map((e) => {
-                    const startLabel = formatKstDate(e.eventDate);
-                    const endLabel = e.endDate ? formatKstDate(e.endDate) : null;
-                    const dateLabel = endLabel && endLabel !== startLabel ? `${startLabel} ~ ${endLabel}` : startLabel;
-                    return (
-                      <div key={e.id} className="rounded-md border p-2.5 text-sm">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Badge variant="outline" className="shrink-0">{eventTypeText(e.eventType, m.domain.eventTypes)}</Badge>
-                            {e.title && <span className="truncate text-sm font-semibold">{e.title}</span>}
-                            {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.qty, { count: formatSigned(e.quantity) })}</span>}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                            {dateLabel}
-                            <button
-                              onClick={() => {
-                                setEditingEvent({
-                                  id: e.id,
-                                  eventType: e.eventType as EditingEvent['eventType'],
-                                  quantity: e.quantity,
-                                  title: e.title,
-                                  note: e.note,
-                                  eventDate: e.eventDate,
-                                  endDate: e.endDate,
-                                });
-                                setFormOpen(true);
-                              }}
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label={t.edit}
-                            >
-                              <Pencil className="size-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEvent(e.id)}
-                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label={t.delete}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="mt-1 text-sm">{e.note}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">{format(t.author, { name: e.createdBy.name })}</p>
-                      </div>
-                    );
-                  })}
+                  <Paged items={events} pagerClassName="mt-2">
+                    {(pageItems) => (
+                      <>
+                        {pageItems.map((e) => {
+                          const startLabel = formatKstDate(e.eventDate);
+                          const endLabel = e.endDate ? formatKstDate(e.endDate) : null;
+                          const dateLabel = endLabel && endLabel !== startLabel ? `${startLabel} ~ ${endLabel}` : startLabel;
+                          return (
+                            <div key={e.id} className="rounded-md border p-2.5 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Badge variant="outline" className="shrink-0">{eventTypeText(e.eventType, m.domain.eventTypes)}</Badge>
+                                  {e.title && <span className="truncate text-sm font-semibold">{e.title}</span>}
+                                  {e.quantity !== null && <span className="shrink-0 text-xs text-muted-foreground">{format(t.qty, { count: formatSigned(e.quantity) })}</span>}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                                  {dateLabel}
+                                  <button
+                                    onClick={() => {
+                                      setEditingEvent({
+                                        id: e.id,
+                                        eventType: e.eventType as EditingEvent['eventType'],
+                                        quantity: e.quantity,
+                                        title: e.title,
+                                        note: e.note,
+                                        eventDate: e.eventDate,
+                                        endDate: e.endDate,
+                                      });
+                                      setFormOpen(true);
+                                    }}
+                                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-label={t.edit}
+                                  >
+                                    <Pencil className="size-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteEvent(e.id)}
+                                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-label={t.delete}
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="mt-1 text-sm">{e.note}</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">{format(t.author, { name: e.createdBy.name })}</p>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </Paged>
                 </div>
               </section>
             </div>

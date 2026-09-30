@@ -3,16 +3,14 @@
 import { useMemo, useState } from 'react';
 import { Star } from 'lucide-react';
 import { Table, TableBody, TableHeader } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination } from '@/components/ui/pagination';
+import { LIST_PAGE_SIZE } from '@/lib/use-paged';
 import { InventoryTableRow, InventoryTableStaticHeader } from '@/components/inventory-table/inventory-table';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import type { RiskLevel } from '@/domain/inventory/types';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 
-const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 // 위험 > 주의 > 개별 확인 > 기준 내 순 — 더 급하게 봐야 할 SKU가 위로 오도록.
 const RISK_DISPLAY_RANK: Record<RiskLevel, number> = { DANGER: 0, WARNING: 1, UNKNOWN: 2, NORMAL: 3 };
@@ -27,7 +25,7 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
   const { m } = useI18n();
   const t = m.dashboard.favorites;
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const pageSize = LIST_PAGE_SIZE;
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => RISK_DISPLAY_RANK[a.analysis.thresholdRisk.level] - RISK_DISPLAY_RANK[b.analysis.thresholdRisk.level]),
     [rows],
@@ -60,34 +58,7 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
               </TableBody>
             </Table>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{t.pageSize}</span>
-              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-                <SelectTrigger className="h-8 w-[84px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>{format(m.dashboard.unit, { count: n })}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2 text-sm">
-                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-                  {m.dashboard.prev}
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {currentPage} / {totalPages}
-                </span>
-                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-                  {m.dashboard.next}
-                </Button>
-              </div>
-            )}
-          </div>
+          <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
         </>
       )}
       </div>

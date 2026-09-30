@@ -15,6 +15,7 @@ import type { OrderEntryRow, StoreItemLearning } from '@/domain/segments/read-mo
 import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 type ItemSummary = StoreItemLearning;
 
@@ -318,33 +319,37 @@ export function OrderSection({
           </div>
         </form>
       )}
-      <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-        {shownOrders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noOrders}</li>}
-        {shownOrders.map((o) => (
-          <li key={o.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-            <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{o.date}</span>
-            <span className="min-w-0 flex-1 truncate">{o.itemName}</span>
-            <span className="tabular-nums">
-              {o.quantity.toLocaleString()}
-              {o.unit}
-            </span>
-            <span className="hidden w-40 text-right text-xs text-muted-foreground sm:inline">
-              {o.coverageAmount === null ? t.coverageLearned : format(t.coverageValue, { amount: formatMoney(o.coverageAmount, locale) })}
-              {o.leftoverQuantity !== null && <span className="block">{format(t.leftoverThen, { units: o.leftoverQuantity <= 0 ? t.none : describeUnitsText(o.leftoverQuantity, o.unit, m.store) })}</span>}
-            </span>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              disabled={busy}
-              aria-label={format(t.deleteOrderAria, { date: o.date, item: o.itemName })}
-              onClick={() => confirm(t.deleteOrderConfirm) && run(() => send(`/api/store/orders/${o.id}`, 'DELETE'), t.deleted)}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </li>
-        ))}
-      </ul>
+      <Paged items={shownOrders} pagerClassName="border-t border-border px-5 py-2.5">
+        {(pageItems) => (
+          <ul className="divide-y divide-border">
+            {shownOrders.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noOrders}</li>}
+            {pageItems.map((o) => (
+              <li key={o.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{o.date}</span>
+                <span className="min-w-0 flex-1 truncate">{o.itemName}</span>
+                <span className="tabular-nums">
+                  {o.quantity.toLocaleString()}
+                  {o.unit}
+                </span>
+                <span className="hidden w-40 text-right text-xs text-muted-foreground sm:inline">
+                  {o.coverageAmount === null ? t.coverageLearned : format(t.coverageValue, { amount: formatMoney(o.coverageAmount, locale) })}
+                  {o.leftoverQuantity !== null && <span className="block">{format(t.leftoverThen, { units: o.leftoverQuantity <= 0 ? t.none : describeUnitsText(o.leftoverQuantity, o.unit, m.store) })}</span>}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  disabled={busy}
+                  aria-label={format(t.deleteOrderAria, { date: o.date, item: o.itemName })}
+                  onClick={() => confirm(t.deleteOrderConfirm) && run(() => send(`/api/store/orders/${o.id}`, 'DELETE'), t.deleted)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Paged>
     </SectionPanel>
   );
 }

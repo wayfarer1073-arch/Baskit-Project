@@ -123,7 +123,6 @@ export const ko = {
   favorites: {
     title: '즐겨찾기',
     empty: '아래 목록에서 상품을 클릭한 뒤 SKU 상세의 별표를 누르면 이곳에 즐겨찾기한 SKU의 KPI 현황이 표시됩니다.',
-    pageSize: '페이지당 행수',
   },
   charts: {
     title: '재고 흐름',
@@ -292,7 +291,6 @@ export const en: Dictionary<typeof ko> = {
   favorites: {
     title: 'Favorites',
     empty: 'Open an item from the list below and click the star in its details to see its KPIs here.',
-    pageSize: 'Rows per page',
   },
   charts: {
     title: 'Stock flow',

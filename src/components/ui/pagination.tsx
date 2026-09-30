@@ -2,11 +2,13 @@
 
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import { cn } from '@/lib/utils';
 
 interface PaginationProps {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
+  className?: string;
 }
 
 function getPageNumbers(page: number, totalPages: number): (number | 'ellipsis')[] {
@@ -23,13 +25,13 @@ function getPageNumbers(page: number, totalPages: number): (number | 'ellipsis')
   return result;
 }
 
-export function Pagination({ page, totalPages, onChange }: PaginationProps) {
+export function Pagination({ page, totalPages, onChange, className }: PaginationProps) {
   const { m } = useI18n();
   if (totalPages <= 1) return null;
   const pages = getPageNumbers(page, totalPages);
 
   return (
-    <nav className="flex items-center justify-center gap-1" aria-label={m.dashboard.ui.pagination}>
+    <nav className={cn('flex flex-wrap items-center justify-center gap-1', className)} aria-label={m.dashboard.ui.pagination}>
       <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         {m.dashboard.prev}
       </Button>

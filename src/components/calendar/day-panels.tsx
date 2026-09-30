@@ -19,6 +19,7 @@ import { format } from '@/lib/i18n/locales';
 import { formatMoney } from '@/lib/format';
 import { formatKstDate } from '@/lib/date';
 import { shiftDate } from '@/domain/inventory/shipping-calendar';
+import { Paged } from '@/components/ui/paged';
 
 export interface WarehouseOption {
   id: string;
@@ -113,16 +114,20 @@ export function PeriodicDayPanel({
       {dayEntries.length > 0 && (
         <div className="rounded-lg border border-border px-3 py-2.5">
           <p className="text-xs font-semibold text-muted-foreground">{t.dayCounts}</p>
-          <ul className="mt-1.5 space-y-1 text-sm">
-            {dayEntries.map(({ w, entry }) => (
-              <li key={w.id} className="flex items-center justify-between gap-2">
-                <span>{w.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {format(t.skus, { count: entry!.rowCount })} · {entry!.isManual ? t.manual : t.file}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <Paged items={dayEntries} pagerClassName="mt-2">
+            {(pageItems) => (
+              <ul className="mt-1.5 space-y-1 text-sm">
+                {pageItems.map(({ w, entry }) => (
+                  <li key={w.id} className="flex items-center justify-between gap-2">
+                    <span>{w.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(t.skus, { count: entry!.rowCount })} · {entry!.isManual ? t.manual : t.file}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Paged>
         </div>
       )}
       <Tabs defaultValue="direct">

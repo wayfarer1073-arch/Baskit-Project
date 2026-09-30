@@ -8,8 +8,9 @@ import { formatKstDate } from '@/lib/date';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { LIST_PAGE_SIZE } from '@/lib/use-paged';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = LIST_PAGE_SIZE;
 
 interface SoldOutSkuSheetProps {
   rows: InventoryRow[];

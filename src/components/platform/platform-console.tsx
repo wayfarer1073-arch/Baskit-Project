@@ -20,6 +20,8 @@ import type { Messages } from '@/lib/i18n/messages';
 import { formatKstDateTime } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Pagination } from '@/components/ui/pagination';
+import { usePaged } from '@/lib/use-paged';
 
 type StatusFilter = 'all' | 'active' | 'suspended' | 'demo';
 
@@ -67,6 +69,7 @@ export function PlatformConsole({ metrics, workspaces, auditLogs, homeOrgId }: P
         (!q || `${w.name} ${w.ownerEmail ?? ''} ${w.ownerName ?? ''}`.toLowerCase().includes(q)),
     );
   }, [workspaces, query, segment, status]);
+  const workspacePaged = usePaged(filtered, `${query}|${segment}|${status}`);
 
   async function enter(id: string) {
     setBusy(id);
@@ -205,7 +208,7 @@ export function PlatformConsole({ metrics, workspaces, auditLogs, homeOrgId }: P
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((w) => (
+              {workspacePaged.pageItems.map((w) => (
                 <TableRow key={w.id}>
                   <TableCell className="max-w-72">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -238,6 +241,7 @@ export function PlatformConsole({ metrics, workspaces, auditLogs, homeOrgId }: P
           </Table>
           {filtered.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted-foreground">{t.noMatch}</p>}
         </div>
+        <Pagination className="border-t border-border px-5 py-2.5" page={workspacePaged.page} totalPages={workspacePaged.totalPages} onChange={workspacePaged.setPage} />
       </SectionPanel>
 
       <AuditLogPanel logs={auditLogs} />
@@ -249,11 +253,12 @@ export function AuditLogPanel({ logs, title }: { logs: AuditLogRow[]; title?: st
   const { m } = useI18n();
   const t = m.platform.console;
   const actions = m.platform.actions as Record<string, string>;
+  const { page, totalPages, pageItems, setPage } = usePaged(logs);
   return (
     <SectionPanel title={title ?? t.auditTitle} description={t.auditDescription}>
       <ul className="divide-y divide-border">
         {logs.length === 0 && <li className="px-5 py-6 text-center text-sm text-muted-foreground">{t.auditEmpty}</li>}
-        {logs.map((log) => {
+        {pageItems.map((log) => {
           const detail = log.detail && typeof log.detail === 'object' ? (log.detail as Record<string, unknown>) : null;
           return (
             <li key={log.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-5 py-2.5 text-sm">
@@ -266,6 +271,7 @@ export function AuditLogPanel({ logs, title }: { logs: AuditLogRow[]; title?: st
           );
         })}
       </ul>
+      <Pagination className="border-t border-border px-5 py-2.5" page={page} totalPages={totalPages} onChange={setPage} />
     </SectionPanel>
   );
 }

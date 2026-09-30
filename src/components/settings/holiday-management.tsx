@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { formatKstDate } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface HolidayRow {
   id: string;
@@ -92,28 +93,32 @@ export function HolidayManagement({ isAdmin, initialHolidays }: HolidayManagemen
         {holidays.length === 0 ? (
           <p className="text-xs text-muted-foreground">{t.holidays.empty}</p>
         ) : (
-          <div className="space-y-1.5">
-            {holidays.map((h) => (
-              <div key={h.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="tabular-nums text-muted-foreground">{formatKstDate(h.date)}</span>
-                  <span className="font-medium">{h.name}</span>
-                </div>
-                {isAdmin && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    disabled={deletingId === h.id}
-                    onClick={() => removeHoliday(h)}
-                    aria-label={format(t.holidays.deleteAria, { name: h.name })}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                )}
+          <Paged items={holidays} pagerClassName="mt-2">
+            {(pageItems) => (
+              <div className="space-y-1.5">
+                {pageItems.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums text-muted-foreground">{formatKstDate(h.date)}</span>
+                      <span className="font-medium">{h.name}</span>
+                    </div>
+                    {isAdmin && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={deletingId === h.id}
+                        onClick={() => removeHoliday(h)}
+                        aria-label={format(t.holidays.deleteAria, { name: h.name })}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </Paged>
         )}
 
         {isAdmin && (

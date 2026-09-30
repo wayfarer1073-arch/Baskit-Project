@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -18,8 +17,8 @@ import type { PeriodicRow } from '@/domain/segments/read-model';
 import { formatNumber } from '@/lib/format';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
-
-const PAGE_SIZE = 50;
+import { Pagination } from '@/components/ui/pagination';
+import { usePaged } from '@/lib/use-paged';
 
 interface PeriodicDashboardProps {
   asOfDate: string;
@@ -39,7 +38,6 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
   const [query, setQuery] = useState('');
   const [warehouseId, setWarehouseId] = useState('all');
   const [recountOnly, setRecountOnly] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [openSkuId, setOpenSkuId] = useState<string | null>(null);
 
   const summary = useMemo(() => {
@@ -53,8 +51,7 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
     () =>
       rows
         .filter((r) => r.estimate.recountReasons.length > 0)
-        .sort((a, b) => compareRecountUrgency(a.estimate, b.estimate))
-        .slice(0, 8),
+        .sort((a, b) => compareRecountUrgency(a.estimate, b.estimate)),
     [rows],
   );
 
@@ -66,6 +63,9 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
       .filter((r) => !q || `${r.productCode}${r.productName}`.replace(/\s+/g, '').toLowerCase().includes(q))
       .sort((a, b) => compareRecountUrgency(a.estimate, b.estimate));
   }, [rows, query, warehouseId, recountOnly]);
+
+  const queuePaged = usePaged(recountQueue);
+  const tablePaged = usePaged(filtered, `${query}|${warehouseId}|${recountOnly}`);
 
   const header = (
     <SegmentDashboardHeader
@@ -115,7 +115,7 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
       {recountQueue.length > 0 && (
         <SectionPanel title={t.queueTitle} description={t.queueDescription}>
           <ul className="divide-y divide-border">
-            {recountQueue.map((r) => (
+            {queuePaged.pageItems.map((r) => (
               <li key={r.skuId}>
                 <button
                   type="button"
@@ -144,6 +144,11 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
               </li>
             ))}
           </ul>
+          {queuePaged.totalPages > 1 && (
+            <div className="border-t border-border px-5 py-2.5">
+              <Pagination page={queuePaged.page} totalPages={queuePaged.totalPages} onChange={queuePaged.setPage} />
+            </div>
+          )}
         </SectionPanel>
       )}
 
@@ -158,7 +163,6 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
-                  setVisibleCount(PAGE_SIZE);
                 }}
                 placeholder={t.searchPlaceholder}
                 className="h-8 w-44 pl-8 text-sm"
@@ -170,7 +174,6 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
                 value={warehouseId}
                 onValueChange={(v) => {
                   setWarehouseId(v);
-                  setVisibleCount(PAGE_SIZE);
                 }}
               >
                 <SelectTrigger className="h-8 w-36 text-sm" aria-label={t.warehouseAria}>
@@ -192,7 +195,6 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
                 checked={recountOnly}
                 onCheckedChange={(v) => {
                   setRecountOnly(v);
-                  setVisibleCount(PAGE_SIZE);
                 }}
               />
               <Label htmlFor="recount-only" className="text-xs">
@@ -218,7 +220,7 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.slice(0, visibleCount).map((r) => (
+              {tablePaged.pageItems.map((r) => (
                 <TableRow key={r.skuId} className="cursor-pointer" onClick={() => setOpenSkuId(r.skuId)}>
                   <TableCell className="max-w-64">
                     <button
@@ -251,11 +253,9 @@ export function PeriodicDashboard({ asOfDate, stockoutSoonDays, recountDays, row
             </TableBody>
           </Table>
           {filtered.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted-foreground">{t.noMatch}</p>}
-          {filtered.length > visibleCount && (
-            <div className="border-t border-border px-5 py-3 text-center">
-              <Button variant="outline" size="sm" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
-                {format(t.more, { count: Math.min(PAGE_SIZE, filtered.length - visibleCount), shown: visibleCount, total: filtered.length })}
-              </Button>
+          {tablePaged.totalPages > 1 && (
+            <div className="border-t border-border px-5 py-2.5">
+              <Pagination page={tablePaged.page} totalPages={tablePaged.totalPages} onChange={tablePaged.setPage} />
             </div>
           )}
         </div>

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 export interface CostRowView {
   skuId: string;
@@ -110,56 +111,60 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
               <Input aria-label={t.filter} placeholder={t.filter} value={filter} onChange={(e) => setFilter(e.target.value)} className="h-8 max-w-xs" />
               <span className="text-xs text-muted-foreground">{format(t.count, { count: visible.length })}</span>
             </div>
-            <ul className="max-h-96 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-              {visible.map((c) => {
-                const draft = drafts[c.skuId] ?? String(c.unitCost);
-                return (
-                  <li key={c.skuId} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">
-                        <code className="text-xs">{c.productCode}</code> {c.productName}
-                      </span>
-                      {warehouses.length > 1 && <span className="text-xs text-muted-foreground">{c.warehouseName}</span>}
-                    </span>
-                    {c.source && <Badge variant={c.source === 'MANUAL' ? 'notice' : 'secondary'}>{t.source[c.source]}</Badge>}
-                    {isAdmin ? (
-                      <>
-                        <Input
-                          aria-label={`${c.productName} ${t.unitCost}`}
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          step="0.01"
-                          value={draft}
-                          onChange={(e) => setDrafts((p) => ({ ...p, [c.skuId]: e.target.value }))}
-                          className="h-8 w-28 text-right tabular-nums"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy || draft.trim() === '' || Number(draft) === c.unitCost}
-                          onClick={() => run(() => putCost(c.skuId, Number(draft)), t.saved)}
-                        >
-                          {t.save}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-8"
-                          aria-label={`${c.productName} ${t.remove}`}
-                          disabled={busy}
-                          onClick={() => confirm(format(t.removeConfirm, { name: c.productName })) && run(() => putCost(c.skuId, null), t.removed)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </>
-                    ) : (
-                      <span className="tabular-nums">{c.unitCost.toLocaleString()}</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <Paged items={visible} resetKey={filter} pagerClassName="mt-2">
+              {(pageItems) => (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {pageItems.map((c) => {
+                    const draft = drafts[c.skuId] ?? String(c.unitCost);
+                    return (
+                      <li key={c.skuId} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">
+                            <code className="text-xs">{c.productCode}</code> {c.productName}
+                          </span>
+                          {warehouses.length > 1 && <span className="text-xs text-muted-foreground">{c.warehouseName}</span>}
+                        </span>
+                        {c.source && <Badge variant={c.source === 'MANUAL' ? 'notice' : 'secondary'}>{t.source[c.source]}</Badge>}
+                        {isAdmin ? (
+                          <>
+                            <Input
+                              aria-label={`${c.productName} ${t.unitCost}`}
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step="0.01"
+                              value={draft}
+                              onChange={(e) => setDrafts((p) => ({ ...p, [c.skuId]: e.target.value }))}
+                              className="h-8 w-28 text-right tabular-nums"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || draft.trim() === '' || Number(draft) === c.unitCost}
+                              onClick={() => run(() => putCost(c.skuId, Number(draft)), t.saved)}
+                            >
+                              {t.save}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-8"
+                              aria-label={`${c.productName} ${t.remove}`}
+                              disabled={busy}
+                              onClick={() => confirm(format(t.removeConfirm, { name: c.productName })) && run(() => putCost(c.skuId, null), t.removed)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="tabular-nums">{c.unitCost.toLocaleString()}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Paged>
           </>
         )}
 

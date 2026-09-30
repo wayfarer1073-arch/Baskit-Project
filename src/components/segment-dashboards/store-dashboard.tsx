@@ -12,6 +12,8 @@ import type { StoreDashboardData, StoreCoverageRow } from '@/domain/segments/rea
 import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Pagination } from '@/components/ui/pagination';
+import { usePaged } from '@/lib/use-paged';
 
 function qty(value: number, unit: string, template: string) {
   return format(template, { qty: Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1), unit });
@@ -35,6 +37,9 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
   const { m, locale } = useI18n();
   const t = m.store.dashboard;
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const checklist = rows.filter((r) => ['order_needed', 'check_needed', 'needs_coverage'].includes(r.analysis.status));
+  const checklistPaged = usePaged(checklist);
+  const tablePaged = usePaged(rows);
 
   const header = (
     <SegmentDashboardHeader
@@ -70,7 +75,6 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
   const needed = count('order_needed');
   const check = count('check_needed');
   const learning = rows.filter((r) => r.analysis.learnedCycles > 0).length;
-  const checklist = rows.filter((r) => ['order_needed', 'check_needed', 'needs_coverage'].includes(r.analysis.status));
   const salesGap = lastSalesDate ? daysBetween(lastSalesDate, asOfDate) : null;
 
   return (
@@ -111,7 +115,7 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
             <p className="px-5 py-8 text-center text-sm text-muted-foreground">{t.checklistEmpty}</p>
           ) : (
             <ul className="divide-y divide-border">
-              {checklist.map((r) => (
+              {checklistPaged.pageItems.map((r) => (
                 <li key={r.itemId}>
                   <button type="button" onClick={() => setOpenItemId(r.itemId)} className="w-full px-5 py-3 text-left transition-colors hover:bg-muted/50">
                     <div className="flex items-center justify-between gap-3">
@@ -128,6 +132,7 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
               ))}
             </ul>
           )}
+          <Pagination className="border-t border-border px-5 py-2.5" page={checklistPaged.page} totalPages={checklistPaged.totalPages} onChange={checklistPaged.setPage} />
         </SectionPanel>
 
         <SectionPanel title={t.weekly} description={sales.recentDailyAvg === null ? t.weeklyEmpty : t.weeklyDescription}>
@@ -153,7 +158,7 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((r) => {
+              {tablePaged.pageItems.map((r) => {
                 const a = r.analysis;
                 return (
                   <TableRow key={r.itemId} className="cursor-pointer" onClick={() => setOpenItemId(r.itemId)}>
@@ -198,6 +203,7 @@ export function StoreDashboard({ asOfDate, rows, sales, lastSalesDate, checkRema
             </TableBody>
           </Table>
         </div>
+        <Pagination className="border-t border-border px-5 py-2.5" page={tablePaged.page} totalPages={tablePaged.totalPages} onChange={tablePaged.setPage} />
       </SectionPanel>
 
       <StoreItemSheet itemId={openItemId} asOfDate={asOfDate} onOpenChange={(open) => !open && setOpenItemId(null)} />

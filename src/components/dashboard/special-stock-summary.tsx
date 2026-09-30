@@ -10,10 +10,9 @@ import { formatNumber } from '@/lib/format';
 import { formatExpirationDday } from '@/lib/status';
 import { eventTypeText } from '@/lib/event-types';
 import { cn } from '@/lib/utils';
+import { LIST_PAGE_SIZE } from '@/lib/use-paged';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
-
-export const SPECIAL_PAGE_SIZE = 7;
 
 export interface SpecialSchedule {
   title: string | null;
@@ -44,9 +43,9 @@ export function SpecialStockSummary({ rows, schedules, asOfDate, onSelectSku }: 
     const exp = (r: InventoryRow) => r.analysis.expirationRisk.daysUntilExpiration ?? Number.MAX_SAFE_INTEGER;
     return [...rows].sort((a, b) => key(a).localeCompare(key(b)) || exp(a) - exp(b) || a.descriptor.productName.localeCompare(b.descriptor.productName));
   }, [rows, schedules]);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / SPECIAL_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sorted.length / LIST_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const pageRows = sorted.slice((currentPage - 1) * SPECIAL_PAGE_SIZE, currentPage * SPECIAL_PAGE_SIZE);
+  const pageRows = sorted.slice((currentPage - 1) * LIST_PAGE_SIZE, currentPage * LIST_PAGE_SIZE);
 
   return (
     <section className="overflow-hidden rounded-xl border border-border" aria-labelledby="special-stock-title">

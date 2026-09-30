@@ -11,6 +11,8 @@ import { formatMoney, formatNumber } from '@/lib/format';
 import { ReliabilityInfo } from '@/components/ui/reliability-info';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Pagination } from '@/components/ui/pagination';
+import { usePaged } from '@/lib/use-paged';
 
 function Row({ label, value, hint, info }: { label: string; value: React.ReactNode; hint?: string; info?: React.ReactNode }) {
   return (
@@ -43,6 +45,55 @@ function CountBars({ counts }: { counts: PeriodicSkuDetail['counts'] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** 실사 이력 — 7개씩 페이지로 넘긴다. */
+function CountHistory({ counts }: { counts: PeriodicSkuDetail['counts'] }) {
+  const t = useI18n().m.periodic.sheet;
+  const { page, totalPages, pageItems, setPage } = usePaged(counts);
+  return (
+    <>
+      <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+        {pageItems.map((c) => (
+          <li key={c.date} className="px-3 py-2 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="tabular-nums text-muted-foreground">{c.date}</span>
+              <span className="text-[11px] text-muted-foreground">{c.manual ? t.manual : t.excel}</span>
+              <span className="ml-auto font-medium tabular-nums">{formatNumber(c.quantity)}</span>
+            </div>
+            {c.lots.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {c.lots.map((l) => (
+                  <span key={l.lot} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground tabular-nums">
+                    {l.lot} · {formatNumber(l.quantity)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <Pagination className="mt-2" page={page} totalPages={totalPages} onChange={setPage} />
+    </>
+  );
+}
+
+/** 입고 기록 — 7개씩 페이지로 넘긴다. */
+function InboundHistory({ inbounds }: { inbounds: PeriodicSkuDetail['inbounds'] }) {
+  const { page, totalPages, pageItems, setPage } = usePaged(inbounds);
+  return (
+    <>
+      <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+        {pageItems.map((i, idx) => (
+          <li key={`${i.date}-${idx}`} className="flex justify-between px-3 py-2 text-sm">
+            <span className="tabular-nums text-muted-foreground">{i.date}</span>
+            <span className="tabular-nums">+{formatNumber(i.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+      <Pagination className="mt-2" page={page} totalPages={totalPages} onChange={setPage} />
+    </>
   );
 }
 
@@ -141,39 +192,13 @@ export function PeriodicSkuSheet({ skuId, asOfDate, onOpenChange }: { skuId: str
                     <CountBars counts={d.counts} />
                   </div>
                 )}
-                <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-                  {d.counts.map((c) => (
-                    <li key={c.date} className="px-3 py-2 text-sm">
-                      <div className="flex items-center gap-3">
-                        <span className="tabular-nums text-muted-foreground">{c.date}</span>
-                        <span className="text-[11px] text-muted-foreground">{c.manual ? t.manual : t.excel}</span>
-                        <span className="ml-auto font-medium tabular-nums">{formatNumber(c.quantity)}</span>
-                      </div>
-                      {c.lots.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {c.lots.map((l) => (
-                            <span key={l.lot} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground tabular-nums">
-                              {l.lot} · {formatNumber(l.quantity)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <CountHistory counts={d.counts} />
               </section>
 
               {d.inbounds.length > 0 && (
                 <section aria-label={t.inbounds}>
                   <h3 className="text-sm font-semibold">{t.inbounds}</h3>
-                  <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-                    {d.inbounds.slice(0, 20).map((i, idx) => (
-                      <li key={`${i.date}-${idx}`} className="flex justify-between px-3 py-2 text-sm">
-                        <span className="tabular-nums text-muted-foreground">{i.date}</span>
-                        <span className="tabular-nums">+{formatNumber(i.quantity)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <InboundHistory inbounds={d.inbounds} />
                 </section>
               )}
             </div>

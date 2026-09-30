@@ -11,6 +11,7 @@ import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 function pct(v: number | null) {
   if (v === null) return '—';
@@ -164,40 +165,44 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                 </div>
                 {a.cycles.length > 0 ? (
                   <div className="mt-3 overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="text-muted-foreground">
-                        <tr className="border-b border-border">
-                          <th className="py-1.5 text-left font-medium">{t.colCycle}</th>
-                          <th className="py-1.5 text-right font-medium">{t.colRealized}</th>
-                          <th className="py-1.5 text-right font-medium">{t.colOverrun}</th>
-                          <th className="py-1.5 text-right font-medium">{t.colLeftover}</th>
-                          <th className="py-1.5 text-right font-medium">{t.colError}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...a.cycles].reverse().map((c) => (
-                          <tr key={c.orderDate} className="border-b border-border/60">
-                            <td className="py-1.5">
-                              {c.orderDate.slice(5)} → {c.nextOrderDate.slice(5)}
-                              <span className="ml-1 text-muted-foreground">
-                                {format(m.store.units.qty, { qty: c.quantity.toLocaleString(), unit })}·{format(t.cycleDays, { days: c.days })}
-                              </span>
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums">{c.realizedSales === null ? t.notEnoughSales : money(c.realizedSales)}</td>
-                            <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                              {c.overrunSales === null ? '—' : `${c.overrunSales >= 0 ? '+' : '−'}${money(Math.abs(c.overrunSales))}`}
-                              {c.daysAfterCross !== null && <span className="block text-[10px]">{format(t.daysAfter, { days: c.daysAfterCross })}</span>}
-                            </td>
-                            <td className="py-1.5 text-right text-muted-foreground">
-                              {c.leftoverAtNext === null ? t.leftoverMissing : c.leftoverAtNext <= 0 ? t.usedUp : du(c.leftoverAtNext)}
-                            </td>
-                            <td className={cn('py-1.5 text-right tabular-nums', c.systemError !== null && Math.abs(c.systemError) <= 0.1 && 'font-medium text-status-normal')}>
-                              {pct(c.systemError)}
-                            </td>
+                    <Paged items={[...a.cycles].reverse()}>
+                      {(pageItems) => (
+                      <table className="w-full text-xs">
+                        <thead className="text-muted-foreground">
+                          <tr className="border-b border-border">
+                            <th className="py-1.5 text-left font-medium">{t.colCycle}</th>
+                            <th className="py-1.5 text-right font-medium">{t.colRealized}</th>
+                            <th className="py-1.5 text-right font-medium">{t.colOverrun}</th>
+                            <th className="py-1.5 text-right font-medium">{t.colLeftover}</th>
+                            <th className="py-1.5 text-right font-medium">{t.colError}</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {pageItems.map((c) => (
+                            <tr key={c.orderDate} className="border-b border-border/60">
+                              <td className="py-1.5">
+                                {c.orderDate.slice(5)} → {c.nextOrderDate.slice(5)}
+                                <span className="ml-1 text-muted-foreground">
+                                  {format(m.store.units.qty, { qty: c.quantity.toLocaleString(), unit })}·{format(t.cycleDays, { days: c.days })}
+                                </span>
+                              </td>
+                              <td className="py-1.5 text-right tabular-nums">{c.realizedSales === null ? t.notEnoughSales : money(c.realizedSales)}</td>
+                              <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                                {c.overrunSales === null ? '—' : `${c.overrunSales >= 0 ? '+' : '−'}${money(Math.abs(c.overrunSales))}`}
+                                {c.daysAfterCross !== null && <span className="block text-[10px]">{format(t.daysAfter, { days: c.daysAfterCross })}</span>}
+                              </td>
+                              <td className="py-1.5 text-right text-muted-foreground">
+                                {c.leftoverAtNext === null ? t.leftoverMissing : c.leftoverAtNext <= 0 ? t.usedUp : du(c.leftoverAtNext)}
+                              </td>
+                              <td className={cn('py-1.5 text-right tabular-nums', c.systemError !== null && Math.abs(c.systemError) <= 0.1 && 'font-medium text-status-normal')}>
+                                {pct(c.systemError)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      )}
+                    </Paged>
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
                       {t.tableHelp}
                     </p>
@@ -214,21 +219,25 @@ export function StoreItemSheet({ itemId, asOfDate, onOpenChange }: { itemId: str
                     {t.recordOrder}
                   </Link>
                 </div>
-                <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-                  {d.orders.length === 0 && <li className="px-3 py-3 text-xs text-muted-foreground">{t.noRecords}</li>}
-                  {d.orders.map((o) => (
-                    <li key={o.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <span className="tabular-nums text-muted-foreground">{o.date}</span>
-                      <span className="tabular-nums">
-                        {format(m.store.units.qty, { qty: o.quantity.toLocaleString(), unit })}
-                      </span>
-                      <span className="ml-auto text-right text-xs text-muted-foreground">
-                        {o.coverageAmount === null ? t.coverageMissing : format(m.store.records.coverageValue, { amount: money(o.coverageAmount) })}
-                        {o.leftoverQuantity !== null && <span className="block">{format(m.store.records.leftoverThen, { units: o.leftoverQuantity <= 0 ? m.store.records.none : du(o.leftoverQuantity) })}</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <Paged items={d.orders}>
+                  {(pageItems) => (
+                    <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+                      {d.orders.length === 0 && <li className="px-3 py-3 text-xs text-muted-foreground">{t.noRecords}</li>}
+                      {pageItems.map((o) => (
+                        <li key={o.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                          <span className="tabular-nums text-muted-foreground">{o.date}</span>
+                          <span className="tabular-nums">
+                            {format(m.store.units.qty, { qty: o.quantity.toLocaleString(), unit })}
+                          </span>
+                          <span className="ml-auto text-right text-xs text-muted-foreground">
+                            {o.coverageAmount === null ? t.coverageMissing : format(m.store.records.coverageValue, { amount: money(o.coverageAmount) })}
+                            {o.leftoverQuantity !== null && <span className="block">{format(m.store.records.leftoverThen, { units: o.leftoverQuantity <= 0 ? m.store.records.none : du(o.leftoverQuantity) })}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Paged>
               </section>
               {a.estimate.source !== 'none' && <p className="text-[11px] text-muted-foreground">{format(t.currentBasis, { source: m.store.source[a.estimate.source] })}</p>}
             </div>

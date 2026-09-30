@@ -1,17 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Pagination } from '@/components/ui/pagination';
+import { usePaged } from '@/lib/use-paged';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import type { TodayAction, TodayActionKind } from '@/domain/inventory/today-actions';
 import type { Messages } from '@/lib/i18n/messages';
 import { cn } from '@/lib/utils';
 import { localizeReason } from '@/lib/status';
-
-const VISIBLE = 8;
 
 const KIND_VARIANT: Record<TodayActionKind, 'danger' | 'warning' | 'secondary' | 'stagnant' | 'increase'> = {
   order_now: 'danger',
@@ -43,8 +41,7 @@ function describe(action: TodayAction, t: Messages['today'], d: Messages['domain
 export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; onSelect: (skuId: string) => void }) {
   const { m } = useI18n();
   const t = m.today;
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? actions : actions.slice(0, VISIBLE);
+  const { page, totalPages, pageItems: shown, setPage } = usePaged(actions);
 
   return (
     <section aria-labelledby="today-actions-title" className="overflow-hidden rounded-xl border border-border bg-card">
@@ -84,11 +81,9 @@ export function TodayActions({ actions, onSelect }: { actions: TodayAction[]; on
           ))}
         </ul>
       )}
-      {actions.length > VISIBLE && (
-        <div className="border-t border-border px-5 py-2 text-center">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-            {expanded ? t.showLess : format(t.showAll, { count: actions.length })}
-          </Button>
+      {totalPages > 1 && (
+        <div className="border-t border-border px-5 py-2.5">
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       )}
     </section>

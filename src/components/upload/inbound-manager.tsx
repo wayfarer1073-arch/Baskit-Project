@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface InboundEntryRow {
   id: string;
@@ -147,30 +148,34 @@ export function InboundManager({ warehouseId, date }: { warehouseId: string; dat
       {loading ? (
         <p className="text-xs text-muted-foreground">{t.loading}</p>
       ) : entries.length > 0 ? (
-        <ul className="space-y-1.5">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center justify-between gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs">
-              <div className="min-w-0">
-                <span className="font-medium">{entry.productName}</span>{' '}
-                <span className="text-muted-foreground">{entry.productCode}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="tabular-nums">{format(t.quantity, { count: entry.quantity.toLocaleString() })}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  aria-label={format(t.deleteAria, { name: entry.productName })}
-                  disabled={deletingId === entry.id}
-                  onClick={() => handleDelete(entry.id)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Paged items={entries} pagerClassName="mt-2">
+          {(pageItems) => (
+            <ul className="space-y-1.5">
+              {pageItems.map((entry) => (
+                <li key={entry.id} className="flex items-center justify-between gap-2 rounded-md border bg-background px-2.5 py-1.5 text-xs">
+                  <div className="min-w-0">
+                    <span className="font-medium">{entry.productName}</span>{' '}
+                    <span className="text-muted-foreground">{entry.productCode}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="tabular-nums">{format(t.quantity, { count: entry.quantity.toLocaleString() })}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      aria-label={format(t.deleteAria, { name: entry.productName })}
+                      disabled={deletingId === entry.id}
+                      onClick={() => handleDelete(entry.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Paged>
       ) : (
         <p className="text-xs text-muted-foreground">{t.empty}</p>
       )}

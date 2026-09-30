@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { SkuPicker, type PickedSku } from '@/components/settings/sku-picker';
+import { Paged } from '@/components/ui/paged';
 
 export interface MergeLinkView {
   skuId: string;
@@ -63,33 +64,37 @@ export function MergeLinkManagement({ links, warehouses, isAdmin }: { links: Mer
         {groups.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.empty}</p>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border">
-            {groups.map(([key, members]) => (
-              <li key={key} className="space-y-1 px-3 py-2 text-sm">
-                <p className="text-xs text-muted-foreground">{format(t.groupLabel, { key })}</p>
-                {members.map((l) => (
-                  <div key={l.skuId} className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{l.warehouseName}</span>
-                    <span className="min-w-0 flex-1 truncate">
-                      <code className="text-xs">{l.productCode}</code> {l.productName}
-                    </span>
-                    {isAdmin && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-7"
-                        aria-label={format(t.unlink, { code: l.productCode })}
-                        disabled={busy}
-                        onClick={() => run(() => putMerge(l.skuId, null), t.unlinked)}
-                      >
-                        <Link2Off className="size-3.5" />
-                      </Button>
-                    )}
-                  </div>
+          <Paged items={groups} pagerClassName="mt-2">
+            {(pageItems) => (
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {pageItems.map(([key, members]) => (
+                  <li key={key} className="space-y-1 px-3 py-2 text-sm">
+                    <p className="text-xs text-muted-foreground">{format(t.groupLabel, { key })}</p>
+                    {members.map((l) => (
+                      <div key={l.skuId} className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{l.warehouseName}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          <code className="text-xs">{l.productCode}</code> {l.productName}
+                        </span>
+                        {isAdmin && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            aria-label={format(t.unlink, { code: l.productCode })}
+                            disabled={busy}
+                            onClick={() => run(() => putMerge(l.skuId, null), t.unlinked)}
+                          >
+                            <Link2Off className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </li>
                 ))}
-              </li>
-            ))}
-          </ul>
+              </ul>
+            )}
+          </Paged>
         )}
         {isAdmin && (
           <form

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { StoreItemLearning, SupplierRow } from '@/domain/segments/read-model';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 async function send(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -202,56 +203,62 @@ function SupplierManagement({ suppliers }: { suppliers: SupplierRow[] }) {
       </CardHeader>
       <CardContent className="space-y-2">
         {suppliers.length === 0 && <p className="text-sm text-muted-foreground">{t.suppliers.empty}</p>}
-        {suppliers.map((s) => {
-          const d = drafts[s.id] ?? { name: s.name, lead: String(s.leadTimeDays) };
-          const changed = d.name.trim() !== s.name || Number(d.lead) !== s.leadTimeDays;
-          return (
-            <div key={s.id} className="flex flex-wrap items-center gap-2">
-              <Input
-                aria-label={t.suppliers.nameAria}
-                value={d.name}
-                maxLength={50}
-                onChange={(e) => setDrafts((p) => ({ ...p, [s.id]: { ...d, name: e.target.value } }))}
-                className="w-44"
-              />
-              <div className="flex items-center gap-1.5">
-                <Input
-                  aria-label={format(t.suppliers.leadAria, { name: s.name })}
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={d.lead}
-                  onChange={(e) => setDrafts((p) => ({ ...p, [s.id]: { ...d, lead: e.target.value } }))}
-                  className="w-20"
-                />
-                <span className="text-sm text-muted-foreground">{t.common.days}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{format(t.suppliers.itemCount, { count: s.itemCount })}</span>
-              <div className="ml-auto flex gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !changed}
-                  onClick={() => run(() => send(`/api/store/suppliers/${s.id}`, 'PATCH', { name: d.name, leadTimeDays: Number(d.lead) }), t.suppliers.saved)}
-                >
-                  {t.common.save}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  disabled={busy}
-                  aria-label={format(t.suppliers.deleteAria, { name: s.name })}
-                  onClick={() =>
-                    confirm(format(t.suppliers.deleteConfirm, { name: s.name }) + (s.itemCount ? format(t.suppliers.deleteLinked, { count: s.itemCount }) : '')) &&
-                    run(() => send(`/api/store/suppliers/${s.id}`, 'DELETE'), t.suppliers.deleted)
-                  }
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </div>
-          );
-        })}
+        <Paged items={suppliers} pagerClassName="mt-2">
+          {(pageItems) => (
+            <>
+              {pageItems.map((s) => {
+                const d = drafts[s.id] ?? { name: s.name, lead: String(s.leadTimeDays) };
+                const changed = d.name.trim() !== s.name || Number(d.lead) !== s.leadTimeDays;
+                return (
+                  <div key={s.id} className="flex flex-wrap items-center gap-2">
+                    <Input
+                      aria-label={t.suppliers.nameAria}
+                      value={d.name}
+                      maxLength={50}
+                      onChange={(e) => setDrafts((p) => ({ ...p, [s.id]: { ...d, name: e.target.value } }))}
+                      className="w-44"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        aria-label={format(t.suppliers.leadAria, { name: s.name })}
+                        type="number"
+                        min={0}
+                        max={60}
+                        value={d.lead}
+                        onChange={(e) => setDrafts((p) => ({ ...p, [s.id]: { ...d, lead: e.target.value } }))}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">{t.common.days}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{format(t.suppliers.itemCount, { count: s.itemCount })}</span>
+                    <div className="ml-auto flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || !changed}
+                        onClick={() => run(() => send(`/api/store/suppliers/${s.id}`, 'PATCH', { name: d.name, leadTimeDays: Number(d.lead) }), t.suppliers.saved)}
+                      >
+                        {t.common.save}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={format(t.suppliers.deleteAria, { name: s.name })}
+                        onClick={() =>
+                          confirm(format(t.suppliers.deleteConfirm, { name: s.name }) + (s.itemCount ? format(t.suppliers.deleteLinked, { count: s.itemCount }) : '')) &&
+                          run(() => send(`/api/store/suppliers/${s.id}`, 'DELETE'), t.suppliers.deleted)
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </Paged>
         <form
           className="flex flex-wrap items-center gap-2 border-t pt-3"
           onSubmit={async (e) => {
@@ -368,42 +375,48 @@ function StoreItemManagement({ items, suppliers }: { items: StoreItemLearning[];
       </CardHeader>
       <CardContent className="space-y-2">
         {items.length === 0 && <p className="text-sm text-muted-foreground">{t.items.empty}</p>}
-        {items.map((i) => {
-          const d = drafts[i.id] ?? toDraft(i);
-          const original = toDraft(i);
-          const changed = JSON.stringify(d) !== JSON.stringify(original);
-          return (
-            <div key={i.id} className={`${grid} rounded-lg border border-border p-3`}>
-              <ItemFields draft={d} onChange={(next) => setDrafts((p) => ({ ...p, [i.id]: next }))} suppliers={suppliers} idPrefix={`item-${i.id}`} />
-              <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !changed}
-                  onClick={() => run(() => send(`/api/store/items/${i.id}`, 'PATCH', payload(d)), t.items.saved)}
-                >
-                  {t.common.save}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  disabled={busy}
-                  aria-label={format(t.items.archiveAria, { name: i.name })}
-                  title={t.items.archiveTitle}
-                  onClick={() =>
-                    confirm(format(t.items.archiveConfirm, { name: i.name })) && run(() => send(`/api/store/items/${i.id}`, 'DELETE'), t.items.archived)
-                  }
-                >
-                  <Archive className="size-4" />
-                </Button>
-              </div>
-              <p className="col-span-2 text-[11px] text-muted-foreground sm:col-span-5">
-                {format(t.items.orders, { count: i.orderCount })}
-                {i.learnedCycles > 0 ? format(t.items.learned, { count: i.learnedCycles }) : t.items.notLearned}
-              </p>
-            </div>
-          );
-        })}
+        <Paged items={items} pagerClassName="mt-2">
+          {(pageItems) => (
+            <>
+              {pageItems.map((i) => {
+                const d = drafts[i.id] ?? toDraft(i);
+                const original = toDraft(i);
+                const changed = JSON.stringify(d) !== JSON.stringify(original);
+                return (
+                  <div key={i.id} className={`${grid} rounded-lg border border-border p-3`}>
+                    <ItemFields draft={d} onChange={(next) => setDrafts((p) => ({ ...p, [i.id]: next }))} suppliers={suppliers} idPrefix={`item-${i.id}`} />
+                    <div className="col-span-2 flex items-center justify-end gap-1 sm:col-span-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || !changed}
+                        onClick={() => run(() => send(`/api/store/items/${i.id}`, 'PATCH', payload(d)), t.items.saved)}
+                      >
+                        {t.common.save}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={format(t.items.archiveAria, { name: i.name })}
+                        title={t.items.archiveTitle}
+                        onClick={() =>
+                          confirm(format(t.items.archiveConfirm, { name: i.name })) && run(() => send(`/api/store/items/${i.id}`, 'DELETE'), t.items.archived)
+                        }
+                      >
+                        <Archive className="size-4" />
+                      </Button>
+                    </div>
+                    <p className="col-span-2 text-[11px] text-muted-foreground sm:col-span-5">
+                      {format(t.items.orders, { count: i.orderCount })}
+                      {i.learnedCycles > 0 ? format(t.items.learned, { count: i.learnedCycles }) : t.items.notLearned}
+                    </p>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </Paged>
         <form
           className={`${grid} border-t pt-3`}
           onSubmit={async (e) => {

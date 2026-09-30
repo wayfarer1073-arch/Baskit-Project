@@ -2,8 +2,9 @@ import { requireTenant } from '@/server/tenant';
 import { listPosts } from '@/server/repositories/post-repository';
 import { BoardClient } from '@/components/board/board-client';
 import type { PostTag } from '@prisma/client';
+import { LIST_PAGE_SIZE } from '@/lib/paging';
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = LIST_PAGE_SIZE;
 const VALID_TAGS: PostTag[] = ['ISSUE', 'NOTICE', 'CHAT', 'RESOLVED'];
 
 function isValidCalendarDate(dateStr: string): boolean {

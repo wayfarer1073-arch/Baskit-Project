@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 type InviteRole = 'VIEWER' | 'MEMBER' | 'ADMIN';
 interface PendingInvite {
@@ -129,18 +130,22 @@ export function TeamInvitations() {
           {pending.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t.none}</p>
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {pending.map((inv) => (
-                <li key={inv.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                  <span className="min-w-0 truncate">{inv.email}</span>
-                  <Badge variant="outline">{t.roles[inv.role]}</Badge>
-                  <span className="text-xs text-muted-foreground">{inv.expired ? t.expired : format(t.expires, { date: inv.expiresAt.slice(0, 10) })}</span>
-                  <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`${t.revoke} ${inv.email}`} onClick={() => revoke(inv.id)}>
-                    <X className="size-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <Paged items={pending} pagerClassName="mt-2">
+              {(pageItems) => (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {pageItems.map((inv) => (
+                    <li key={inv.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">{inv.email}</span>
+                      <Badge variant="outline">{t.roles[inv.role]}</Badge>
+                      <span className="text-xs text-muted-foreground">{inv.expired ? t.expired : format(t.expires, { date: inv.expiresAt.slice(0, 10) })}</span>
+                      <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`${t.revoke} ${inv.email}`} onClick={() => revoke(inv.id)}>
+                        <X className="size-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Paged>
           )}
         </div>
       </CardContent>

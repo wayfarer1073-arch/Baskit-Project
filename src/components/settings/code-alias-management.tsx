@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 export interface CodeAliasView {
   id: string;
@@ -97,28 +98,32 @@ export function CodeAliasManagement({ aliases, warehouses }: { aliases: CodeAlia
         {aliases.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.empty}</p>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border">
-            {aliases.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                {warehouses.length > 1 && <span className="text-xs text-muted-foreground">{a.warehouseName}</span>}
-                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{a.externalCode}</code>
-                <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                <span className="min-w-0 truncate">
-                  <code className="text-xs">{a.productCode}</code> {a.productName}
-                </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="ml-auto size-7"
-                  aria-label={format(t.removeLabel, { code: a.externalCode })}
-                  disabled={busy}
-                  onClick={() => send(`/api/code-aliases/${a.id}`, { method: 'DELETE' }, t.removed)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <Paged items={aliases} pagerClassName="mt-2">
+            {(pageItems) => (
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {pageItems.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                    {warehouses.length > 1 && <span className="text-xs text-muted-foreground">{a.warehouseName}</span>}
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{a.externalCode}</code>
+                    <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span className="min-w-0 truncate">
+                      <code className="text-xs">{a.productCode}</code> {a.productName}
+                    </span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="ml-auto size-7"
+                      aria-label={format(t.removeLabel, { code: a.externalCode })}
+                      disabled={busy}
+                      onClick={() => send(`/api/code-aliases/${a.id}`, { method: 'DELETE' }, t.removed)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Paged>
         )}
 
         {warehouses.length > 0 && (

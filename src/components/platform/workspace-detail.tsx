@@ -20,6 +20,7 @@ import { SEGMENT_ORDER, isSegment } from '@/lib/segments';
 import { formatKstDateTime } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface WorkspaceDetailProps {
   summary: WorkspaceSummary;
@@ -182,76 +183,84 @@ export function WorkspaceDetail({ summary: w, users, warehouses, auditLogs, home
             <p className="mt-1 text-xs text-muted-foreground">{t.tempPasswordHelp}</p>
           </div>
         )}
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t.cols.user}</TableHead>
-                <TableHead>{t.cols.role}</TableHead>
-                <TableHead>{t.cols.created}</TableHead>
-                <TableHead>{t.cols.lastLogin}</TableHead>
-                <TableHead>{t.cols.status}</TableHead>
-                <TableHead className="text-right">{t.cols.actions}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell>
-                    <p className="text-sm font-medium">{u.name}</p>
-                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}
-                    {u.isPlatformAdmin && (
-                      <Badge variant="notice" className="ml-1.5">
-                        {t.operator}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">{formatKstDateTime(u.createdAt).slice(0, 10)}</TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">{timeAgo(u.lastLoginAt, m.platform.time)}</TableCell>
-                  <TableCell>{u.isActive ? <Badge variant="normal">{t.active}</Badge> : <Badge variant="stagnant">{t.inactive}</Badge>}</TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    {!u.isPlatformAdmin && (
-                      <>
-                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => resetPassword(u)}>
-                          <KeyRound className="size-3.5" />
-                          {t.issueTemp}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => run(() => adminRequest(`/api/admin/users/${u.id}`, 'PATCH', { isActive: !u.isActive }), u.isActive ? t.deactivated : t.activated)}
-                        >
-                          {u.isActive ? t.deactivate : t.activate}
-                        </Button>
-                      </>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {users.length === 0 && <p className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noUsers}</p>}
-        </div>
+        <Paged items={users} pagerClassName="border-t border-border px-5 py-2.5">
+          {(pageItems) => (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t.cols.user}</TableHead>
+                    <TableHead>{t.cols.role}</TableHead>
+                    <TableHead>{t.cols.created}</TableHead>
+                    <TableHead>{t.cols.lastLogin}</TableHead>
+                    <TableHead>{t.cols.status}</TableHead>
+                    <TableHead className="text-right">{t.cols.actions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageItems.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <p className="text-sm font-medium">{u.name}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}
+                        {u.isPlatformAdmin && (
+                          <Badge variant="notice" className="ml-1.5">
+                            {t.operator}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{formatKstDateTime(u.createdAt).slice(0, 10)}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{timeAgo(u.lastLoginAt, m.platform.time)}</TableCell>
+                      <TableCell>{u.isActive ? <Badge variant="normal">{t.active}</Badge> : <Badge variant="stagnant">{t.inactive}</Badge>}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {!u.isPlatformAdmin && (
+                          <>
+                            <Button size="sm" variant="ghost" disabled={busy} onClick={() => resetPassword(u)}>
+                              <KeyRound className="size-3.5" />
+                              {t.issueTemp}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => run(() => adminRequest(`/api/admin/users/${u.id}`, 'PATCH', { isActive: !u.isActive }), u.isActive ? t.deactivated : t.activated)}
+                            >
+                              {u.isActive ? t.deactivate : t.activate}
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {users.length === 0 && <p className="px-5 py-6 text-center text-sm text-muted-foreground">{t.noUsers}</p>}
+            </div>
+          )}
+        </Paged>
       </SectionPanel>
 
       {warehouses.length > 0 && (
         <SectionPanel title={t.warehouses} description={format(t.warehouseCount, { count: warehouses.length })}>
-          <ul className="divide-y divide-border">
-            {warehouses.map((wh) => (
-              <li key={wh.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-                <span className="w-8 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">{wh.code}</span>
-                <span className="min-w-0 flex-1 truncate">{wh.name}</span>
-                {wh.isArchived && <Badge variant="stagnant">{t.archived}</Badge>}
-                <span className="text-xs text-muted-foreground">
-                  {format(t.warehouseLine, { skus: wh.skuCount, date: wh.lastSnapshotDate ?? t.none })}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <Paged items={warehouses} pagerClassName="border-t border-border px-5 py-2.5">
+            {(pageItems) => (
+              <ul className="divide-y divide-border">
+                {pageItems.map((wh) => (
+                  <li key={wh.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                    <span className="w-8 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">{wh.code}</span>
+                    <span className="min-w-0 flex-1 truncate">{wh.name}</span>
+                    {wh.isArchived && <Badge variant="stagnant">{t.archived}</Badge>}
+                    <span className="text-xs text-muted-foreground">
+                      {format(t.warehouseLine, { skus: wh.skuCount, date: wh.lastSnapshotDate ?? t.none })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Paged>
         </SectionPanel>
       )}
 

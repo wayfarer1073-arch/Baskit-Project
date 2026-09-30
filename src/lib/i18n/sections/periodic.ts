@@ -54,7 +54,6 @@ export const ko = {
     today: '오늘',
     daysAgo: '{days}일 전',
     noMatch: '조건에 맞는 품목이 없어요.',
-    more: '{count}개 더 보기 ({shown} / {total})',
   },
   sheet: {
     subtitle: '{code} · {warehouse} · 기준일 {date}',
@@ -180,7 +179,6 @@ export const en: Dictionary<typeof ko> = {
     today: 'today',
     daysAgo: '{days}d ago',
     noMatch: 'No items match these filters.',
-    more: 'Show {count} more ({shown} / {total})',
   },
   sheet: {
     subtitle: '{code} · {warehouse} · as of {date}',

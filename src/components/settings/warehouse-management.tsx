@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface WarehouseManagementProps {
   isAdmin: boolean;
@@ -91,37 +92,43 @@ export function WarehouseManagement({ isAdmin, warehouses }: WarehouseManagement
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {warehouses.map((w) => (
-          <div key={w.id} className="flex items-center gap-2">
-            <Label htmlFor={`warehouse-name-${w.id}`} className="w-10 shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">
-              {w.code}
-            </Label>
-            <Input
-              id={`warehouse-name-${w.id}`}
-              value={names[w.id] ?? ''}
-              onChange={(e) => setNames((prev) => ({ ...prev, [w.id]: e.target.value }))}
-              disabled={!isAdmin}
-              className="max-w-xs"
-            />
-            {isAdmin && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => rename(w.id)} disabled={busyId === w.id}>
-                  {t.common.save}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => archive(w.id, w.name)}
-                  disabled={busyId === w.id || warehouses.length <= 1}
-                  aria-label={format(t.warehouses.archiveAria, { name: w.name })}
-                  title={warehouses.length <= 1 ? t.warehouses.needOne : t.warehouses.archive}
-                >
-                  <Archive className="size-4" />
-                </Button>
-              </>
-            )}
-          </div>
-        ))}
+        <Paged items={warehouses} pagerClassName="mt-2">
+          {(pageItems) => (
+            <>
+              {pageItems.map((w) => (
+                <div key={w.id} className="flex items-center gap-2">
+                  <Label htmlFor={`warehouse-name-${w.id}`} className="w-10 shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[11px] font-medium text-muted-foreground">
+                    {w.code}
+                  </Label>
+                  <Input
+                    id={`warehouse-name-${w.id}`}
+                    value={names[w.id] ?? ''}
+                    onChange={(e) => setNames((prev) => ({ ...prev, [w.id]: e.target.value }))}
+                    disabled={!isAdmin}
+                    className="max-w-xs"
+                  />
+                  {isAdmin && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => rename(w.id)} disabled={busyId === w.id}>
+                        {t.common.save}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => archive(w.id, w.name)}
+                        disabled={busyId === w.id || warehouses.length <= 1}
+                        aria-label={format(t.warehouses.archiveAria, { name: w.name })}
+                        title={warehouses.length <= 1 ? t.warehouses.needOne : t.warehouses.archive}
+                      >
+                        <Archive className="size-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </Paged>
         {isAdmin && (
           <form onSubmit={add} className="flex items-center gap-2 border-t pt-3">
             <span className="w-10 shrink-0" aria-hidden="true" />

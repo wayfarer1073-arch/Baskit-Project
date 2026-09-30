@@ -31,6 +31,7 @@ import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
 import type { RiskThresholdSettings } from '@/domain/inventory/types';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface SkuVisibilityRow {
   skuId: string;
@@ -497,35 +498,39 @@ function UserManagement({
         <CardDescription>{t.users.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          {users.map((u) => {
-            const isSelf = u.id === currentUserId;
-            // 워크스페이스에 관리자가 한 명만 남으면 그 계정은 지울 수 없다(서버도 같은 규칙으로 막는다).
-            const isProtected = u.role === 'ADMIN' && users.filter((x) => x.role === 'ADMIN').length <= 1;
-            const disabledReason = isProtected ? t.users.lastAdmin : isSelf ? t.users.self : undefined;
-            return (
-              <div key={u.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <div>
-                  <span className="font-medium">{u.name}</span> <span className="text-muted-foreground">{u.email}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}</Badge>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:text-muted-foreground"
-                    disabled={isSelf || isProtected || deletingUserId === u.id}
-                    onClick={() => removeUser(u)}
-                    aria-label={format(t.users.deleteAria, { name: u.name })}
-                    title={disabledReason}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <Paged items={users}>
+          {(pageItems) => (
+            <div className="space-y-2">
+              {pageItems.map((u) => {
+                const isSelf = u.id === currentUserId;
+                // 워크스페이스에 관리자가 한 명만 남으면 그 계정은 지울 수 없다(서버도 같은 규칙으로 막는다).
+                const isProtected = u.role === 'ADMIN' && users.filter((x) => x.role === 'ADMIN').length <= 1;
+                const disabledReason = isProtected ? t.users.lastAdmin : isSelf ? t.users.self : undefined;
+                return (
+                  <div key={u.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                    <div>
+                      <span className="font-medium">{u.name}</span> <span className="text-muted-foreground">{u.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}</Badge>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive disabled:text-muted-foreground"
+                        disabled={isSelf || isProtected || deletingUserId === u.id}
+                        onClick={() => removeUser(u)}
+                        aria-label={format(t.users.deleteAria, { name: u.name })}
+                        title={disabledReason}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Paged>
         <Separator />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">

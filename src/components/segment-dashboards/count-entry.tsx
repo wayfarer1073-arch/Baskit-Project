@@ -15,6 +15,7 @@ import type { RecentCountSku } from '@/domain/segments/read-model';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { Paged } from '@/components/ui/paged';
 
 interface LotDraft {
   key: number;
@@ -373,42 +374,46 @@ export function CountEntry({
               <Input aria-label={t.recentSearchAria} placeholder={t.recentSearchPlaceholder} value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
             </div>
           </div>
-          <ul className={cn('divide-y divide-border overflow-y-auto', fixedDate ? 'max-h-64' : 'max-h-[560px]')}>
-            {recent === null &&
-              Array.from({ length: 5 }, (_, i) => (
-                <li key={i} className="px-4 py-3">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="mt-1.5 h-3 w-1/2" />
-                </li>
-              ))}
-            {recent?.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted-foreground">{t.recentEmpty}</li>}
-            {recent && recent.length > 0 && filtered.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted-foreground">{t.recentNoMatch}</li>}
-            {filtered.map((s) => {
-              const added = inForm.has(s.productCode);
-              return (
-                <li key={s.skuId}>
-                  <button
-                    type="button"
-                    onClick={() => pick(s)}
-                    className={cn('w-full px-4 py-2.5 text-left transition-colors hover:bg-muted/50', added && 'bg-brand-accent/5')}
-                    aria-pressed={added}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium">{s.productName}</span>
-                      <span className="shrink-0 text-sm tabular-nums">{s.lastQuantity?.toLocaleString() ?? '—'}</span>
-                    </div>
-                    <div className="mt-0.5 flex justify-between gap-2 text-[11px] text-muted-foreground">
-                      <span className="truncate">
-                        {s.productCode}
-                        {s.lots.length > 0 && format(t.recentLots, { count: s.lots.length })}
-                      </span>
-                      <span className="shrink-0">{added ? t.editing : (s.lastCountDate ?? '')}</span>
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <Paged items={filtered} resetKey={query} pagerClassName="border-t border-border px-4 py-2.5">
+            {(pageItems) => (
+              <ul className="divide-y divide-border">
+                {recent === null &&
+                  Array.from({ length: 5 }, (_, i) => (
+                    <li key={i} className="px-4 py-3">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="mt-1.5 h-3 w-1/2" />
+                    </li>
+                  ))}
+                {recent?.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted-foreground">{t.recentEmpty}</li>}
+                {recent && recent.length > 0 && filtered.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted-foreground">{t.recentNoMatch}</li>}
+                {pageItems.map((s) => {
+                  const added = inForm.has(s.productCode);
+                  return (
+                    <li key={s.skuId}>
+                      <button
+                        type="button"
+                        onClick={() => pick(s)}
+                        className={cn('w-full px-4 py-2.5 text-left transition-colors hover:bg-muted/50', added && 'bg-brand-accent/5')}
+                        aria-pressed={added}
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-medium">{s.productName}</span>
+                          <span className="shrink-0 text-sm tabular-nums">{s.lastQuantity?.toLocaleString() ?? '—'}</span>
+                        </div>
+                        <div className="mt-0.5 flex justify-between gap-2 text-[11px] text-muted-foreground">
+                          <span className="truncate">
+                            {s.productCode}
+                            {s.lots.length > 0 && format(t.recentLots, { count: s.lots.length })}
+                          </span>
+                          <span className="shrink-0">{added ? t.editing : (s.lastCountDate ?? '')}</span>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Paged>
         </SectionPanel>
       </div>
     </div>

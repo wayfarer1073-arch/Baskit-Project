@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import type { SupplierPolicyRow } from '@/domain/reorder/reorder';
+import { Paged } from '@/components/ui/paged';
 
 export interface ReorderDefaults {
   leadTimeDays: number;
@@ -112,11 +113,15 @@ export function ReorderSettings({ isAdmin, defaults, suppliers }: { isAdmin: boo
           <h3 className="text-sm font-medium">{t.suppliers}</h3>
           <p className="text-xs text-muted-foreground">{t.suppliersHint}</p>
           {suppliers.length > 0 && (
-            <ul className="space-y-2">
-              {suppliers.map((s) => (
-                <SupplierPolicyEditor key={s.id} supplier={s} isAdmin={isAdmin} busy={busy} run={run} defaults={defaults} />
-              ))}
-            </ul>
+            <Paged items={suppliers} pagerClassName="mt-2">
+              {(pageItems) => (
+                <ul className="space-y-2">
+                  {pageItems.map((s) => (
+                    <SupplierPolicyEditor key={s.id} supplier={s} isAdmin={isAdmin} busy={busy} run={run} defaults={defaults} />
+                  ))}
+                </ul>
+              )}
+            </Paged>
           )}
           {isAdmin && (
             <form onSubmit={addSupplier} className="flex gap-2">
