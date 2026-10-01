@@ -37,6 +37,9 @@ export interface MobileCalendarProps {
   salesByDate: Map<string, number>;
   orderCountByDate: Map<string, number>;
   schedules: ScheduleRow[];
+  /** 캘린더 머리글의 표시 선택 — 재고 데이터 도형과 일정 막대를 각각 켜고 끈다. */
+  showStock: boolean;
+  showSchedules: boolean;
   /** 방식을 주면 그 방식의 입력 화면을 바로 연다. */
   onOpen: (date: string, mode: Segment) => void;
   onOpenSchedule: (id: string) => void;
@@ -101,12 +104,14 @@ export function MobileCalendar(props: MobileCalendarProps) {
             const offDay = getDay(day) === 0 || getDay(day) === 6 || holidayByDate.has(date);
             const uploaded = show('DAILY_SYNC') && dailyWarehouses.length > 0 ? dailyUploaded(date).length : 0;
             // 일일 업로드: 모든 창고 = 원, 일부만 = 세모. 비정기 실사·매장 매출은 기록이 있으면 원.
-            const marks = [
-              uploaded > 0 && { key: 'daily', color: DOT.DAILY_SYNC, triangle: uploaded < dailyWarehouses.length },
-              show('PERIODIC_COUNT') && props.periodicCodesByDate.has(date) && { key: 'periodic', color: DOT.PERIODIC_COUNT, triangle: false },
-              show('ORDER_CYCLE') && props.salesByDate.has(date) && { key: 'store', color: DOT.ORDER_CYCLE, triangle: false },
-            ].filter((d): d is { key: string; color: string; triangle: boolean } => !!d);
-            const daySchedules = schedulesOn(date);
+            const marks = !props.showStock
+              ? []
+              : [
+                  uploaded > 0 && { key: 'daily', color: DOT.DAILY_SYNC, triangle: uploaded < dailyWarehouses.length },
+                  show('PERIODIC_COUNT') && props.periodicCodesByDate.has(date) && { key: 'periodic', color: DOT.PERIODIC_COUNT, triangle: false },
+                  show('ORDER_CYCLE') && props.salesByDate.has(date) && { key: 'store', color: DOT.ORDER_CYCLE, triangle: false },
+                ].filter((d): d is { key: string; color: string; triangle: boolean } => !!d);
+            const daySchedules = props.showSchedules ? schedulesOn(date) : [];
             const bars = daySchedules.slice(0, MAX_BARS);
             const more = daySchedules.length - MAX_BARS;
             return (

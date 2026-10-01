@@ -10,6 +10,7 @@ export const ko = {
     sales: '{amount} ₩',
     orders: '발주 {count}',
   },
+  layers: { label: '캘린더에 표시할 정보', stock: '재고 데이터', schedules: '일정' },
   mobile: {
     dayListLabel: '고른 날짜의 기록',
     dayTitle: '{month}월 {day}일 ({weekday})',
@@ -122,6 +123,7 @@ export const en: Dictionary<typeof ko> = {
     sales: '{amount} ₩',
     orders: '{count} orders',
   },
+  layers: { label: 'What to show on the calendar', stock: 'Stock data', schedules: 'Schedules' },
   mobile: {
     dayListLabel: 'Records for the selected date',
     dayTitle: '{weekday}, {month}/{day}',

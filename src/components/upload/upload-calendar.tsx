@@ -8,6 +8,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarDayDialog } from '@/components/calendar/calendar-day-dialog';
 import { MobileCalendar } from '@/components/calendar/mobile-calendar';
+import { usePersistedFlag } from '@/lib/use-persisted-flag';
 import { ScheduleFormDialog } from '@/components/calendar/schedule-form-dialog';
 import type { OrderEntryRow, SalesEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
 import type { Segment } from '@/lib/segments';
@@ -109,6 +110,9 @@ export function UploadCalendar({
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate ?? null);
   const [selectedMode, setSelectedMode] = useState<Segment | null>(initialMode ?? null);
   const [scheduleForm, setScheduleForm] = useState<{ schedule: ScheduleRow | null; date: string } | null>(null);
+  // 캘린더 머리글의 표시 선택(재고 데이터·일정) — 보는 사람 기기에 기억한다.
+  const [showStockLayer, setShowStockLayer] = usePersistedFlag('limenote_calendar_show_stock', true);
+  const [showScheduleLayer, setShowScheduleLayer] = usePersistedFlag('limenote_calendar_show_schedules', true);
   // 모바일: 달력 아래 목록에 보여 줄 날짜(처음엔 오늘).
   const [agendaDate, setAgendaDate] = useState<string>(() => initialDate ?? todayKstDateString());
   const showDaily = enabledSegments.includes('DAILY_SYNC');
@@ -192,7 +196,7 @@ export function UploadCalendar({
     for (const s of monthSchedules) max = Math.max(max, laneOf.get(s.id) ?? -1);
     return Math.min(MAX_LANES, max + 1);
   }, [monthSchedules, laneOf]);
-  const barsSpacerHeight = lanesUsed > 0 ? lanesUsed * BAR_H + (lanesUsed - 1) * BAR_GAP : 0;
+  const barsSpacerHeight = showScheduleLayer && lanesUsed > 0 ? lanesUsed * BAR_H + (lanesUsed - 1) * BAR_GAP : 0;
 
   const openSchedule = scheduleList.find((s) => s.id === openScheduleId) ?? null;
   const selectedDateBlocked =
@@ -206,11 +210,17 @@ export function UploadCalendar({
 
   return (
     <section className="overflow-hidden rounded-xl border border-border">
-      <div className="flex items-center justify-between gap-3 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <div className="flex items-center gap-1.5">
           <h2 className="text-base font-semibold">{c.title}</h2>
           <InfoTooltip tone="header">{c.description}</InfoTooltip>
         </div>
+        {/* 모바일에서는 둘째 줄, 넓은 화면에서는 제목 옆 — 달력 칸에 무엇을 보일지 고른다. */}
+        <fieldset className="order-last flex w-full items-center gap-4 sm:order-none sm:mr-auto sm:w-auto sm:pl-3">
+          <legend className="sr-only">{c.layers.label}</legend>
+          <LayerCheckbox label={c.layers.stock} checked={showStockLayer} onChange={setShowStockLayer} />
+          <LayerCheckbox label={c.layers.schedules} checked={showScheduleLayer} onChange={setShowScheduleLayer} />
+        </fieldset>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => shiftMonth(-1)} aria-label={t.calendar.prevMonth}>
             <ChevronLeft className="size-4" />
@@ -324,7 +334,7 @@ export function UploadCalendar({
                                 {format(day, 'd')}
                               </span>
                               {/* 날짜 바로 옆 한 줄에 일일 업로드 창고 / 비정기 실사 창고 순으로. */}
-                              {markers.length > 0 && (
+                              {showStockLayer && markers.length > 0 && (
                                 <span className={cn('min-w-0 truncate text-[10px] font-semibold tabular-nums', markerTone)} title={markers.join(' / ')}>
                                   {markers.map((marker, i) => (
                                     <span key={i}>
@@ -347,7 +357,7 @@ export function UploadCalendar({
                             )}
                           </div>
                           {barsSpacerHeight > 0 && <div style={{ height: barsSpacerHeight }} aria-hidden="true" />}
-                          {salesAmount !== undefined && (
+                          {showStockLayer && salesAmount !== undefined && (
                             <span
                               className={cn('mt-auto truncate text-right text-[10px] font-semibold tabular-nums', markerTone)}
                               title={fill(c.markers.sales, { amount: salesAmount.toLocaleString() })}
@@ -360,7 +370,7 @@ export function UploadCalendar({
                     })}
                   </div>
 
-                  {segments.length > 0 && (
+                  {showScheduleLayer && segments.length > 0 && (
                     <div
                       className="pointer-events-none absolute inset-x-0"
                       style={{
@@ -421,6 +431,8 @@ export function UploadCalendar({
             salesByDate={salesByDate}
             orderCountByDate={orderCountByDate}
             schedules={monthSchedules}
+            showStock={showStockLayer}
+            showSchedules={showScheduleLayer}
             onOpen={(date, mode) => {
               setSelectedMode(mode);
               setSelectedDate(date);
@@ -484,5 +496,15 @@ export function UploadCalendar({
         />
       )}
     </section>
+  );
+}
+
+/** 어두운 캘린더 머리글 위의 표시 선택 체크박스. */
+function LayerCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-sidebar-foreground select-none">
+      <input type="checkbox" className="size-3.5 accent-[var(--brand-accent)]" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
   );
 }
