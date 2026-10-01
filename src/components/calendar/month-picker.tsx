@@ -17,8 +17,7 @@ interface MonthPickerProps {
 }
 
 /**
- * 캘린더 머리글의 연도·월 선택 상자. 월 목록은 지금 보고 있는 달부터 시작해 12월 다음에 1월이 이어지도록
- * 돌려서 보여 준다(예: 10월이면 10, 11, 12, 1, 2 …, 9). 월을 바꿔도 연도는 연도 상자의 값을 그대로 쓴다.
+ * 캘린더 머리글의 연도·월 선택 상자. 월은 1~12월 순서대로 보여 주고, 월을 바꿔도 연도는 연도 상자의 값을 그대로 쓴다.
  */
 export function MonthPicker({ year, month, todayYear, onChange }: MonthPickerProps) {
   const { m, locale } = useI18n();
@@ -26,7 +25,7 @@ export function MonthPicker({ year, month, todayYear, onChange }: MonthPickerPro
   const years = Array.from({ length: YEARS_BACK + YEARS_AHEAD + 1 }, (_, i) => todayYear - YEARS_BACK + i);
   if (!years.includes(year)) years.push(year);
   years.sort((a, b) => a - b);
-  const months = Array.from({ length: 12 }, (_, i) => ((month - 1 + i) % 12) + 1);
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const monthName = (n: number) => (locale === 'ko' ? fill(t.monthOption, { month: n }) : new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(2000, n - 1, 1)));
   const trigger = 'h-8 border-0 bg-background text-sm font-semibold text-foreground tabular-nums shadow-none';
 
