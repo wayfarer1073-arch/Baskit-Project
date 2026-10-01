@@ -92,7 +92,7 @@ export function MobileCalendar(props: MobileCalendarProps) {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 border-t border-l border-border/30">
+        <div className="grid grid-cols-7 border-t border-l border-border/15">
           {weeks.flat().map((day) => {
             const date = format(day, 'yyyy-MM-dd');
             const inMonth = isSameMonth(day, month);
@@ -116,7 +116,7 @@ export function MobileCalendar(props: MobileCalendarProps) {
                 onClick={() => props.onSelectDate(date)}
                 aria-pressed={isSelected}
                 aria-label={format(day, 'yyyy-MM-dd')}
-                className={cn('relative flex min-h-14 flex-col items-center border-r border-b border-border/30 pt-2.5', !inMonth && 'bg-muted/30')}
+                className={cn('relative flex min-h-14 flex-col items-center border-r border-b border-border/15 pt-2.5', !inMonth && 'bg-muted/30')}
               >
                 {marks.length > 0 && (
                   <span className={cn('absolute top-1 left-1 flex items-center gap-[2px]', !inMonth && 'opacity-40')} aria-hidden="true">
