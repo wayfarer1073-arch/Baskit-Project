@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarDayDialog } from '@/components/calendar/calendar-day-dialog';
 import { MobileCalendar } from '@/components/calendar/mobile-calendar';
+import { MonthPicker } from '@/components/calendar/month-picker';
 import { usePersistedFlag } from '@/lib/use-persisted-flag';
 import { ScheduleFormDialog } from '@/components/calendar/schedule-form-dialog';
 import type { OrderEntryRow, SalesEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
@@ -152,7 +151,10 @@ export function UploadCalendar({
 
   /** 달을 옮긴다. 모바일 목록은 그 달에 오늘이 있으면 오늘, 아니면 1일로. */
   function shiftMonth(delta: number) {
-    const next = addMonths(month, delta);
+    goToMonth(addMonths(month, delta));
+  }
+
+  function goToMonth(next: Date) {
     setMonth(next);
     const first = format(startOfMonth(next), 'yyyy-MM-dd');
     setAgendaDate(today.slice(0, 7) === first.slice(0, 7) ? today : first);
@@ -221,15 +223,7 @@ export function UploadCalendar({
           <LayerCheckbox label={c.layers.stock} checked={showStockLayer} onChange={setShowStockLayer} />
           <LayerCheckbox label={c.layers.schedules} checked={showScheduleLayer} onChange={setShowScheduleLayer} />
         </fieldset>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => shiftMonth(-1)} aria-label={t.calendar.prevMonth}>
-            <ChevronLeft className="size-4" />
-          </Button>
-          <span className="w-24 text-center text-sm font-semibold tabular-nums">{format(month, t.calendar.monthFormat)}</span>
-          <Button variant="outline" size="icon" className="text-foreground hover:text-brand-accent" onClick={() => shiftMonth(1)} aria-label={t.calendar.nextMonth}>
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
+        <MonthPicker year={month.getFullYear()} month={month.getMonth() + 1} todayYear={Number(today.slice(0, 4))} onChange={(y, mo) => goToMonth(new Date(y, mo - 1, 1))} />
       </div>
 
       <div className="p-4 sm:p-5">
