@@ -2,6 +2,8 @@ export interface MailMessage {
   to: string;
   subject: string;
   text: string;
+  /** 있으면 HTML 메일로 보내고 text는 HTML을 못 여는 메일 프로그램용으로 함께 보낸다. */
+  html?: string;
 }
 
 /** 개발·테스트에서 보낸 메일을 확인하는 곳(메일 서비스가 설정되지 않았을 때만 쌓인다). */
@@ -34,7 +36,7 @@ export async function sendMail(message: MailMessage): Promise<boolean> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [message.to], subject: message.subject, text: message.text }),
+      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [message.to], subject: message.subject, text: message.text, ...(message.html ? { html: message.html } : {}) }),
     });
     // 실패 이유(도메인 미인증, 잘못된 보내는 주소 등)를 로그에 남긴다. 응답 본문에 비밀값은 없다.
     if (!res.ok) console.error(`[mail] send failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}`);
