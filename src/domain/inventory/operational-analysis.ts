@@ -2,14 +2,10 @@ import { daysBetween, demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDa
 import { analyzeSku, buildDailyDeltas, calculateCoverage, calculateThresholdRisk, resolveEffectiveThresholds } from './calculations';
 import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalysis, StockObservation, WindowDepletion } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
-import { assessReliability } from '@/domain/reliability/reliability';
+import { forecastReliability, RELIABILITY_HORIZON_DEMAND_DAYS } from './nowcast';
 
 /** 소진 속도를 잴 근거 기간 안의 업로드 간격 상한(출고일) — 매일이 아니어도 주 1회처럼 규칙적으로 올리면 쓴다. */
 const MAX_BASIS_GAP_SHIPPING_DAYS = 5;
-/** 자료 신뢰도는 최근 4주(달력 28일) 동안 소진 속도를 잴 수 있었던 비율로 본다. */
-const RELIABILITY_WINDOW_DAYS = 28;
-/** 새로 생긴 품목은 첫 관측 이후만 보되, 최소 이만큼(수요일)의 자료가 있어야 '상'이 될 수 있다. */
-const RELIABILITY_MIN_EXPECTED_DAYS = 10;
 
 export interface OperatingContext {
   holidays?: ReadonlySet<string>;
@@ -105,37 +101,15 @@ export function analyzeOperationalSku(
                   ? '소진 미관측'
                   : null;
   const canEstimate = reason === null;
-  // 자료 신뢰도 = 소진 속도를 재는 자료가 얼마나 촘촘하고 믿을 만한가. 업로드가 며칠 밀린 것(자료 갱신 필요)과
-  // 입고 기록 없는 재고 증가(입고·조정 확인 — 그 구간만 빼고 잰다)는 신뢰도를 깎지 않는다. 경과일은 상단 알림과
-  // 추정치의 등급(같은 길이 백테스트 오차)으로 따로 보여 준다.
-  const rateBlock = context.isMissing
-    ? '품절'
-    : context.isB2B
-      ? '특수 관리 개별 판단'
-      : invalid
-        ? '재고 정합성 확인'
-        : latest.normalStock === 0
-          ? '관측 무재고'
-          : !basis
-            ? '관측 자료 부족'
-            : basis.averageDailyDepletion === 0
-              ? '소진 미관측'
-              : null;
-  const reliabilityWindow = shippingWindow(deltas, latest.date, RELIABILITY_WINDOW_DAYS, holidays);
-  const reliability = assessReliability({
-    source: sorted[sorted.length - 1]?.source === 'COUNT' ? 'COUNT' : 'SNAPSHOT',
-    expectedDays: Math.max(
-      RELIABILITY_MIN_EXPECTED_DAYS,
-      demandDaysBetween(sorted[0].date > shiftDate(latest.date, -RELIABILITY_WINDOW_DAYS) ? sorted[0].date : shiftDate(latest.date, -RELIABILITY_WINDOW_DAYS), latest.date, holidays),
-    ),
-    observedDays: reliabilityWindow.observedIntervalDays,
-    windowDays: null,
-    intervals: reliabilityWindow.intervalCount,
-    minIntervals: 3,
-    daysSinceLevel: 0,
-    halfLifeDays: 0,
-    blockingReason: rateBlock,
-  });
+  // 신뢰도 = 품목 자신의 과거로 앞으로의 누적 소진량을 되짚어 맞혀 본 오차(미업로드일 추정과 같은 기준).
+  // 자료가 최신이면 1주 앞, 업로드가 밀렸으면 밀린 기간만큼 앞을 맞히는 정도로 본다.
+  const reliability = forecastReliability({
+    observations: sorted,
+    holidays,
+    horizonDays: staleDays > 0 ? demandDaysBetween(latest.date, latestShippingDay(asOfDate, holidays), holidays) : RELIABILITY_HORIZON_DEMAND_DAYS,
+    isB2B: context.isB2B,
+    isSoldOut: context.isMissing,
+  })!;
   const confidence = reliability.level;
   const rate = canEstimate ? basis!.averageDailyDepletion : null;
   const coverage = calculateCoverage(latest.normalStock, rate, settings);

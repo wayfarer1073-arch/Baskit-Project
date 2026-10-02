@@ -279,6 +279,6 @@ export interface SkuAnalysis {
   stockIncreasedToday: boolean;
   /** 오늘 새롭게 위험/주의 단계로 악화됐는지(어제 정상 → 오늘 주의/위험 등) */
   newlyAtRisk: boolean;
-  /** 추정 신뢰도(출처 × 관측 밀도 × 경과 감쇠). forecast.confidence는 이 값의 level이다. */
-  reliability?: import('@/domain/reliability/reliability').Reliability;
+  /** 신뢰도 — 품목 자신의 과거로 앞으로의 소진량을 되짚어 맞혀 본 오차로 매긴다(일일 업로드). forecast.confidence는 이 값의 level이다. */
+  reliability?: import('./nowcast').ForecastReliability | null;
 }

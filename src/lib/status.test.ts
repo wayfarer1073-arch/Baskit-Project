@@ -69,33 +69,35 @@ describe('isSoldOutTag / isStaleDepletionTag / isB2BTag', () => {
 });
 
 describe('dataReliabilityLevel', () => {
-  it('최근 7일 자료만으로 정상 추정 가능하면 상', () => {
-    const a = analyzeOperationalSku(daily(), '2026-09-19')!;
-    expect(a.operating?.reason).toBeNull();
-    expect(a.operating?.basisWindowDays).toBe(7);
+  /** from부터 asOf 전날까지 출고일마다 rate씩 빠지는 긴 이력. */
+  function longDaily(rate = 10, from = '2026-07-01', to = '2026-09-18') {
+    const result: StockObservation[] = [obs(from, 5000)];
+    let stock = 5000;
+    for (let d = shiftDate(from, 1); d <= to; d = shiftDate(d, 1)) {
+      if (isShippingDay(d)) { stock -= rate; result.push(obs(d, stock)); }
+    }
+    return result;
+  }
+
+  it('과거 자료로 1주 앞을 되짚어 맞혀 본 오차가 작으면 상', () => {
+    const a = analyzeOperationalSku(longDaily(), '2026-09-18')!;
+    expect(a.reliability?.horizon).toBe(5);
+    expect(a.reliability?.reason).toBeNull();
     expect(dataReliabilityLevel(a)).toBe('HIGH');
   });
 
-  it('근거 기간이 14일로 넓어져도 최근 4주가 촘촘히 관측됐으면 상(기간 길이로 깎지 않는다)', () => {
-    // 7일 안에 업로드가 한 번뿐인 긴 연휴라 14일로 넓어지지만, 그 주도 한 구간으로 온전히 관측됐다.
-    const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
-    const a = analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!;
-    expect(a.operating?.basisWindowDays).toBe(14);
-    expect(dataReliabilityLevel(a)).toBe('HIGH');
-  });
-
-  it('업로드가 밀린 것(자료 갱신 필요)은 자료 신뢰도를 깎지 않고, 소진 속도를 잴 수 없는 사유가 있을 때만 하다', () => {
-    const stale = analyzeOperationalSku(daily(), '2026-09-21')!;
+  it('업로드가 밀리면 밀린 기간만큼 앞을 맞혀 본 오차로 매긴다(흐름이 규칙적이면 그대로 상)', () => {
+    const stale = analyzeOperationalSku(longDaily(), '2026-09-28')!;
     expect(stale.operating?.reason).toBe('자료 갱신 필요');
-    expect(stale.operating?.basisWindowDays).toBe(7);
+    expect(stale.reliability?.horizon).toBe(6);
     expect(dataReliabilityLevel(stale)).toBe('HIGH');
-    const special = analyzeOperationalSku(daily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!;
-    expect(dataReliabilityLevel(special)).toBe('LOW');
   });
 
-  it('근거로 쓸 window 자체를 찾지 못하면(자료 부족) 하', () => {
-    const a = analyzeOperationalSku([obs('2026-09-17', 100), obs('2026-09-18', 90)], '2026-09-18')!;
-    expect(a.operating?.basisWindowDays).toBeNull();
-    expect(dataReliabilityLevel(a)).toBe('LOW');
+  it('특수 관리 품목이나 자료가 짧은 품목은 하', () => {
+    expect(dataReliabilityLevel(analyzeOperationalSku(longDaily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!)).toBe('LOW');
+    const short = analyzeOperationalSku(daily(), '2026-09-18')!;
+    expect(short.reliability?.reason).toBe('insufficient_history');
+    expect(dataReliabilityLevel(short)).toBe('LOW');
+    expect(dataReliabilityLevel(analyzeOperationalSku([obs('2026-09-17', 100), obs('2026-09-18', 90)], '2026-09-18')!)).toBe('LOW');
   });
 });

@@ -237,6 +237,84 @@ export function gradeOf(wape: number): NowcastGrade | null {
   return wape <= NOWCAST_GRADE_LIMITS.HIGH ? 'HIGH' : wape <= NOWCAST_GRADE_LIMITS.MEDIUM ? 'MEDIUM' : wape <= NOWCAST_GRADE_LIMITS.LOW ? 'LOW' : null;
 }
 
+// ── 평가(추정 신뢰도) ────────────────────────────────────────────────────────────────────────
+
+/** 자료가 최신인 품목의 추정 신뢰도는 1주(평일 5일) 앞을 얼마나 맞히는지로 본다. */
+export const RELIABILITY_HORIZON_DEMAND_DAYS = 5;
+
+type Evaluation =
+  | { kind: 'graded'; grade: NowcastGrade; best: BacktestResult; series: DemandDay[]; horizon: number }
+  | { kind: 'flat' }
+  | { kind: 'unavailable'; reason: NowcastUnavailableReason; best: BacktestResult | null; horizon: number };
+
+interface EvaluationInput {
+  /** 날짜 오름차순, 마지막이 기준이 되는 최신 관측. */
+  sorted: StockObservation[];
+  holidays: ClosedDays;
+  /** 앞으로 맞혀야 할 수요일 수(자료 공백 또는 1주). */
+  horizonDays: number;
+  isB2B?: boolean;
+  isSoldOut?: boolean;
+}
+
+/** 품목의 과거 자료로 horizon만큼 앞의 누적 소진량을 얼마나 맞히는지 평가한다. 추정치와 신뢰도 배지가 같은 평가를 쓴다. */
+function evaluate({ sorted, holidays, horizonDays, isB2B, isSoldOut }: EvaluationInput): Evaluation {
+  const horizon = Math.max(1, horizonDays);
+  const unavailable = (reason: NowcastUnavailableReason, best: BacktestResult | null = null): Evaluation => ({ kind: 'unavailable', reason, best, horizon });
+  const latest = sorted[sorted.length - 1];
+  if (isSoldOut) return unavailable('sold_out');
+  if (isB2B) return unavailable('special');
+  const integrityFrom = shiftDate(latest.date, -INTEGRITY_LOOKBACK_DAYS);
+  if (sorted.some((o) => o.date >= integrityFrom && o.normalStock < 0)) return unavailable('integrity');
+
+  const series = demandDaySeries(sorted, holidays);
+  // 최근 소진이 없으면 직전 재고가 그대로라고 본다.
+  const recentKnown = series.slice(-FLAT_LOOKBACK_DAYS).filter((d) => d.value !== null);
+  if (recentKnown.length >= FLAT_MIN_KNOWN_DAYS && recentKnown.every((d) => d.value === 0)) return { kind: 'flat' };
+  if (series.filter((d) => d.value !== null).length < NOWCAST_MIN_KNOWN_DAYS) return unavailable('insufficient_history');
+  const maxGap = Math.min(NOWCAST_MAX_GAP_DEMAND_DAYS, Math.floor(series.length / 2));
+  if (horizonDays > maxGap) return unavailable('gap_too_long');
+
+  const best = selectModel(series, horizon);
+  if (!best || best.origins < NOWCAST_MIN_ORIGINS) return unavailable('insufficient_history', best);
+  const grade = gradeOf(best.wape);
+  if (!grade) return unavailable('unstable_pattern', best);
+  return { kind: 'graded', grade, best, series, horizon };
+}
+
+const summaryOf = (best: BacktestResult | null, horizon: number): NowcastBacktest | null => (best ? { origins: best.origins, horizon, wape: best.wape } : null);
+
+export type ForecastReliabilityReason = NowcastUnavailableReason | 'no_depletion';
+
+/**
+ * 일일 업로드 품목의 신뢰도(자료 신뢰도 배지) — 추정 신뢰도와 같은 기준.
+ * 자료가 최신이면 1주 앞, 자료가 끊겼으면 끊긴 기간만큼 앞을 품목 자신의 과거로 되짚어 맞혀 본 오차로 매긴다.
+ *  - 상 ≤ 15% · 중 ≤ 30% · 하 ≤ 50%
+ *  - 등급을 매길 수 없으면(품절·특수 관리·정합성·자료 부족·불규칙·공백 초과) 하 + 사유
+ *  - 최근 소진이 없으면 '변동 없음'으로 중
+ */
+export interface ForecastReliability {
+  level: NowcastGrade;
+  reason: ForecastReliabilityReason | null;
+  backtest: NowcastBacktest | null;
+  horizon: number;
+}
+
+export function forecastReliability(input: {
+  observations: StockObservation[];
+  holidays?: ClosedDays;
+  horizonDays: number;
+  isB2B?: boolean;
+  isSoldOut?: boolean;
+}): ForecastReliability | null {
+  const sorted = [...input.observations].sort((a, b) => a.date.localeCompare(b.date));
+  if (sorted.length === 0) return null;
+  const e = evaluate({ ...input, sorted, holidays: input.holidays ?? NO_HOLIDAYS });
+  if (e.kind === 'flat') return { level: 'MEDIUM', reason: 'no_depletion', backtest: null, horizon: Math.max(1, input.horizonDays) };
+  if (e.kind === 'unavailable') return { level: 'LOW', reason: e.reason, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon };
+  return { level: e.grade, reason: null, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon };
+}
+
 // ── 추정 ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface NowcastInput {
@@ -271,33 +349,19 @@ export function nowcastStock(input: NowcastInput): Nowcast | null {
     backtest: null,
     reason: null,
   };
-  const unavailable = (reason: NowcastUnavailableReason, extra: Partial<Nowcast> = {}): Nowcast => ({ ...base, ...extra, reason });
-
-  if (input.isSoldOut) return unavailable('sold_out');
-  if (input.isB2B) return unavailable('special');
-  const integrityFrom = shiftDate(latest.date, -INTEGRITY_LOOKBACK_DAYS);
-  if (sorted.some((o) => o.date >= integrityFrom && o.normalStock < 0)) return unavailable('integrity');
-
-  const series = demandDaySeries(sorted, holidays);
-  const known = series.filter((d) => d.value !== null);
-  // 최근 소진이 없으면 직전 재고가 그대로라고 본다.
-  const recentKnown = series.slice(-FLAT_LOOKBACK_DAYS).filter((d) => d.value !== null);
-  if (recentKnown.length >= FLAT_MIN_KNOWN_DAYS && recentKnown.every((d) => d.value === 0)) {
+  const e = evaluate({ sorted, holidays, horizonDays, isB2B: input.isB2B, isSoldOut: input.isSoldOut });
+  if (e.kind === 'flat') {
     return { ...base, status: 'flat', estimatedStock: latest.normalStock, low: latest.normalStock, high: latest.normalStock, expectedDepletion: 0 };
   }
-  if (known.length < NOWCAST_MIN_KNOWN_DAYS) return unavailable('insufficient_history');
-  const maxGap = Math.min(NOWCAST_MAX_GAP_DEMAND_DAYS, Math.floor(series.length / 2));
-  if (horizonDays > maxGap) return unavailable('gap_too_long');
-
-  const horizon = Math.max(1, horizonDays);
-  const best = selectModel(series, horizon);
-  if (!best || best.origins < NOWCAST_MIN_ORIGINS) {
-    return unavailable('insufficient_history', best ? { backtest: { origins: best.origins, horizon, wape: best.wape } } : {});
+  if (e.kind === 'unavailable') {
+    return {
+      ...base,
+      reason: e.reason,
+      backtest: summaryOf(e.best, e.horizon),
+      ...(e.reason === 'unstable_pattern' && e.best ? { method: e.best.spec.method, parameter: e.best.spec.parameter } : {}),
+    };
   }
-  const backtestSummary = { origins: best.origins, horizon, wape: best.wape };
-  const grade = gradeOf(best.wape);
-  if (!grade) return unavailable('unstable_pattern', { method: best.spec.method, parameter: best.spec.parameter, backtest: backtestSummary });
-
+  const { best, series, grade } = e;
   const futureWeekdays: number[] = [];
   for (let day = shiftDate(latest.date, 1); futureWeekdays.length < horizonDays; day = shiftDate(day, 1)) {
     if (isDemandDay(day, holidays)) futureWeekdays.push(weekdayOf(day));
@@ -317,6 +381,6 @@ export function nowcastStock(input: NowcastInput): Nowcast | null {
     grade,
     method: best.spec.method,
     parameter: best.spec.parameter,
-    backtest: backtestSummary,
+    backtest: summaryOf(best, e.horizon),
   };
 }

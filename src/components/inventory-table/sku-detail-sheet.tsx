@@ -29,7 +29,7 @@ import type { Messages } from '@/lib/i18n/messages';
 import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import type { ReorderSuggestion } from '@/domain/reorder/reorder';
 import { ReorderPanel, type Turnover30 } from './reorder-panel';
-import { ReliabilityInfo } from '@/components/ui/reliability-info';
+import { ForecastReliabilityInfo } from '@/components/inventory-table/forecast-reliability-info';
 import { Paged } from '@/components/ui/paged';
 
 interface SkuDetailResponse {
@@ -342,7 +342,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 <span className={`rounded-md bg-muted px-2 py-0.5 text-xs font-medium ${dataReliabilityClassName(dataReliabilityLevel(detail.analysis))}`}>
                   {dataReliabilityText(dataReliabilityLevel(detail.analysis), m.domain)}
                 </span>
-                <ReliabilityInfo reliability={detail.analysis.reliability} className="ml-1 align-middle" />
+                <ForecastReliabilityInfo reliability={detail.analysis.reliability} className="ml-1 align-middle" />
               </SheetDescription>
             </SheetHeader>
 
