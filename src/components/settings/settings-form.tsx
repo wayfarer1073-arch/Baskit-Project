@@ -136,16 +136,7 @@ interface DailySettingsProps {
 }
 
 /** 일일 재고 연동 탭 — 매일 받는 재고 파일로 판단하는 대시보드의 기준과 SKU 관리. */
-export function DailySettings({
-  isAdmin,
-  stock,
-  mergeLinks,
-  settings,
-  skus,
-  codeAliases,
-  reorderDefaults,
-  supplierPolicies,
-}: DailySettingsProps) {
+export function DailySettings({ isAdmin, stock, mergeLinks, settings, skus, codeAliases, reorderDefaults, supplierPolicies }: DailySettingsProps) {
   const { m } = useI18n();
   const t = m.settingsScreens;
   const [thresholds, setThresholds] = useState(settings);
@@ -176,9 +167,7 @@ export function DailySettings({
         <CardHeader>
           <div className="flex items-center gap-1.5">
             <CardTitle>{t.thresholds.title}</CardTitle>
-            <InfoTooltip tone="header">
-              {t.thresholds.description}
-            </InfoTooltip>
+            <InfoTooltip tone="header">{t.thresholds.description}</InfoTooltip>
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -200,12 +189,7 @@ export function DailySettings({
             onChange={(v) => setThresholds((p) => ({ ...p, overstockCoverageDays: v }))}
             disabled={!isAdmin}
           />
-          <ThresholdField
-            label={t.thresholds.stagnant}
-            value={thresholds.stagnantDays}
-            onChange={(v) => setThresholds((p) => ({ ...p, stagnantDays: v }))}
-            disabled={!isAdmin}
-          />
+          <ThresholdField label={t.thresholds.stagnant} value={thresholds.stagnantDays} onChange={(v) => setThresholds((p) => ({ ...p, stagnantDays: v }))} disabled={!isAdmin} />
         </CardContent>
         {isAdmin && (
           <CardContent className="pt-0">
@@ -225,7 +209,6 @@ export function DailySettings({
       <CodeAliasManagement aliases={codeAliases} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} />
 
       {warehouses.length > 1 && <MergeLinkManagement links={mergeLinks} warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))} isAdmin={isAdmin} />}
-
     </div>
   );
 }
@@ -313,9 +296,7 @@ function SkuVisibilityManagement({ isAdmin, initialSkus }: { isAdmin: boolean; i
       <CardHeader>
         <div className="flex items-center gap-1.5">
           <CardTitle>{t.visibility.title}</CardTitle>
-          <InfoTooltip tone="header">
-            {t.visibility.description}
-          </InfoTooltip>
+          <InfoTooltip tone="header">{t.visibility.description}</InfoTooltip>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -435,7 +416,12 @@ function SkuVisibilityItem({ sku, isAdmin, updating, onToggle }: { sku: SkuVisib
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <span className="text-xs text-muted-foreground">{sku.isHiddenFromDashboard ? t.visibility.stateHidden : t.visibility.stateShown}</span>
-        <Switch checked={sku.isHiddenFromDashboard} onCheckedChange={onToggle} disabled={!isAdmin || updating} aria-label={format(t.visibility.toggleAria, { name: sku.productName })} />
+        <Switch
+          checked={sku.isHiddenFromDashboard}
+          onCheckedChange={onToggle}
+          disabled={!isAdmin || updating}
+          aria-label={format(t.visibility.toggleAria, { name: sku.productName })}
+        />
       </div>
     </div>
   );
@@ -452,34 +438,24 @@ function UserManagement({
 }) {
   const { m } = useI18n();
   const t = m.settingsScreens;
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'VIEWER' | 'MEMBER' | 'ADMIN'>('MEMBER');
-  const [submitting, setSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
-  async function addUser() {
-    setSubmitting(true);
+  async function changeRole(user: { id: string; name: string }, role: 'VIEWER' | 'MEMBER' | 'ADMIN') {
+    setUpdatingUserId(user.id);
     try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, password, role }),
-      });
-      const body = await res.json();
+      const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body.error ?? t.common.addFailed);
+        toast.error(body.error ?? t.common.saveFailed);
         return;
       }
-      toast.success(t.users.added);
-      onUsersChange([...users, body.user]);
-      setEmail('');
-      setName('');
-      setPassword('');
-      setRole('MEMBER');
+      onUsersChange(users.map((u) => (u.id === user.id ? { ...u, role } : u)));
+      toast.success(format(t.users.roleChanged, { name: user.name }));
+    } catch {
+      toast.error(t.common.saveFailed);
     } finally {
-      setSubmitting(false);
+      setUpdatingUserId(null);
     }
   }
 
@@ -523,7 +499,16 @@ function UserManagement({
                       <span className="font-medium">{u.name}</span> <span className="text-muted-foreground">{u.email}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline">{u.role === 'ADMIN' ? m.nav.roles.admin : u.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member}</Badge>
+                      <Select value={u.role} onValueChange={(v) => changeRole(u, v as 'VIEWER' | 'MEMBER' | 'ADMIN')} disabled={isSelf || isProtected || updatingUserId === u.id}>
+                        <SelectTrigger className="h-7 w-[6.5rem] text-xs" aria-label={format(t.users.roleAria, { name: u.name })} title={disabledReason}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="VIEWER">{m.nav.roles.viewer}</SelectItem>
+                          <SelectItem value="MEMBER">{m.nav.roles.member}</SelectItem>
+                          <SelectItem value="ADMIN">{m.nav.roles.admin}</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         size="icon"
                         variant="ghost"
@@ -542,37 +527,6 @@ function UserManagement({
             </div>
           )}
         </Paged>
-        <Separator />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-email">{t.users.email}</Label>
-            <Input id="new-user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-name">{t.users.name}</Label>
-            <Input id="new-user-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-password">{t.users.password}</Label>
-            <Input id="new-user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="new-user-role">{t.users.role}</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as 'VIEWER' | 'MEMBER' | 'ADMIN')}>
-              <SelectTrigger id="new-user-role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="VIEWER">{m.nav.roles.viewer}</SelectItem>
-                <SelectItem value="MEMBER">{m.nav.roles.member}</SelectItem>
-                <SelectItem value="ADMIN">{m.nav.roles.admin}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <Button onClick={addUser} disabled={submitting || !email || !name || password.length < 8}>
-          {t.users.submit}
-        </Button>
       </CardContent>
     </Card>
   );

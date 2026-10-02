@@ -19,12 +19,11 @@ export function countActiveAdmins(orgId: string) {
   return prisma.user.count({ where: { organizationId: orgId, role: 'ADMIN', isActive: true } });
 }
 
-export async function createUser(orgId: string, input: { email: string; name: string; password: string; role: Role }) {
-  const passwordHash = await hashPassword(input.password);
-  return prisma.user.create({
-    data: { organizationId: orgId, email: input.email.trim().toLowerCase(), name: input.name, passwordHash, role: input.role },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
-  });
+/** 워크스페이스 안 사용자의 권한을 바꾼다. 바꾼 사용자를 돌려주고, 없으면 null. */
+export async function updateUserRole(orgId: string, userId: string, role: Role) {
+  const result = await prisma.user.updateMany({ where: { id: userId, organizationId: orgId, isActive: true }, data: { role } });
+  if (result.count === 0) return null;
+  return prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true, role: true, createdAt: true } });
 }
 
 /**
