@@ -14,6 +14,7 @@ import type { SkuDescriptor } from '@/domain/inventory/read-model';
 
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import { basisRate } from '@/domain/inventory/merge';
+import { nowcastStock } from '@/domain/inventory/nowcast';
 
 
 /** 최근 30일 회전율 — 관측이 5회 미만이면 믿기 어려워 계산하지 않는다. */
@@ -23,6 +24,37 @@ function turnover30(observations: StockObservation[], a: SkuAnalysis): Inventory
   if (recent.length < 5) return null;
   const averageStock = recent.reduce((sum, o) => sum + Math.max(0, o.normalStock), 0) / recent.length;
   return { ratio: turnover(a.window30.totalDepletion, averageStock), depletion: a.window30.totalDepletion, averageStock };
+}
+
+type SkuInput = { descriptor: SkuDescriptor; observations: StockObservation[] };
+
+function analyzeFor({ descriptor, observations }: SkuInput, asOfDate: string, settings: RiskThresholdSettings, calendar: ClosedDays) {
+  return analyzeSku(
+    observations,
+    asOfDate,
+    settings,
+    { dangerQty: descriptor.manualDangerQty, warningQty: descriptor.manualWarningQty },
+    { expirationDate: descriptor.expirationDate, expirationRiskDays: descriptor.expirationRiskDays },
+    { holidays: calendar, isB2B: descriptor.isB2B, isMissing: descriptor.isSoldOut },
+  );
+}
+
+/**
+ * 기준일까지 출고일이 지났는데 재고 자료가 없으면, 자료가 끊기기 전 시점으로 다시 분석해 그때의 신뢰도로
+ * 추정할지 정하고 오늘 재고를 추정한다. KPI·위험 판정은 그대로 실제 관측값을 쓴다.
+ */
+function nowcastFor(input: SkuInput, analysis: SkuAnalysis, asOfDate: string, settings: RiskThresholdSettings, calendar: ClosedDays) {
+  if (!analysis.operating || analysis.operating.staleShippingDays <= 0) return null;
+  const preGapAnalysis = analyzeFor(input, analysis.latest.date, settings, calendar);
+  if (!preGapAnalysis) return null;
+  return nowcastStock({
+    observations: input.observations,
+    asOfDate,
+    holidays: calendar,
+    isB2B: input.descriptor.isB2B,
+    isSoldOut: input.descriptor.isSoldOut,
+    preGapAnalysis,
+  });
 }
 
 interface ReorderContext {
@@ -54,15 +86,10 @@ export async function getInventoryRows(options: {
   const skusWithSeries = await loadActiveSkusWithSeries(options.orgId, options.warehouseId, options.asOfDate, calendarFor);
 
   const rows: InventoryRow[] = [];
-  for (const { descriptor, observations } of skusWithSeries) {
-    const analysis = analyzeSku(
-      observations,
-      options.asOfDate,
-      settings,
-      { dangerQty: descriptor.manualDangerQty, warningQty: descriptor.manualWarningQty },
-      { expirationDate: descriptor.expirationDate, expirationRiskDays: descriptor.expirationRiskDays },
-      { holidays: calendarFor(descriptor.warehouseId), isB2B: descriptor.isB2B, isMissing: descriptor.isSoldOut },
-    );
+  for (const input of skusWithSeries) {
+    const { descriptor, observations } = input;
+    const calendar = calendarFor(descriptor.warehouseId);
+    const analysis = analyzeFor(input, options.asOfDate, settings, calendar);
     if (!analysis) continue; // asOfDate 이전 관측치가 없는 SKU(예: 미래 등록)는 제외
     const valueBreakdown = calculateInventoryValueBreakdown(analysis.latest);
     const periodComparison = options.compareFromDate ? calculatePeriodComparison(observations, options.compareFromDate, options.asOfDate) : null;
@@ -71,8 +98,9 @@ export async function getInventoryRows(options: {
       analysis,
       valueBreakdown,
       periodComparison,
-      reorder: reorderFor(reorderCtx, descriptor, analysis, calendarFor(descriptor.warehouseId)),
+      reorder: reorderFor(reorderCtx, descriptor, analysis, calendar),
       turnover30: turnover30(observations, analysis),
+      nowcast: nowcastFor(input, analysis, options.asOfDate, settings, calendar),
     });
   }
   return rows;
@@ -83,14 +111,8 @@ export async function getSkuDetail(orgId: string, skuId: string, asOfDate: strin
   const [{ calendarFor }, reorderCtx] = await Promise.all([loadWarehouseCalendars(orgId), loadReorderContext(orgId, asOfDate)]);
   const result = await loadSkuWithSeries(orgId, skuId, asOfDate, calendarFor);
   if (!result) return null;
-  const analysis = analyzeSku(
-    result.observations,
-    asOfDate,
-    resolvedSettings,
-    { dangerQty: result.descriptor.manualDangerQty, warningQty: result.descriptor.manualWarningQty },
-    { expirationDate: result.descriptor.expirationDate, expirationRiskDays: result.descriptor.expirationRiskDays },
-    { holidays: calendarFor(result.descriptor.warehouseId), isB2B: result.descriptor.isB2B, isMissing: result.descriptor.isSoldOut },
-  );
+  const calendar = calendarFor(result.descriptor.warehouseId);
+  const analysis = analyzeFor(result, asOfDate, resolvedSettings, calendar);
   if (!analysis) return null;
   const valueBreakdown = calculateInventoryValueBreakdown(analysis.latest);
   const expirationLots = await listExpirationLotsForSku(skuId);
@@ -100,7 +122,8 @@ export async function getSkuDetail(orgId: string, skuId: string, asOfDate: strin
     valueBreakdown,
     observations: result.observations,
     expirationLots,
-    reorder: reorderFor(reorderCtx, result.descriptor, analysis, calendarFor(result.descriptor.warehouseId)),
+    reorder: reorderFor(reorderCtx, result.descriptor, analysis, calendar),
     turnover30: turnover30(result.observations, analysis),
+    nowcast: nowcastFor(result, analysis, asOfDate, resolvedSettings, calendar),
   };
 }

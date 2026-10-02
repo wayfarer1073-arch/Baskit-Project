@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { NowcastStock } from '@/components/inventory-table/nowcast-stock';
 import { ArrowDown, ArrowUp, ArrowUpDown, ClipboardList, Columns3, Download, FileSpreadsheet, PackageX, Search, X } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -640,7 +641,7 @@ export function InventoryTableRow({
       )}
       {isVisible('warehouse') && <TableCell className="px-2 py-1.5">{r.descriptor.warehouseCode}</TableCell>}
       {isVisible('normalStock') && (
-        <TableCell className="px-2 py-1.5 text-right tabular-nums">{r.descriptor.isSoldOut ? "0" : formatNumber(r.analysis.latest.normalStock)}</TableCell>
+        <TableCell className="px-2 py-1.5 text-right tabular-nums">{r.descriptor.isSoldOut ? '0' : <NowcastStock nowcast={r.nowcast} fallback={formatNumber(r.analysis.latest.normalStock)} />}</TableCell>
       )}
       {isVisible('netChange') && (
         <TableCell className="px-2 py-1.5 text-right tabular-nums">

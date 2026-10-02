@@ -1,5 +1,7 @@
 'use client';
 
+import type { Nowcast } from '@/domain/inventory/nowcast';
+import { NowcastDetail } from '@/components/inventory-table/nowcast-stock';
 import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarDays, ClipboardList, PackageX, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-react';
@@ -38,6 +40,7 @@ interface SkuDetailResponse {
   expirationLots: { lot: string; expirationDate: string }[];
   reorder?: ReorderSuggestion | null;
   turnover30?: Turnover30 | null;
+  nowcast?: Nowcast | null;
 }
 
 interface EventItem {
@@ -379,6 +382,8 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   </div>
                 </div>
               </section>
+
+              {detail.nowcast && !detail.descriptor.isSoldOut && <NowcastDetail nowcast={detail.nowcast} />}
 
               <section className="grid grid-cols-2 gap-2">
                 <MetricCard label={detail.descriptor.isSoldOut ? t.lastObservedStock : t.observedStock} value={qty(detail.analysis.latest.availableStock)} />

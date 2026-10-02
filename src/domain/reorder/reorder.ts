@@ -1,5 +1,5 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
-import { demandDaysBetween, latestShippingDay, NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
+import { isDemandDay, latestShippingDay, NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
 
 /**
  * 권장 발주일·발주량.
@@ -110,7 +110,15 @@ export function suggestReorder(input: {
   if (rate === null || !(rate > 0)) return null;
   const calendar = input.calendar ?? NO_HOLIDAYS;
   const start = parseISO(input.observedDate);
-  const stockAt = (date: string) => input.stock - rate * demandDaysBetween(input.observedDate, date, calendar);
+  // (관측일, 관측일 + k] 의 수요일 수를 한 번씩만 센다 — 후보일마다 달력을 처음부터 다시 세면 품목 수백 개에서 수십 초가 걸린다.
+  const cumulative = [0];
+  const demandDaysUntil = (date: string) => {
+    const k = differenceInCalendarDays(parseISO(date), start);
+    if (k <= 0) return 0;
+    for (let offset = cumulative.length; offset <= k; offset++) cumulative.push(cumulative[offset - 1] + (isDemandDay(ymd(addDays(start, offset)), calendar) ? 1 : 0));
+    return cumulative[k];
+  };
+  const stockAt = (date: string) => input.stock - rate * demandDaysUntil(date);
   const safetyStock = rate * policy.safetyDays;
   const arrivalOf = (d: Date) => ymd(addDays(d, policy.leadTimeDays));
 

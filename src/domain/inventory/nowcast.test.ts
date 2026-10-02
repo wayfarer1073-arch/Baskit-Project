@@ -1,0 +1,126 @@
+import { describe, expect, it } from 'vitest';
+import { demandDaySeries, nowcastStock, NOWCAST_MAX_GAP_DEMAND_DAYS } from './nowcast';
+import { analyzeOperationalSku } from './operational-analysis';
+import { closedDays, isDemandDay, isShippingDay, shiftDate, type ClosedDays } from './shipping-calendar';
+import type { StockObservation } from './types';
+
+const obs = (date: string, stock: number, inbound = 0): StockObservation => ({
+  date,
+  normalStock: stock,
+  availableStock: stock,
+  unitCost: 10,
+  defectiveStock: 0,
+  incomingStock: 0,
+  warningQty: 0,
+  dangerQty: 0,
+  inboundQuantity: inbound,
+});
+
+/** 평일마다 rate(date)만큼 주문이 들어오고, 출고일마다 쌓인 주문이 빠진다(업로드도 그날). */
+function history(rate: (date: string) => number, from: string, to: string, start: number, holidays: ClosedDays = closedDays([])) {
+  const result: StockObservation[] = [obs(from, start)];
+  let stock = start;
+  let backlog = 0;
+  for (let d = shiftDate(from, 1); d <= to; d = shiftDate(d, 1)) {
+    if (!isDemandDay(d, holidays)) continue;
+    backlog += rate(d);
+    if (isShippingDay(d, holidays)) {
+      stock -= backlog;
+      backlog = 0;
+      result.push(obs(d, stock));
+    }
+  }
+  return result;
+}
+
+function nowcastAt(observations: StockObservation[], asOfDate: string, extra: { isB2B?: boolean; isSoldOut?: boolean; holidays?: ClosedDays } = {}) {
+  const latest = observations[observations.length - 1].date;
+  const pre = analyzeOperationalSku(observations, latest, undefined, undefined, undefined, { holidays: extra.holidays, isB2B: extra.isB2B, isMissing: extra.isSoldOut })!;
+  return nowcastStock({ observations, asOfDate, preGapAnalysis: pre, ...extra });
+}
+
+describe('demandDaySeries', () => {
+  it('spreads a multi-day interval evenly over its demand days and blanks unexplained increases', () => {
+    const series = demandDaySeries([obs('2026-09-10', 100), obs('2026-09-11', 90), obs('2026-09-15', 60), obs('2026-09-16', 80)]);
+    expect(series.map((d) => d.date)).toEqual(['2026-09-11', '2026-09-14', '2026-09-15', '2026-09-16']);
+    expect(series.map((d) => d.value)).toEqual([10, 15, 15, null]);
+    expect(series[1].weekday).toBe(1);
+  });
+});
+
+describe('nowcastStock', () => {
+  const steady = history(() => 10, '2026-07-01', '2026-09-25', 2000);
+
+  it('subtracts the predicted depletion for each elapsed demand day from the last upload', () => {
+    // 금요일 자료 뒤 월·화 미업로드 → 2 수요일
+    const n = nowcastAt(steady, '2026-09-29');
+    expect(n.status).toBe('estimated');
+    expect(n.lastObservedDate).toBe('2026-09-25');
+    expect(n.elapsedDays).toBe(4);
+    expect(n.horizonDays).toBe(2);
+    expect(n.estimatedStock).toBe(n.lastObservedStock - 20);
+    expect(n.backtest!.wape).toBeLessThan(0.01);
+    expect(n.low).toBeLessThanOrEqual(n.estimatedStock!);
+    expect(n.high).toBeGreaterThanOrEqual(n.estimatedStock!);
+  });
+
+  it('learns a weekday pattern when there is enough history', () => {
+    // 월요일엔 30, 나머지 평일엔 10
+    const weekly = history((d) => (new Date(`${d}T00:00:00Z`).getUTCDay() === 1 ? 30 : 10), '2026-06-01', '2026-09-25', 4000);
+    const monday = nowcastAt(weekly, '2026-09-28');
+    expect(monday.method).toBe('ewma_weekday');
+    // 요일 계수 없이 평균만 쓰면 월요일도 14 안팎이다.
+    expect(monday.expectedDepletion).toBeGreaterThan(26);
+    expect(monday.expectedDepletion).toBeLessThan(32);
+    const tuesday = nowcastAt(weekly, '2026-09-29');
+    expect(tuesday.expectedDepletion! - monday.expectedDepletion!).toBeGreaterThan(8);
+    expect(tuesday.expectedDepletion! - monday.expectedDepletion!).toBeLessThan(12);
+  });
+
+  it('does not count a holiday whose orders have not shipped yet', () => {
+    const holidays = closedDays(['2026-09-28']);
+    const n = nowcastAt(steady, '2026-09-28', { holidays });
+    expect(n.horizonDays).toBe(0);
+    expect(n.estimatedStock).toBe(n.lastObservedStock);
+  });
+
+  it('refuses noisy items, special items, sold-out items and long gaps', () => {
+    let seed = 7;
+    const noise = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    const erratic = history(() => (noise() < 0.75 ? 0 : 40 + Math.round(noise() * 80)), '2026-07-01', '2026-09-25', 20000);
+    const noisy = nowcastAt(erratic, '2026-09-29');
+    expect(noisy.status).toBe('unavailable');
+    expect(['unstable_pattern', 'low_reliability']).toContain(noisy.reason);
+    expect(noisy.estimatedStock).toBeNull();
+
+    expect(nowcastAt(steady, '2026-09-29', { isB2B: true }).reason).toBe('special');
+    expect(nowcastAt(steady, '2026-09-29', { isSoldOut: true }).reason).toBe('sold_out');
+    const far = nowcastAt(steady, shiftDate('2026-09-25', NOWCAST_MAX_GAP_DEMAND_DAYS * 2));
+    expect(far.reason).toBe('gap_too_long');
+  });
+
+  it('refuses items whose reliability was not high before the gap', () => {
+    const sparse = [obs('2026-09-01', 100), obs('2026-09-10', 80), obs('2026-09-25', 50)];
+    const n = nowcastAt(sparse, '2026-09-29');
+    expect(n.status).toBe('unavailable');
+    expect(n.reason).toBe('low_reliability');
+  });
+
+  it('reports no depletion instead of guessing for items that have not moved', () => {
+    const flat = history(() => 0, '2026-07-01', '2026-09-25', 500);
+    expect(nowcastAt(flat, '2026-09-29').reason).toBe('no_depletion');
+  });
+
+  it('never estimates below zero', () => {
+    const low = history(() => 10, '2026-07-01', '2026-09-25', 680);
+    // 마지막 재고 60, 10월 6일까지 7 수요일 × 10 = 70
+    const n = nowcastAt(low, '2026-10-06');
+    expect(low[low.length - 1].normalStock).toBe(60);
+    expect(n.status).toBe('estimated');
+    expect(n.estimatedStock).toBe(0);
+    expect(n.low).toBe(0);
+  });
+});

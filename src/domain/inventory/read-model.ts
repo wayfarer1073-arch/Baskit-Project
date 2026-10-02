@@ -54,4 +54,6 @@ export interface InventoryRow {
   reorder?: import('@/domain/reorder/reorder').ReorderSuggestion | null;
   /** 최근 30일 회전율 = 30일 소진량 ÷ 평균 재고. */
   turnover30?: { ratio: number | null; depletion: number; averageStock: number } | null;
+  /** 기준일 재고 자료가 아직 없을 때 직전 자료로 추정한 오늘 재고(자료가 최신이면 없음). */
+  nowcast?: import('./nowcast').Nowcast | null;
 }

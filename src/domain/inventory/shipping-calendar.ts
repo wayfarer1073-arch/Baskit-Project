@@ -1,4 +1,7 @@
-import { addDays, format, parseISO } from 'date-fns';
+const DAY_MS = 86_400_000;
+/** 'YYYY-MM-DD' → UTC 자정 시각. 날짜 문자열만 다루므로 시간대와 무관하다(date-fns 파싱보다 훨씬 빠르다 — 품목마다 수천 번 부른다). */
+const utcOf = (date: string) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+const weekdayOf = (date: string) => new Date(utcOf(date)).getUTCDay();
 
 /**
  * 쉬는 날 목록(등록 휴무일). workedDays는 주말·휴무일인데도 실제로 재고 자료가 올라온 날 — 그날은 일한 날로
@@ -15,11 +18,11 @@ export function closedDays(holidays: Iterable<string>, workedDays: Iterable<stri
   return set;
 }
 export function shiftDate(date: string, days: number): string {
-  return format(addDays(parseISO(date), days), 'yyyy-MM-dd');
+  return new Date(utcOf(date) + days * DAY_MS).toISOString().slice(0, 10);
 }
 export function isShippingDay(date: string, holidays: ClosedDays = NO_HOLIDAYS): boolean {
   if (holidays.workedDays?.has(date)) return true;
-  const day = parseISO(date).getDay();
+  const day = weekdayOf(date);
   return day !== 0 && day !== 6 && !holidays.has(date);
 }
 /** Close-of-day snapshots: count shipping days in (previous observation, current observation]. */
@@ -54,7 +57,7 @@ export function shippingDateAfter(from: string, days: number, holidays: Readonly
  */
 export function isDemandDay(date: string, holidays: ClosedDays = NO_HOLIDAYS): boolean {
   if (holidays.workedDays?.has(date)) return true;
-  const day = parseISO(date).getDay();
+  const day = weekdayOf(date);
   return day !== 0 && day !== 6;
 }
 /** (from, to] 구간의 수요일 수 = 출고일 + 평일에 걸친 등록 휴무일 (+ 자료가 올라온 주말). */

@@ -1,10 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import { ActionCenter } from '@/components/dashboard/action-center';
 import { TodayActions } from '@/components/dashboard/today-actions';
 import { buildTodayActions } from '@/domain/inventory/today-actions';
@@ -23,6 +20,7 @@ import type { RiskThresholdSettings } from '@/domain/inventory/types';
 import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { QuickFilter, TableTab } from '@/lib/inventory-filters';
 import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
+import { StaleDataBanner } from '@/components/dashboard/stale-data-banner';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { cn } from '@/lib/utils';
 import { MergedInventoryTable } from '@/components/inventory-table/merged-inventory-table';
@@ -131,7 +129,10 @@ export function DashboardClient({
 
   return (
     <div className="space-y-9">
-      {masthead}
+      <div className="space-y-4">
+        {masthead}
+        <StaleDataBanner rows={rows} asOfDate={asOfDate} />
+      </div>
       <TodayActions actions={todayActions} onSelect={setSelectedSkuId} />
       <KpiCards kpis={kpis} fromDate={fromDate} asOfDate={asOfDate} onOpenSoldOutList={() => setSoldOutPanelOpen(true)} />
       <OperatingSummary rows={rows} />
