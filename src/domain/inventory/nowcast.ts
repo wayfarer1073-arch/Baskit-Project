@@ -1,6 +1,5 @@
-import { parseISO } from 'date-fns';
 import { buildDailyDeltas } from './calculations';
-import { demandDaysBetween, isDemandDay, latestShippingDay, NO_HOLIDAYS, shiftDate, type ClosedDays } from './shipping-calendar';
+import { daysBetween, demandDaysBetween, isDemandDay, latestShippingDay, NO_HOLIDAYS, shiftDate, weekdayOf, type ClosedDays } from './shipping-calendar';
 import type { SkuAnalysis, StockObservation } from './types';
 
 /**
@@ -88,7 +87,7 @@ export function demandDaySeries(sorted: StockObservation[], holidays: ClosedDays
     for (let day = shiftDate(d.fromDate, 1); day <= d.toDate; day = shiftDate(day, 1)) if (isDemandDay(day, holidays)) days.push(day);
     if (days.length === 0) continue;
     const value = d.increase > 0 ? null : d.depletion / days.length;
-    for (const date of days) series.push({ date, weekday: parseISO(date).getDay(), value });
+    for (const date of days) series.push({ date, weekday: weekdayOf(date), value });
   }
   return series.slice(-maxDays);
 }
@@ -232,7 +231,6 @@ export interface NowcastInput {
   preGapAnalysis: SkuAnalysis;
 }
 
-const daysApart = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
 export function nowcastStock(input: NowcastInput): Nowcast {
   const holidays = input.holidays ?? NO_HOLIDAYS;
@@ -243,7 +241,7 @@ export function nowcastStock(input: NowcastInput): Nowcast {
     status: 'unavailable',
     lastObservedDate: latest.date,
     lastObservedStock: latest.normalStock,
-    elapsedDays: daysApart(latest.date, input.asOfDate),
+    elapsedDays: daysBetween(latest.date, input.asOfDate),
     horizonDays,
     estimatedStock: null,
     low: null,
@@ -275,7 +273,7 @@ export function nowcastStock(input: NowcastInput): Nowcast {
 
   const futureWeekdays: number[] = [];
   for (let day = shiftDate(latest.date, 1); futureWeekdays.length < horizonDays; day = shiftDate(day, 1)) {
-    if (isDemandDay(day, holidays)) futureWeekdays.push(parseISO(day).getDay());
+    if (isDemandDay(day, holidays)) futureWeekdays.push(weekdayOf(day));
   }
   const predicted = forecast(best.spec, series, futureWeekdays) ?? [];
   const expectedDepletion = predicted.reduce((s, v) => s + v, 0);

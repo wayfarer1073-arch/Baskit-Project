@@ -1,6 +1,5 @@
-import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { daysBetween, demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
 import { analyzeSku, buildDailyDeltas, calculateCoverage, calculateThresholdRisk, resolveEffectiveThresholds } from './calculations';
-import { demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDate, shippingDateAfter, shippingDaysBetween } from './shipping-calendar';
 import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalysis, StockObservation, WindowDepletion } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
 import { assessReliability } from '@/domain/reliability/reliability';
@@ -180,7 +179,7 @@ export function analyzeOperationalSku(
       : null;
   const expirationDate = expiry?.expirationDate ?? null;
   const riskDays = expiry?.expirationRiskDays ?? DEFAULT_EXPIRATION_RISK_DAYS;
-  const daysUntilExpiration = expirationDate ? differenceInCalendarDays(parseISO(expirationDate), parseISO(asOfDate)) : null;
+  const daysUntilExpiration = expirationDate ? daysBetween(asOfDate, expirationDate) : null;
   const riskDate = expirationDate ? shiftDate(expirationDate, -riskDays) : null;
   // Expiration is a calendar date, never compare it directly with shipping-day coverage.
   // Lot quantities are unknown: flag a date to inspect, not a quantity expected to expire.

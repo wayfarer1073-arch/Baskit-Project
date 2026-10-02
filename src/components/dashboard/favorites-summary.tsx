@@ -9,6 +9,8 @@ import { InventoryTableRow, InventoryTableStaticHeader } from '@/components/inve
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import type { RiskLevel } from '@/domain/inventory/types';
 import { useI18n } from '@/components/i18n/i18n-provider';
+import type { StockView } from '@/components/inventory-table/nowcast-stock';
+import { StockViewSwitch } from '@/components/inventory-table/stock-view-switch';
 import { format } from '@/lib/i18n/locales';
 
 
@@ -19,9 +21,12 @@ interface FavoritesSummaryProps {
   rows: InventoryRow[];
   onSelectSku: (skuId: string) => void;
   fromDate: string | null;
+  stockView?: StockView;
+  onStockViewChange?: (view: StockView) => void;
+  stockViewDisabled?: boolean;
 }
 
-export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSummaryProps) {
+export function FavoritesSummary({ rows, onSelectSku, fromDate, stockView = 'estimate', onStockViewChange, stockViewDisabled = true }: FavoritesSummaryProps) {
   const { m } = useI18n();
   const t = m.dashboard.favorites;
   const [page, setPage] = useState(1);
@@ -36,10 +41,15 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
 
   return (
     <section className="overflow-hidden rounded-xl border border-border">
-      <div className="flex items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
+      <div className="flex flex-wrap items-center gap-1.5 bg-sidebar px-5 py-3.5 text-sidebar-foreground">
         <Star className="size-4 fill-brand-accent text-brand-accent" aria-hidden="true" />
         <h2 className="text-base font-semibold">{t.title}</h2>
         <span className="text-xs text-sidebar-muted-foreground">{format(m.dashboard.unit, { count: rows.length })}</span>
+        {onStockViewChange && rows.length > 0 && (
+          <div className="ml-auto">
+            <StockViewSwitch view={stockView} onChange={onStockViewChange} disabled={stockViewDisabled} />
+          </div>
+        )}
       </div>
       <div className="space-y-3 p-4 sm:p-5">
       {rows.length === 0 ? (
@@ -53,7 +63,7 @@ export function FavoritesSummary({ rows, onSelectSku, fromDate }: FavoritesSumma
               </TableHeader>
               <TableBody>
                 {pageRows.map((r) => (
-                  <InventoryTableRow key={r.descriptor.skuId} row={r} fromDate={fromDate} onSelectSku={onSelectSku} />
+                  <InventoryTableRow key={r.descriptor.skuId} row={r} fromDate={fromDate} onSelectSku={onSelectSku} stockView={stockView} />
                 ))}
               </TableBody>
             </Table>

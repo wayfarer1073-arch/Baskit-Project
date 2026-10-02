@@ -1,5 +1,6 @@
 'use client';
 
+import { NowcastStock } from '@/components/inventory-table/nowcast-stock';
 import { useMemo, useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -98,7 +99,7 @@ export function SpecialStockSummary({ rows, schedules, asOfDate, onSelectSku }: 
                           </p>
                         </TableCell>
                         <TableCell className={cn('max-w-64 text-xs whitespace-normal', !d.specialNote && 'text-muted-foreground')}>{d.specialNote || t.noNote}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(r.analysis.latest.normalStock)}</TableCell>
+                        <TableCell className="text-right tabular-nums"><NowcastStock nowcast={r.nowcast} fallback={formatNumber(r.analysis.latest.normalStock)} /></TableCell>
                         <TableCell className="text-right tabular-nums">{formatNumber(r.analysis.window7.totalDepletion)}</TableCell>
                         <TableCell className="text-xs">
                           {expiration.expirationDate ? (

@@ -42,7 +42,7 @@ export function StaleDataBanner({ rows, asOfDate }: { rows: InventoryRow[]; asOf
     let estimated = 0;
     let unavailable = 0;
     for (const r of rows) {
-      if (!r.nowcast || r.descriptor.isSoldOut) continue;
+      if (!r.nowcast || r.descriptor.isSoldOut || r.nowcast.reason === 'special') continue;
       if (r.nowcast.status === 'estimated') estimated++;
       else unavailable++;
     }

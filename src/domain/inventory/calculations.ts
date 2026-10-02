@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import type {
   AccelerationTrend,
   CoverageAssessment,
@@ -21,6 +21,7 @@ import type {
   WindowDepletion,
 } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
+import { daysBetween, shiftDate } from './shipping-calendar';
 
 /**
  * 이 모듈은 "재고 Snapshot"만으로 계산 가능한 지표만 다룬다.
@@ -54,7 +55,7 @@ export function buildDailyDeltas(sortedObservations: StockObservation[]): DailyD
   for (let i = 1; i < sortedObservations.length; i++) {
     const prev = sortedObservations[i - 1];
     const curr = sortedObservations[i];
-    const intervalDays = differenceInCalendarDays(toDate(curr.date), toDate(prev.date));
+    const intervalDays = daysBetween(prev.date, curr.date);
     if (intervalDays <= 0) continue; // 동일 날짜 중복 등 방어
     deltas.push({
       fromDate: prev.date,
@@ -112,14 +113,11 @@ export function calculateWindowDepletion(
   asOfDate: string,
   windowDays: number,
 ): WindowDepletion {
-  const windowStart = addDays(toDate(asOfDate), -windowDays);
-  const relevant = deltas.filter((d) => {
-    const fromD = toDate(d.fromDate);
-    const toD = toDate(d.toDate);
-    // delta의 끝(toDate)뿐 아니라 시작(fromDate)도 window 안에 있어야 한다. 그렇지 않으면
-    // window보다 훨씬 긴 간격(예: 30일)의 delta가 통째로 "최근 N일" 수치에 섞여 들어간다.
-    return fromD >= windowStart && toD > windowStart && toD <= toDate(asOfDate);
-  });
+  // 'YYYY-MM-DD' 문자열은 사전순 비교가 날짜순과 같다.
+  const windowStart = shiftDate(asOfDate, -windowDays);
+  // delta의 끝(toDate)뿐 아니라 시작(fromDate)도 window 안에 있어야 한다. 그렇지 않으면
+  // window보다 훨씬 긴 간격(예: 30일)의 delta가 통째로 "최근 N일" 수치에 섞여 들어간다.
+  const relevant = deltas.filter((d) => d.fromDate >= windowStart && d.toDate > windowStart && d.toDate <= asOfDate);
   const totalDepletion = relevant.reduce((sum, d) => sum + d.depletion, 0);
   const totalInboundQuantity = relevant.reduce((sum, d) => sum + d.inboundQuantity, 0);
   const observedIntervalDays = relevant.reduce((sum, d) => sum + d.intervalDays, 0);
@@ -150,8 +148,8 @@ export function calculateDataMaturity(sortedObservations: StockObservation[], as
   // "N일치 데이터가 있다"는 실제 관측 구간(첫 관측~마지막 관측)의 길이로 판단해야 한다.
   // asOfDate를 기준으로 하면, 마지막 업로드 이후 새 관측 없이 조회일만 흘러가도 관측이 계속
   // 쌓이고 있는 것처럼 잘못 판정된다(예: 1/1·1/2 두 건만 있는데 2/1에 조회하면 31일치로 오판).
-  const observedSpanDays = differenceInCalendarDays(toDate(last), toDate(first));
-  const daysSinceFirstObservation = differenceInCalendarDays(toDate(asOfDate), toDate(first));
+  const observedSpanDays = daysBetween(first, last);
+  const daysSinceFirstObservation = daysBetween(first, asOfDate);
   return {
     firstObservedDate: first,
     lastObservedDate: last,
@@ -249,7 +247,7 @@ export function calculateAcceleration(maturity: DataMaturity, deltas: DailyDelta
     return { recent7AvgDepletion: null, previous7AvgDepletion: null, accelerationRatePercent: null, trend: null };
   }
   const recent7 = calculateWindowDepletion(deltas, asOfDate, 7);
-  const eightDaysAgo = format(addDays(toDate(asOfDate), -7), 'yyyy-MM-dd');
+  const eightDaysAgo = shiftDate(asOfDate, -7);
   const previous7 = calculateWindowDepletion(deltas, eightDaysAgo, 7);
 
   if (recent7.observedIntervalDays < 7 || previous7.observedIntervalDays < 7) {
@@ -340,7 +338,7 @@ export function calculateStagnation(
   }
   const anchorDate = lastDepletionDate ?? sortedObservations[0].date;
   const lastObservedDate = sortedObservations[sortedObservations.length - 1].date;
-  const stagnantDays = differenceInCalendarDays(toDate(lastObservedDate < asOfDate ? lastObservedDate : asOfDate), toDate(anchorDate));
+  const stagnantDays = daysBetween(anchorDate, lastObservedDate < asOfDate ? lastObservedDate : asOfDate);
   return { lastDepletionDate, stagnantDays, isMeaningful: maturity.hasThirtyDayData };
 }
 
@@ -379,7 +377,7 @@ export function calculateExpirationRisk(
     return { expirationDate: null, riskDays: null, daysUntilExpiration: null, daysUntilRiskDate: null, isAtRisk: false };
   }
   const effectiveRiskDays = riskDays ?? DEFAULT_EXPIRATION_RISK_DAYS;
-  const daysUntilExpiration = differenceInCalendarDays(toDate(expirationDate), toDate(asOfDate));
+  const daysUntilExpiration = daysBetween(asOfDate, expirationDate);
   const daysUntilRiskDate = daysUntilExpiration - effectiveRiskDays;
   const isAtRisk = currentStock !== undefined && currentStock <= 0 ? false
     : (currentStock !== undefined && currentStock > 0 && daysUntilRiskDate <= 0)
@@ -429,7 +427,7 @@ export function analyzeSku(
   const expirationRisk = calculateExpirationRisk(
     expirationConfig?.expirationDate ?? null,
     expirationConfig?.expirationRiskDays ?? null,
-    coverage.coverageDays === null ? null : Math.max(0, coverage.coverageDays - differenceInCalendarDays(toDate(asOfDate), toDate(latest.date))),
+    coverage.coverageDays === null ? null : Math.max(0, coverage.coverageDays - daysBetween(latest.date, asOfDate)),
     asOfDate,
     latest.normalStock,
   );

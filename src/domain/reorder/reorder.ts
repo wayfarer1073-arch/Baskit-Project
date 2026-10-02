@@ -1,5 +1,4 @@
-import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
-import { isDemandDay, latestShippingDay, NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
+import { daysBetween, isDemandDay, latestShippingDay, NO_HOLIDAYS, shiftDate, type ClosedDays } from '@/domain/inventory/shipping-calendar';
 
 /**
  * 권장 발주일·발주량.
@@ -82,7 +81,6 @@ export interface ReorderSuggestion {
   policy: ReorderPolicy;
 }
 
-const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
 const SOON_DAYS = 7;
 const HORIZON_DAYS = 730;
 
@@ -109,40 +107,40 @@ export function suggestReorder(input: {
   const { rate, policy } = input;
   if (rate === null || !(rate > 0)) return null;
   const calendar = input.calendar ?? NO_HOLIDAYS;
-  const start = parseISO(input.observedDate);
+  const start = input.observedDate;
   // (관측일, 관측일 + k] 의 수요일 수를 한 번씩만 센다 — 후보일마다 달력을 처음부터 다시 세면 품목 수백 개에서 수십 초가 걸린다.
   const cumulative = [0];
   const demandDaysUntil = (date: string) => {
-    const k = differenceInCalendarDays(parseISO(date), start);
+    const k = daysBetween(start, date);
     if (k <= 0) return 0;
-    for (let offset = cumulative.length; offset <= k; offset++) cumulative.push(cumulative[offset - 1] + (isDemandDay(ymd(addDays(start, offset)), calendar) ? 1 : 0));
+    for (let offset = cumulative.length; offset <= k; offset++) cumulative.push(cumulative[offset - 1] + (isDemandDay(shiftDate(start, offset), calendar) ? 1 : 0));
     return cumulative[k];
   };
   const stockAt = (date: string) => input.stock - rate * demandDaysUntil(date);
   const safetyStock = rate * policy.safetyDays;
-  const arrivalOf = (d: Date) => ymd(addDays(d, policy.leadTimeDays));
+  const arrivalOf = (d: string) => shiftDate(d, policy.leadTimeDays);
 
   // 이 날 발주하면 도착 때 재고가 안전재고 아래로 떨어지는 첫 날 = 늦어도 이날 발주해야 한다.
   let orderDate: string | null = null;
   for (let i = 0; i <= HORIZON_DAYS; i++) {
-    const d = addDays(start, i);
+    const d = shiftDate(start, i);
     if (stockAt(arrivalOf(d)) <= safetyStock) {
       // 주말·휴무일에는 발주하지 않으므로 그 전 영업일로 당긴다.
-      orderDate = latestShippingDay(ymd(d), calendar);
+      orderDate = latestShippingDay(d, calendar);
       break;
     }
   }
 
   // 발주량은 '지금(기준일) 또는 권장 발주일 중 늦은 날'에 발주한다고 보고 계산한다.
   const orderOn = orderDate && orderDate > input.asOfDate ? orderDate : input.asOfDate;
-  const arrivalDate = arrivalOf(parseISO(orderOn));
+  const arrivalDate = arrivalOf(orderOn);
   const stockAtArrival = Math.max(0, stockAt(arrivalDate));
   const quantity = orderDate ? roundOrder(rate * (policy.targetDays + policy.safetyDays) - stockAtArrival, policy) : 0;
 
   let status: ReorderStatus;
   if (!orderDate) status = 'not_needed';
   else {
-    const days = differenceInCalendarDays(parseISO(orderDate), parseISO(input.asOfDate));
+    const days = daysBetween(input.asOfDate, orderDate);
     status = days < 0 ? 'overdue' : days === 0 ? 'today' : days <= SOON_DAYS ? 'soon' : 'later';
   }
   return { orderDate, status, arrivalDate: orderDate ? arrivalDate : null, quantity, stockAtArrival: Math.round(stockAtArrival), policy };

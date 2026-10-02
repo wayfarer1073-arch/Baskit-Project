@@ -40,10 +40,42 @@ function UnavailableTip({ nowcast }: { nowcast: Nowcast }) {
   );
 }
 
-/** 재고 표의 정상재고 칸 — 추정치면 붉은 느낌표, 추정할 수 없으면 마지막 실제 값 + '예측 불가'. */
-export function NowcastStock({ nowcast, fallback }: { nowcast: Nowcast | null | undefined; fallback: string }) {
+/** 직전 재고 툴팁 — 언제 값인지, 특수 관리 품목이면 추정하지 않는 이유. */
+function LastTip({ nowcast }: { nowcast: Nowcast }) {
+  const t = useI18n().m.dashboard.nowcast;
+  return (
+    <div className="space-y-1">
+      <div className="font-semibold">{t.lastTipTitle}</div>
+      <p>{format(t.lastTipBody, { date: nowcast.lastObservedDate, days: nowcast.elapsedDays })}</p>
+      {nowcast.reason === 'special' && <p className="opacity-75">{t.specialNote}</p>}
+    </div>
+  );
+}
+
+/** 재고를 직전 값으로 볼지, 오늘 추정치로 볼지(일일 대시보드의 전체 재고 표·즐겨찾기 슬라이드). */
+export type StockView = 'estimate' | 'last';
+
+/**
+ * 재고 표의 정상재고 칸.
+ * - 자료가 최신이면 실제 값 그대로.
+ * - 특수 관리 품목은 추정하지 않고 직전 재고 + 붉은 느낌표.
+ * - '예측치' 보기: 추정치 + 붉은 느낌표, 추정할 수 없으면 직전 값 + '예측 불가'.
+ * - '직전 재고' 보기: 직전 값 그대로.
+ */
+export function NowcastStock({ nowcast, fallback, view = 'estimate' }: { nowcast: Nowcast | null | undefined; fallback: string; view?: StockView }) {
   const t = useI18n().m.dashboard.nowcast;
   if (!nowcast) return <>{fallback}</>;
+  if (nowcast.reason === 'special') {
+    return (
+      <span className="inline-flex items-center justify-end gap-1">
+        <span>{fallback}</span>
+        <InfoTooltip tone="alert" label={t.lastAria}>
+          <LastTip nowcast={nowcast} />
+        </InfoTooltip>
+      </span>
+    );
+  }
+  if (view === 'last') return <>{fallback}</>;
   if (nowcast.status === 'estimated') {
     return (
       <span className="inline-flex items-center justify-end gap-1">
@@ -70,6 +102,25 @@ export function NowcastStock({ nowcast, fallback }: { nowcast: Nowcast | null | 
 /** SKU 상세 상단의 오늘 재고 추정 줄. */
 export function NowcastDetail({ nowcast }: { nowcast: Nowcast }) {
   const t = useI18n().m.dashboard.nowcast;
+  if (nowcast.reason === 'special') {
+    return (
+      <div className="flex items-start justify-between gap-3 rounded-xl border bg-card p-3">
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground">{t.detailSpecialTitle}</div>
+          <div className="mt-1 flex items-center gap-1.5 text-base font-semibold tracking-tight tabular-nums">
+            <span>{formatNumber(nowcast.lastObservedStock)}</span>
+            <InfoTooltip tone="alert" label={t.lastAria}>
+              <LastTip nowcast={nowcast} />
+            </InfoTooltip>
+          </div>
+        </div>
+        <div className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">
+          {nowcast.lastObservedDate}
+          <div>{format(t.daysAgo, { days: nowcast.elapsedDays })}</div>
+        </div>
+      </div>
+    );
+  }
   const estimated = nowcast.status === 'estimated';
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border bg-card p-3">

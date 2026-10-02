@@ -15,6 +15,7 @@ import type { SkuDescriptor } from '@/domain/inventory/read-model';
 import type { InventoryRow } from '@/domain/inventory/read-model';
 import { basisRate } from '@/domain/inventory/merge';
 import { nowcastStock } from '@/domain/inventory/nowcast';
+import { dataRevision, lastWriteAt } from '@/lib/data-revision';
 
 
 /** 최근 30일 회전율 — 관측이 5회 미만이면 믿기 어려워 계산하지 않는다. */
@@ -74,6 +75,17 @@ function reorderFor(ctx: ReorderContext, descriptor: SkuDescriptor, analysis: Sk
   return suggestReorder({ stock: analysis.latest.normalStock, rate: basisRate(analysis), observedDate: analysis.latest.date, asOfDate: ctx.asOfDate, policy, calendar });
 }
 
+/**
+ * 대시보드를 열 때마다 품목 수백 개를 처음부터 다시 분석하지 않도록, 같은 조건의 결과를 DB 쓰기가 없는 동안 재사용한다.
+ * 업로드·설정 변경 등 어떤 쓰기든 일어나면 리비전이 바뀌어 다음 요청에서 새로 계산한다. 쓰기 직후 몇 초는
+ * 트랜잭션이 아직 커밋되지 않았을 수 있어 결과를 저장하지 않는다. 서버 프로세스 하나의 메모리 캐시다.
+ */
+const ROWS_CACHE_LIMIT = 6;
+const WRITE_SETTLE_MS = 5_000;
+/** 앱을 거치지 않은 DB 변경(직접 SQL 등)도 오래 남지 않도록 10분이 지나면 새로 계산한다. */
+const ROWS_CACHE_TTL_MS = 10 * 60_000;
+const rowsCache = new Map<string, { revision: number; at: number; rows: InventoryRow[] }>();
+
 export async function getInventoryRows(options: {
   orgId: string;
   warehouseId?: string;
@@ -81,7 +93,30 @@ export async function getInventoryRows(options: {
   compareFromDate?: string;
   settings?: RiskThresholdSettings;
 }): Promise<InventoryRow[]> {
+  const revision = dataRevision();
+  const startedAt = Date.now();
   const settings = options.settings ?? (await getSettings(options.orgId));
+  const key = JSON.stringify([options.orgId, options.warehouseId ?? null, options.asOfDate, options.compareFromDate ?? null, settings]);
+  const cached = rowsCache.get(key);
+  if (cached && cached.revision === revision && startedAt - cached.at < ROWS_CACHE_TTL_MS) {
+    // 최근에 쓴 항목을 맨 뒤로(가장 오래 안 쓴 것부터 버린다).
+    rowsCache.delete(key);
+    rowsCache.set(key, cached);
+    return cached.rows;
+  }
+  const rows = await computeInventoryRows(options, settings);
+  if (dataRevision() === revision && startedAt - lastWriteAt() > WRITE_SETTLE_MS) {
+    rowsCache.delete(key);
+    rowsCache.set(key, { revision, at: startedAt, rows });
+    if (rowsCache.size > ROWS_CACHE_LIMIT) rowsCache.delete(rowsCache.keys().next().value!);
+  }
+  return rows;
+}
+
+async function computeInventoryRows(
+  options: { orgId: string; warehouseId?: string; asOfDate: string; compareFromDate?: string },
+  settings: RiskThresholdSettings,
+): Promise<InventoryRow[]> {
   const [{ calendarFor }, reorderCtx] = await Promise.all([loadWarehouseCalendars(options.orgId), loadReorderContext(options.orgId, options.asOfDate)]);
   const skusWithSeries = await loadActiveSkusWithSeries(options.orgId, options.warehouseId, options.asOfDate, calendarFor);
 

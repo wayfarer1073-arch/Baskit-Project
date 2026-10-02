@@ -21,6 +21,8 @@ import type { DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { QuickFilter, TableTab } from '@/lib/inventory-filters';
 import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
 import { StaleDataBanner } from '@/components/dashboard/stale-data-banner';
+import type { StockView } from '@/components/inventory-table/nowcast-stock';
+import { usePersistedFlag } from '@/lib/use-persisted-flag';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { cn } from '@/lib/utils';
 import { MergedInventoryTable } from '@/components/inventory-table/merged-inventory-table';
@@ -79,6 +81,12 @@ export function DashboardClient({
   const tableRows = useMemo(() => rows.filter((r) => !favorites.has(r.descriptor.skuId)), [rows, favorites]);
   const specialRows = useMemo(() => rows.filter((r) => r.descriptor.isB2B), [rows]);
   const soldOutRows = useMemo(() => rows.filter((r) => r.descriptor.isSoldOut), [rows]);
+  // 직전 재고 ↔ 예측치 슬라이드(표·즐겨찾기 각각 기억). 오늘 재고가 다 올라와 추정할 품목이 없으면 비활성.
+  const stockViewDisabled = useMemo(() => !rows.some((r) => r.nowcast && r.nowcast.reason !== 'special' && !r.descriptor.isSoldOut), [rows]);
+  const [tableEstimate, setTableEstimate] = usePersistedFlag('limenote_stock_view_table_estimate', true);
+  const [favoritesEstimate, setFavoritesEstimate] = usePersistedFlag('limenote_stock_view_favorites_estimate', true);
+  const tableView: StockView = tableEstimate ? 'estimate' : 'last';
+  const favoritesView: StockView = favoritesEstimate ? 'estimate' : 'last';
 
   async function toggleFavorite(skuId: string, next: boolean) {
     setFavorites((prev) => {
@@ -147,7 +155,14 @@ export function DashboardClient({
         fromDate={fromDate}
         asOfDate={asOfDate}
       />
-      <FavoritesSummary rows={favoriteRows} onSelectSku={setSelectedSkuId} fromDate={fromDate} />
+      <FavoritesSummary
+        rows={favoriteRows}
+        onSelectSku={setSelectedSkuId}
+        fromDate={fromDate}
+        stockView={favoritesView}
+        onStockViewChange={(view) => setFavoritesEstimate(view === 'estimate')}
+        stockViewDisabled={stockViewDisabled}
+      />
       <SpecialStockSummary rows={specialRows} schedules={specialSchedules} asOfDate={asOfDate} onSelectSku={setSelectedSkuId} />
       <div id="inventory-table-section" className="space-y-3">
         {warehouses.length > 1 && (
@@ -186,6 +201,9 @@ export function DashboardClient({
             onSelectSku={setSelectedSkuId}
             asOfDate={asOfDate}
             fromDate={fromDate}
+            stockView={tableView}
+            onStockViewChange={(view) => setTableEstimate(view === 'estimate')}
+            stockViewDisabled={stockViewDisabled}
           />
         )}
       </div>

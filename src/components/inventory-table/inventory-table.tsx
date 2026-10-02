@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { NowcastStock } from '@/components/inventory-table/nowcast-stock';
+import { NowcastStock, type StockView } from '@/components/inventory-table/nowcast-stock';
+import { StockViewSwitch } from '@/components/inventory-table/stock-view-switch';
 import { ArrowDown, ArrowUp, ArrowUpDown, ClipboardList, Columns3, Download, FileSpreadsheet, PackageX, Search, X } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -35,6 +36,10 @@ interface InventoryTableProps {
   onSelectSku: (skuId: string) => void;
   asOfDate: string;
   fromDate: string | null;
+  /** 정상재고 칸을 직전 재고로 볼지 예측치로 볼지. 오늘 재고가 올라와 있으면 stockViewDisabled. */
+  stockView?: StockView;
+  onStockViewChange?: (view: StockView) => void;
+  stockViewDisabled?: boolean;
 }
 
 type SortKey =
@@ -122,6 +127,9 @@ export function InventoryTable({
   onSelectSku,
   asOfDate,
   fromDate,
+  stockView = 'estimate',
+  onStockViewChange,
+  stockViewDisabled = true,
 }: InventoryTableProps) {
   const { m } = useI18n();
   const t = m.inventory;
@@ -215,6 +223,7 @@ export function InventoryTable({
           <InfoTooltip tone="header">{t.subtitle}</InfoTooltip>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {onStockViewChange && <StockViewSwitch view={stockView} onChange={onStockViewChange} disabled={stockViewDisabled} />}
           <span className="text-xs text-sidebar-muted-foreground">{format(t.count, { count: sorted.length.toLocaleString() })}</span>
           <Button variant="outline" size="sm" className="text-foreground hover:text-brand-accent" onClick={downloadCurrentView}>
             <Download className="size-3.5" /> {t.downloadView}
@@ -447,7 +456,7 @@ export function InventoryTable({
               </TableRow>
             )}
             {pageRows.map((r) => (
-              <InventoryTableRow key={r.descriptor.skuId} row={r} fromDate={fromDate} onSelectSku={onSelectSku} hiddenColumns={hiddenColumns} />
+              <InventoryTableRow key={r.descriptor.skuId} row={r} fromDate={fromDate} onSelectSku={onSelectSku} hiddenColumns={hiddenColumns} stockView={stockView} />
             ))}
           </TableBody>
         </Table>
@@ -555,11 +564,13 @@ export function InventoryTableRow({
   fromDate,
   onSelectSku,
   hiddenColumns,
+  stockView = 'estimate',
 }: {
   row: InventoryRow;
   fromDate: string | null;
   onSelectSku: (skuId: string) => void;
   hiddenColumns?: ReadonlySet<ColumnKey>;
+  stockView?: StockView;
 }) {
   const isVisible = (key: ColumnKey) => !hiddenColumns?.has(key);
   const { m, locale } = useI18n();
@@ -641,7 +652,7 @@ export function InventoryTableRow({
       )}
       {isVisible('warehouse') && <TableCell className="px-2 py-1.5">{r.descriptor.warehouseCode}</TableCell>}
       {isVisible('normalStock') && (
-        <TableCell className="px-2 py-1.5 text-right tabular-nums">{r.descriptor.isSoldOut ? '0' : <NowcastStock nowcast={r.nowcast} fallback={formatNumber(r.analysis.latest.normalStock)} />}</TableCell>
+        <TableCell className="px-2 py-1.5 text-right tabular-nums">{r.descriptor.isSoldOut ? '0' : <NowcastStock nowcast={r.nowcast} fallback={formatNumber(r.analysis.latest.normalStock)} view={stockView} />}</TableCell>
       )}
       {isVisible('netChange') && (
         <TableCell className="px-2 py-1.5 text-right tabular-nums">

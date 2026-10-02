@@ -1,7 +1,18 @@
 const DAY_MS = 86_400_000;
 /** 'YYYY-MM-DD' → UTC 자정 시각. 날짜 문자열만 다루므로 시간대와 무관하다(date-fns 파싱보다 훨씬 빠르다 — 품목마다 수천 번 부른다). */
 const utcOf = (date: string) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
-const weekdayOf = (date: string) => new Date(utcOf(date)).getUTCDay();
+// 대시보드 한 번에 품목 수백 개 × 수십 일을 하루씩 넘기며 세므로 '다음 날'과 요일을 기억해 둔다(날짜 종류는 많지 않다).
+const CACHE_LIMIT = 50_000;
+const weekdayCache = new Map<string, number>();
+const nextDayCache = new Map<string, string>();
+function remember<V>(cache: Map<string, V>, key: string, value: V): V {
+  if (cache.size >= CACHE_LIMIT) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+export const weekdayOf = (date: string) => weekdayCache.get(date) ?? remember(weekdayCache, date, new Date(utcOf(date)).getUTCDay());
+/** to − from (달력 일수). */
+export const daysBetween = (from: string, to: string) => Math.round((utcOf(to) - utcOf(from)) / DAY_MS);
 
 /**
  * 쉬는 날 목록(등록 휴무일). workedDays는 주말·휴무일인데도 실제로 재고 자료가 올라온 날 — 그날은 일한 날로
@@ -18,6 +29,7 @@ export function closedDays(holidays: Iterable<string>, workedDays: Iterable<stri
   return set;
 }
 export function shiftDate(date: string, days: number): string {
+  if (days === 1) return nextDayCache.get(date) ?? remember(nextDayCache, date, new Date(utcOf(date) + DAY_MS).toISOString().slice(0, 10));
   return new Date(utcOf(date) + days * DAY_MS).toISOString().slice(0, 10);
 }
 export function isShippingDay(date: string, holidays: ClosedDays = NO_HOLIDAYS): boolean {
