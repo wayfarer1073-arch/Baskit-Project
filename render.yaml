@@ -13,7 +13,8 @@ services:
   - type: web
     name: baskit-web
     runtime: node
-    plan: free
+    # 대시보드에서 올린 요금제(0.5 CPU · 512MB, 잠들지 않음)와 맞춘다. DB와 마찬가지로 요금제는 이 파일에서 바꾼다.
+    plan: starter
     # main에는 아직 초기 커밋만 있어, 실제 앱 코드가 있는 브랜치를 명시한다.
     branch: claude/intelligent-mayer-ilfo5t
     # NODE_ENV=production이어도 Tailwind/PostCSS/TypeScript 등 빌드 도구가 필요하다.
