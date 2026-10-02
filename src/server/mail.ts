@@ -19,6 +19,11 @@ export function isMailConfigured(): boolean {
  * 실패해도 호출한 요청을 깨뜨리지 않는다 — 가입·재설정 요청 자체는 성공하고, 메일은 다시 보내기로 복구한다.
  */
 export async function sendMail(message: MailMessage): Promise<boolean> {
+  if (!isMailConfigured() && process.env.NODE_ENV === 'production') {
+    // 운영에서 메일 서비스가 설정되지 않았으면 보낸 척하지 않는다 — 화면이 '보냈어요'라고 잘못 안내하지 않도록.
+    console.error('[mail] RESEND_API_KEY / MAIL_FROM 환경변수가 없어 메일을 보내지 못했습니다.');
+    return false;
+  }
   if (!isMailConfigured()) {
     outbox.push(message);
     if (outbox.length > 50) outbox.shift();
@@ -31,7 +36,8 @@ export async function sendMail(message: MailMessage): Promise<boolean> {
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: process.env.MAIL_FROM, to: [message.to], subject: message.subject, text: message.text }),
     });
-    if (!res.ok) console.error(`[mail] send failed: ${res.status}`);
+    // 실패 이유(도메인 미인증, 잘못된 보내는 주소 등)를 로그에 남긴다. 응답 본문에 비밀값은 없다.
+    if (!res.ok) console.error(`[mail] send failed: ${res.status} ${(await res.text().catch(() => '')).slice(0, 300)}`);
     return res.ok;
   } catch (e) {
     console.error('[mail] send failed', e);
@@ -39,9 +45,9 @@ export async function sendMail(message: MailMessage): Promise<boolean> {
   }
 }
 
-/** 메일 링크에 쓸 서비스 주소. APP_URL(권장) → AUTH_URL → 요청 주소 순. */
+/** 메일 링크에 쓸 서비스 주소. APP_URL(권장) → AUTH_URL → NEXTAUTH_URL → 요청 주소 순. */
 export function appUrl(request?: Request): string {
-  const configured = process.env.APP_URL ?? process.env.AUTH_URL;
+  const configured = process.env.APP_URL || process.env.AUTH_URL || process.env.NEXTAUTH_URL;
   if (configured) return configured.replace(/\/$/, '');
   if (request) return new URL(request.url).origin;
   return 'http://localhost:3000';

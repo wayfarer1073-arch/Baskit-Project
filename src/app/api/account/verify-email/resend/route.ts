@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   const user = await getAccountStatus(tenant.userId);
   if (!user) return NextResponse.json({ error: m.account.failed }, { status: 404 });
   if (user.emailVerifiedAt) return NextResponse.json({ ok: true, alreadyVerified: true });
-  await sendVerificationMail(m, appUrl(request), { id: tenant.userId, email: user.email, name: user.name });
+  const sent = await sendVerificationMail(m, appUrl(request), { id: tenant.userId, email: user.email, name: user.name });
+  if (!sent) return NextResponse.json({ error: m.account.mailFailed }, { status: 503 });
   return NextResponse.json({ ok: true });
 }

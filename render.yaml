@@ -42,3 +42,12 @@ services:
         sync: false
       - key: FILE_STORAGE_SECRET_ACCESS_KEY
         sync: false
+      # 가입 인증·비밀번호 재설정·팀 초대 메일(Resend). 없으면 메일이 나가지 않는다.
+      - key: RESEND_API_KEY
+        sync: false
+      # 보내는 주소 — Resend에서 인증한 도메인이어야 한다. 예: Limenote <no-reply@limenote.cc>
+      - key: MAIL_FROM
+        sync: false
+      # 메일 속 링크 주소
+      - key: APP_URL
+        value: https://limenote.cc
