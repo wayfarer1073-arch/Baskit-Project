@@ -23,7 +23,8 @@
     "db:seed-store": "tsx scripts/seed-store-mock.ts",
     "db:grant-platform-admin": "tsx scripts/grant-platform-admin.ts",
     "db:maintenance": "tsx scripts/db-maintenance.ts",
-    "db:move-files": "tsx scripts/move-upload-files-to-storage.ts"
+    "db:move-files": "tsx scripts/move-upload-files-to-storage.ts",
+    "db:import-legacy": "tsx scripts/import-legacy.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1143.0",

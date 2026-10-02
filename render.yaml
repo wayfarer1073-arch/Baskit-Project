@@ -18,7 +18,8 @@ services:
     branch: claude/intelligent-mayer-ilfo5t
     # NODE_ENV=production이어도 Tailwind/PostCSS/TypeScript 등 빌드 도구가 필요하다.
     buildCommand: npm ci --include=dev && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm run start
+    # 이전 사내용 앱 데이터 이관: LEGACY_* 환경변수가 있을 때만 동작하고, 이미 옮겼으면 건너뛴다. 실패해도 앱은 뜬다.
+    startCommand: npx prisma migrate deploy && (npm run db:import-legacy || true) && npm run start
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -51,3 +52,8 @@ services:
       # 메일 속 링크 주소
       - key: APP_URL
         value: https://limenote.cc
+      # 이전 사내용 앱(scm-inventory) 데이터 이관용 — 이관이 끝나면 지워도 된다.
+      - key: LEGACY_DATABASE_URL
+        sync: false
+      - key: LEGACY_IMPORT_TARGET_EMAIL
+        sync: false
