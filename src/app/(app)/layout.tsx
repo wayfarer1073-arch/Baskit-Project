@@ -10,6 +10,7 @@ import { getMessages } from '@/server/i18n';
 import { getSegmentContext } from '@/server/segments';
 import { getAccountStatus } from '@/server/repositories/account-repository';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
+import { mustVerifyEmail } from '@/server/email-verification';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { CALENDAR_HREF } from '@/lib/segments';
@@ -23,6 +24,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const m = await getMessages();
   const roleLabel = tenant.actingAs ? m.nav.roles.operator : tenant.role === 'ADMIN' ? m.nav.roles.admin : tenant.role === 'VIEWER' ? m.nav.roles.viewer : m.nav.roles.member;
   const [recentPosts, organization, account] = await Promise.all([listLatestPostPerTag(tenant.orgId), getOrganization(tenant.orgId), getAccountStatus(tenant.userId)]);
+  // 이메일 인증 전에는 앱 대신 인증 안내 화면으로 보낸다(운영자가 워크스페이스에 들어간 경우·운영자 계정은 제외).
+  if (!tenant.actingAs && !tenant.isPlatformAdmin && account && mustVerifyEmail(account)) redirect('/verify-required');
   const { enabled: enabledSegments, active: defaultSegment } = await getSegmentContext(tenant.orgId);
 
   return (

@@ -53,7 +53,7 @@ async function main() {
     ? await prisma.organization.findUniqueOrThrow({ where: { id: orgId } })
     : await prisma.organization.create({ data: { name: getArg('org') ?? '기본 워크스페이스' } });
   const user = await prisma.user.create({
-    data: { organizationId: organization.id, email, passwordHash, name, role: 'ADMIN' },
+    data: { organizationId: organization.id, email, passwordHash, name, role: 'ADMIN', emailVerifiedAt: new Date() },
   });
   console.log(`워크스페이스: ${organization.name} (${organization.id})`);
 
