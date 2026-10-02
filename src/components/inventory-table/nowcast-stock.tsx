@@ -12,7 +12,10 @@ function EstimateTip({ nowcast }: { nowcast: Nowcast }) {
   const method = nowcast.method === 'mean' ? format(t.method.mean, { n: nowcast.parameter ?? 0 }) : nowcast.method ? t.method[nowcast.method] : '';
   return (
     <div className="space-y-1">
-      <div className="font-semibold">{t.tipTitle}</div>
+      <div className="font-semibold">
+        {t.tipTitle}
+        {nowcast.grade && <span className="ml-1.5 font-normal opacity-75">{format(t.tipGrade, { grade: t.grade[nowcast.grade] })}</span>}
+      </div>
       <p>
         {format(t.tipBody, {
           date: nowcast.lastObservedDate,
@@ -22,7 +25,10 @@ function EstimateTip({ nowcast }: { nowcast: Nowcast }) {
         })}
       </p>
       <p>{format(t.tipRange, { low: formatNumber(nowcast.low ?? 0), high: formatNumber(nowcast.high ?? 0) })}</p>
-      {nowcast.backtest && <p>{format(t.tipAccuracy, { origins: nowcast.backtest.origins, error: (nowcast.backtest.wape * 100).toFixed(1), method })}</p>}
+      {nowcast.backtest && (
+        <p>{format(t.tipAccuracy, { horizon: nowcast.backtest.horizon, origins: nowcast.backtest.origins, error: (nowcast.backtest.wape * 100).toFixed(1), method })}</p>
+      )}
+      {nowcast.grade === 'LOW' && <p>{t.lowGradeNote}</p>}
       <p className="opacity-75">{t.tipBasis}</p>
       <p className="opacity-75">{t.tipInbound}</p>
     </div>
@@ -36,6 +42,17 @@ function UnavailableTip({ nowcast }: { nowcast: Nowcast }) {
     <div className="space-y-1">
       <p>{format(t.unavailableTip, { date: nowcast.lastObservedDate })}</p>
       <p>{reason}</p>
+    </div>
+  );
+}
+
+/** 최근 소진이 없어 직전 재고가 그대로라고 본 경우. */
+function FlatTip({ nowcast }: { nowcast: Nowcast }) {
+  const t = useI18n().m.dashboard.nowcast;
+  return (
+    <div className="space-y-1">
+      <div className="font-semibold">{t.flatTitle}</div>
+      <p>{format(t.flatBody, { date: nowcast.lastObservedDate, stock: formatNumber(nowcast.lastObservedStock) })}</p>
     </div>
   );
 }
@@ -59,7 +76,8 @@ export type StockView = 'estimate' | 'last';
  * 재고 표의 정상재고 칸.
  * - 자료가 최신이면 실제 값 그대로.
  * - 특수 관리 품목은 추정하지 않고 직전 재고 + 붉은 느낌표.
- * - '예측치' 보기: 추정치 + 붉은 느낌표, 추정할 수 없으면 직전 값 + '예측 불가'.
+ * - '예측치' 보기: 추정치 + 붉은 느낌표(추정 신뢰도 '하'면 '참고용'), 최근 소진이 없으면 직전 값 + 붉은 느낌표(변동 없음),
+ *   추정할 수 없으면 직전 값 + '예측 불가'.
  * - '직전 재고' 보기: 직전 값 그대로.
  */
 export function NowcastStock({ nowcast, fallback, view = 'estimate' }: { nowcast: Nowcast | null | undefined; fallback: string; view?: StockView }) {
@@ -76,13 +94,26 @@ export function NowcastStock({ nowcast, fallback, view = 'estimate' }: { nowcast
     );
   }
   if (view === 'last') return <>{fallback}</>;
-  if (nowcast.status === 'estimated') {
+  if (nowcast.status === 'flat') {
     return (
       <span className="inline-flex items-center justify-end gap-1">
-        <span>{formatNumber(nowcast.estimatedStock ?? 0)}</span>
+        <span>{fallback}</span>
         <InfoTooltip tone="alert" label={t.estimateAria}>
-          <EstimateTip nowcast={nowcast} />
+          <FlatTip nowcast={nowcast} />
         </InfoTooltip>
+      </span>
+    );
+  }
+  if (nowcast.status === 'estimated') {
+    return (
+      <span className="inline-flex flex-col items-end leading-tight">
+        <span className="inline-flex items-center gap-1">
+          <span>{formatNumber(nowcast.estimatedStock ?? 0)}</span>
+          <InfoTooltip tone="alert" label={t.estimateAria}>
+            <EstimateTip nowcast={nowcast} />
+          </InfoTooltip>
+        </span>
+        {nowcast.grade === 'LOW' && <span className="text-[10px] text-muted-foreground">{t.reference}</span>}
       </span>
     );
   }
@@ -121,16 +152,21 @@ export function NowcastDetail({ nowcast }: { nowcast: Nowcast }) {
       </div>
     );
   }
-  const estimated = nowcast.status === 'estimated';
+  const estimated = nowcast.status !== 'unavailable';
+  const flat = nowcast.status === 'flat';
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border bg-card p-3">
       <div className="min-w-0">
-        <div className="text-[11px] text-muted-foreground">{estimated ? t.detailTitle : t.detailUnavailableTitle}</div>
+        <div className="text-[11px] text-muted-foreground">
+          {estimated ? t.detailTitle : t.detailUnavailableTitle}
+          {nowcast.grade && <span className="ml-1.5">· {format(t.tipGrade, { grade: t.grade[nowcast.grade] })}</span>}
+          {flat && <span className="ml-1.5">· {t.flatTitle}</span>}
+        </div>
         <div className="mt-1 flex items-center gap-1.5 text-base font-semibold tracking-tight tabular-nums">
           {estimated ? <span>{formatNumber(nowcast.estimatedStock ?? 0)}</span> : <span>{t.unavailable}</span>}
           {estimated ? (
             <InfoTooltip tone="alert" label={t.estimateAria}>
-              <EstimateTip nowcast={nowcast} />
+              {flat ? <FlatTip nowcast={nowcast} /> : <EstimateTip nowcast={nowcast} />}
             </InfoTooltip>
           ) : (
             <InfoTooltip label={t.unavailable}>
@@ -138,7 +174,7 @@ export function NowcastDetail({ nowcast }: { nowcast: Nowcast }) {
             </InfoTooltip>
           )}
         </div>
-        {estimated && (
+        {estimated && !flat && (
           <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
             {format(t.tipRange, { low: formatNumber(nowcast.low ?? 0), high: formatNumber(nowcast.high ?? 0) })}
           </div>

@@ -76,21 +76,21 @@ describe('dataReliabilityLevel', () => {
     expect(dataReliabilityLevel(a)).toBe('HIGH');
   });
 
-  it('14일까지 넓혀야 근거를 찾았으면 중', () => {
-    // 하루짜리 휴무는 수요일로 세어 최근 7일 근거가 그대로 유지된다 — 7일 안에 업로드가 한 번뿐인 긴 연휴라야 14일로 넓어진다.
+  it('근거 기간이 14일로 넓어져도 최근 4주가 촘촘히 관측됐으면 상(기간 길이로 깎지 않는다)', () => {
+    // 7일 안에 업로드가 한 번뿐인 긴 연휴라 14일로 넓어지지만, 그 주도 한 구간으로 온전히 관측됐다.
     const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
     const a = analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!;
     expect(a.operating?.basisWindowDays).toBe(14);
-    expect(dataReliabilityLevel(a)).toBe('MEDIUM');
+    expect(dataReliabilityLevel(a)).toBe('HIGH');
   });
 
-  it('추정 자체가 불가능한 사유(reason)가 있으면, 예전에 유효했던 근거 기간이 남아있어도 무조건 하다', () => {
-    // 조회일이 더 지나 자료가 stale해지면 "자료 갱신 필요"가 뜨지만, window 계산 자체는 여전히
-    // 유효한 과거 관측 구간(7일)을 근거로 삼는다 — basisWindowDays만 보면 "상"처럼 보이는 함정.
-    const a = analyzeOperationalSku(daily(), '2026-09-21')!;
-    expect(a.operating?.reason).toBe('자료 갱신 필요');
-    expect(a.operating?.basisWindowDays).toBe(7);
-    expect(dataReliabilityLevel(a)).toBe('LOW');
+  it('업로드가 밀린 것(자료 갱신 필요)은 자료 신뢰도를 깎지 않고, 소진 속도를 잴 수 없는 사유가 있을 때만 하다', () => {
+    const stale = analyzeOperationalSku(daily(), '2026-09-21')!;
+    expect(stale.operating?.reason).toBe('자료 갱신 필요');
+    expect(stale.operating?.basisWindowDays).toBe(7);
+    expect(dataReliabilityLevel(stale)).toBe('HIGH');
+    const special = analyzeOperationalSku(daily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!;
+    expect(dataReliabilityLevel(special)).toBe('LOW');
   });
 
   it('근거로 쓸 window 자체를 찾지 못하면(자료 부족) 하', () => {

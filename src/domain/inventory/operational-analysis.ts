@@ -4,8 +4,12 @@ import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalys
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
 import { assessReliability } from '@/domain/reliability/reliability';
 
-/** 매일 받는 재고 파일은 출고일 3일만 밀려도 믿기 어려워진다. */
-const DAILY_HALF_LIFE_SHIPPING_DAYS = 3;
+/** 소진 속도를 잴 근거 기간 안의 업로드 간격 상한(출고일) — 매일이 아니어도 주 1회처럼 규칙적으로 올리면 쓴다. */
+const MAX_BASIS_GAP_SHIPPING_DAYS = 5;
+/** 자료 신뢰도는 최근 4주(달력 28일) 동안 소진 속도를 잴 수 있었던 비율로 본다. */
+const RELIABILITY_WINDOW_DAYS = 28;
+/** 새로 생긴 품목은 첫 관측 이후만 보되, 최소 이만큼(수요일)의 자료가 있어야 '상'이 될 수 있다. */
+const RELIABILITY_MIN_EXPECTED_DAYS = 10;
 
 export interface OperatingContext {
   holidays?: ReadonlySet<string>;
@@ -79,7 +83,7 @@ export function analyzeOperationalSku(
   const windows = [7, 14, 30].map((days) => shippingWindow(deltas, latest.date, days, holidays));
   const [w7, w14, w30] = windows;
   // Five shipping days and at least three intervals guard against newly introduced or sparse SKUs.
-  const basis = windows.find((w) => w.observedIntervalDays >= 5 && w.intervalCount >= 3 && w.longestGap <= 3) ?? null;
+  const basis = windows.find((w) => w.observedIntervalDays >= 5 && w.intervalCount >= 3 && w.longestGap <= MAX_BASIS_GAP_SHIPPING_DAYS) ?? null;
   const staleDays = shippingDaysBetween(latest.date, latestShippingDay(asOfDate, holidays), holidays);
   const invalid = sorted.some((o) => o.date >= shiftDate(latest.date, -30) && o.normalStock < 0);
   const uncertainMovement = !!basis && (basis.inconsistent || basis.unexplainedIncrease > 0);
@@ -101,18 +105,36 @@ export function analyzeOperationalSku(
                   ? '소진 미관측'
                   : null;
   const canEstimate = reason === null;
-  // 추정을 막는 사유가 있으면 예전 근거 기간이 멀쩡해 보여도 무조건 '하'다(assessReliability가 보장).
-  const reliabilityWindow = basis ?? w7;
+  // 자료 신뢰도 = 소진 속도를 재는 자료가 얼마나 촘촘하고 믿을 만한가. 업로드가 며칠 밀린 것(자료 갱신 필요)과
+  // 입고 기록 없는 재고 증가(입고·조정 확인 — 그 구간만 빼고 잰다)는 신뢰도를 깎지 않는다. 경과일은 상단 알림과
+  // 추정치의 등급(같은 길이 백테스트 오차)으로 따로 보여 준다.
+  const rateBlock = context.isMissing
+    ? '품절'
+    : context.isB2B
+      ? '특수 관리 개별 판단'
+      : invalid
+        ? '재고 정합성 확인'
+        : latest.normalStock === 0
+          ? '관측 무재고'
+          : !basis
+            ? '관측 자료 부족'
+            : basis.averageDailyDepletion === 0
+              ? '소진 미관측'
+              : null;
+  const reliabilityWindow = shippingWindow(deltas, latest.date, RELIABILITY_WINDOW_DAYS, holidays);
   const reliability = assessReliability({
     source: sorted[sorted.length - 1]?.source === 'COUNT' ? 'COUNT' : 'SNAPSHOT',
-    expectedDays: demandDaysBetween(shiftDate(latest.date, -reliabilityWindow.windowDays), latest.date, holidays),
+    expectedDays: Math.max(
+      RELIABILITY_MIN_EXPECTED_DAYS,
+      demandDaysBetween(sorted[0].date > shiftDate(latest.date, -RELIABILITY_WINDOW_DAYS) ? sorted[0].date : shiftDate(latest.date, -RELIABILITY_WINDOW_DAYS), latest.date, holidays),
+    ),
     observedDays: reliabilityWindow.observedIntervalDays,
-    windowDays: reliabilityWindow.windowDays,
+    windowDays: null,
     intervals: reliabilityWindow.intervalCount,
     minIntervals: 3,
-    daysSinceLevel: staleDays,
-    halfLifeDays: DAILY_HALF_LIFE_SHIPPING_DAYS,
-    blockingReason: reason,
+    daysSinceLevel: 0,
+    halfLifeDays: 0,
+    blockingReason: rateBlock,
   });
   const confidence = reliability.level;
   const rate = canEstimate ? basis!.averageDailyDepletion : null;

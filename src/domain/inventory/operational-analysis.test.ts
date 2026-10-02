@@ -135,14 +135,33 @@ describe('shipping-day trading inventory', () => {
     rows[rows.length - 1] = obs('2026-09-18', 300, 200);
     expect(analyzeOperationalSku(rows, '2026-09-18')!.coverage.coverageDays).toBe(30);
   });
-  it('grades forecast confidence by basis window size, and drops it to LOW whenever a disqualifying reason exists even if an old basis window still looks valid', () => {
+  it('grades data reliability by how densely the last four weeks were observed, not by upload delay or window length', () => {
     expect(analyzeOperationalSku(daily(), '2026-09-19')!.forecast.confidence).toBe('HIGH');
+    // 한 주 내내 휴무여도 그 주는 한 구간으로 온전히 관측된 것이므로 깎지 않는다.
     const holidays = new Set(['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']);
-    expect(analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!.forecast.confidence).toBe('MEDIUM');
-    const stale = analyzeOperationalSku(daily(), '2026-09-21')!;
+    expect(analyzeOperationalSku(daily(10, holidays), '2026-09-18', undefined, undefined, undefined, { holidays })!.forecast.confidence).toBe('HIGH');
+    // 업로드가 밀려도 자료 신뢰도는 그대로다(경과는 '자료 갱신 필요'와 추정 등급으로 따로 보여 준다).
+    const stale = analyzeOperationalSku(daily(), '2026-09-28')!;
     expect(stale.operating?.reason).toBe('자료 갱신 필요');
     expect(stale.operating?.basisWindowDays).toBe(7);
-    expect(stale.forecast.confidence).toBe('LOW');
+    expect(stale.forecast.confidence).toBe('HIGH');
+    expect(stale.thresholdRisk.level).toBe('UNKNOWN');
+    // 너무 짧은 자료는 '상'이 되지 않는다.
+    expect(analyzeOperationalSku(daily(10, new Set(), '2026-09-11', '2026-09-17'), '2026-09-17')!.forecast.confidence).not.toBe('HIGH');
+    // 추정을 막는 사유가 있으면 '하'.
+    expect(analyzeOperationalSku(daily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!.forecast.confidence).toBe('LOW');
+  });
+  it('accepts regular weekly uploads as a usage basis and does not lower reliability for an unexplained increase', () => {
+    const weekly = [obs('2026-08-21', 400), obs('2026-08-28', 350), obs('2026-09-04', 300), obs('2026-09-11', 250), obs('2026-09-18', 200)];
+    const a = analyzeOperationalSku(weekly, '2026-09-18')!;
+    expect(a.operating?.reason).toBeNull();
+    expect(a.operating?.basisWindowDays).toBe(30);
+    expect(a.window30.averageDailyDepletion).toBe(10);
+    expect(a.forecast.confidence).toBe('HIGH');
+    const restocked = [...daily(10, new Set(), '2026-08-24', '2026-09-17'), obs('2026-09-18', 500)];
+    const b = analyzeOperationalSku(restocked, '2026-09-18')!;
+    expect(b.operating?.reason).toBe('입고·조정 확인');
+    expect(b.forecast.confidence).toBe('HIGH');
   });
   it('compares a calendar expiry to the projected date, not to shipping-day coverage', () => {
     const a = analyzeOperationalSku(daily(), '2026-09-18', undefined, undefined, { expirationDate: '2026-09-30', expirationRiskDays: 0 })!;

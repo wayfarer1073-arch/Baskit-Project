@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demandDaySeries, nowcastStock, NOWCAST_MAX_GAP_DEMAND_DAYS } from './nowcast';
-import { analyzeOperationalSku } from './operational-analysis';
+import { demandDaySeries, gradeOf, nowcastStock } from './nowcast';
 import { closedDays, isDemandDay, isShippingDay, shiftDate, type ClosedDays } from './shipping-calendar';
 import type { StockObservation } from './types';
 
@@ -34,9 +33,7 @@ function history(rate: (date: string) => number, from: string, to: string, start
 }
 
 function nowcastAt(observations: StockObservation[], asOfDate: string, extra: { isB2B?: boolean; isSoldOut?: boolean; holidays?: ClosedDays } = {}) {
-  const latest = observations[observations.length - 1].date;
-  const pre = analyzeOperationalSku(observations, latest, undefined, undefined, undefined, { holidays: extra.holidays, isB2B: extra.isB2B, isMissing: extra.isSoldOut })!;
-  return nowcastStock({ observations, asOfDate, preGapAnalysis: pre, ...extra });
+  return nowcastStock({ observations, asOfDate, ...extra })!;
 }
 
 describe('demandDaySeries', () => {
@@ -84,34 +81,63 @@ describe('nowcastStock', () => {
     expect(n.estimatedStock).toBe(n.lastObservedStock);
   });
 
-  it('refuses noisy items, special items, sold-out items and long gaps', () => {
+  it('grades by the error of a backtest as long as the actual gap, and refuses only very irregular items', () => {
+    expect(gradeOf(0.1)).toBe('HIGH');
+    expect(gradeOf(0.2)).toBe('MEDIUM');
+    expect(gradeOf(0.4)).toBe('LOW');
+    expect(gradeOf(0.6)).toBeNull();
     let seed = 7;
     const noise = () => {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    const erratic = history(() => (noise() < 0.75 ? 0 : 40 + Math.round(noise() * 80)), '2026-07-01', '2026-09-25', 20000);
+    const erratic = history(() => (noise() < 0.85 ? 0 : Math.round(noise() * 200)), '2026-07-01', '2026-09-25', 20000);
     const noisy = nowcastAt(erratic, '2026-09-29');
-    expect(noisy.status).toBe('unavailable');
-    expect(['unstable_pattern', 'low_reliability']).toContain(noisy.reason);
+    expect(['unstable_pattern', 'insufficient_history']).toContain(noisy.reason);
     expect(noisy.estimatedStock).toBeNull();
+    const n = nowcastAt(steady, '2026-09-29');
+    expect(n.grade).toBe('HIGH');
+    expect(n.backtest!.horizon).toBe(2);
+  });
 
+  it('keeps estimating across long gaps (beyond a week) and stops only past 30 demand days or half the history', () => {
+    const twoWeeks = nowcastAt(steady, '2026-10-09');
+    expect(twoWeeks.status).toBe('estimated');
+    expect(twoWeeks.horizonDays).toBe(10);
+    expect(twoWeeks.estimatedStock).toBe(twoWeeks.lastObservedStock - 100);
+    expect(twoWeeks.backtest!.horizon).toBe(10);
+    expect(nowcastAt(steady, '2026-11-20').reason).toBe('gap_too_long');
+    // 6주 자료뿐이면 공백은 그 절반(평일 15일)까지만.
+    const short = history(() => 10, '2026-08-14', '2026-09-25', 1000);
+    expect(nowcastAt(short, '2026-10-16').status).toBe('estimated');
+    expect(nowcastAt(short, '2026-10-19').reason).toBe('gap_too_long');
+  });
+
+  it('does not let unexplained increases (unrecorded inbound) block the estimate', () => {
+    // 10번째 업로드마다 입고 기록 없이 재고가 500씩 늘어난다.
+    let added = 0;
+    const shifted = steady.map((o, i) => {
+      if (i > 0 && i % 10 === 0) added += 500;
+      return { ...o, normalStock: o.normalStock + added, availableStock: o.availableStock + added };
+    });
+    const n = nowcastAt(shifted, '2026-09-29');
+    expect(n.status).toBe('estimated');
+    expect(n.expectedDepletion).toBeCloseTo(20, 0);
+  });
+
+  it('refuses special, sold-out and integrity-problem items', () => {
     expect(nowcastAt(steady, '2026-09-29', { isB2B: true }).reason).toBe('special');
     expect(nowcastAt(steady, '2026-09-29', { isSoldOut: true }).reason).toBe('sold_out');
-    const far = nowcastAt(steady, shiftDate('2026-09-25', NOWCAST_MAX_GAP_DEMAND_DAYS * 2));
-    expect(far.reason).toBe('gap_too_long');
+    const negative = [...steady.slice(0, -1), obs('2026-09-24', -5), steady[steady.length - 1]];
+    expect(nowcastAt(negative, '2026-09-29').reason).toBe('integrity');
+    expect(nowcastAt(steady.slice(-8), '2026-09-29').reason).toBe('insufficient_history');
   });
 
-  it('refuses items whose reliability was not high before the gap', () => {
-    const sparse = [obs('2026-09-01', 100), obs('2026-09-10', 80), obs('2026-09-25', 50)];
-    const n = nowcastAt(sparse, '2026-09-29');
-    expect(n.status).toBe('unavailable');
-    expect(n.reason).toBe('low_reliability');
-  });
-
-  it('reports no depletion instead of guessing for items that have not moved', () => {
+  it('shows items without recent depletion as unchanged rather than unpredictable', () => {
     const flat = history(() => 0, '2026-07-01', '2026-09-25', 500);
-    expect(nowcastAt(flat, '2026-09-29').reason).toBe('no_depletion');
+    const n = nowcastAt(flat, '2026-10-09');
+    expect(n.status).toBe('flat');
+    expect(n.estimatedStock).toBe(500);
   });
 
   it('never estimates below zero', () => {

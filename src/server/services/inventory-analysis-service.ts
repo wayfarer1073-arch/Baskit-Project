@@ -40,22 +40,10 @@ function analyzeFor({ descriptor, observations }: SkuInput, asOfDate: string, se
   );
 }
 
-/**
- * 기준일까지 출고일이 지났는데 재고 자료가 없으면, 자료가 끊기기 전 시점으로 다시 분석해 그때의 신뢰도로
- * 추정할지 정하고 오늘 재고를 추정한다. KPI·위험 판정은 그대로 실제 관측값을 쓴다.
- */
-function nowcastFor(input: SkuInput, analysis: SkuAnalysis, asOfDate: string, settings: RiskThresholdSettings, calendar: ClosedDays) {
+/** 기준일까지 출고일이 지났는데 재고 자료가 없으면 직전 자료로 오늘 재고를 추정한다. KPI·위험 판정은 그대로 실제 관측값을 쓴다. */
+function nowcastFor(input: SkuInput, analysis: SkuAnalysis, asOfDate: string, calendar: ClosedDays) {
   if (!analysis.operating || analysis.operating.staleShippingDays <= 0) return null;
-  const preGapAnalysis = analyzeFor(input, analysis.latest.date, settings, calendar);
-  if (!preGapAnalysis) return null;
-  return nowcastStock({
-    observations: input.observations,
-    asOfDate,
-    holidays: calendar,
-    isB2B: input.descriptor.isB2B,
-    isSoldOut: input.descriptor.isSoldOut,
-    preGapAnalysis,
-  });
+  return nowcastStock({ observations: input.observations, asOfDate, holidays: calendar, isB2B: input.descriptor.isB2B, isSoldOut: input.descriptor.isSoldOut });
 }
 
 interface ReorderContext {
@@ -135,7 +123,7 @@ async function computeInventoryRows(
       periodComparison,
       reorder: reorderFor(reorderCtx, descriptor, analysis, calendar),
       turnover30: turnover30(observations, analysis),
-      nowcast: nowcastFor(input, analysis, options.asOfDate, settings, calendar),
+      nowcast: nowcastFor(input, analysis, options.asOfDate, calendar),
     });
   }
   return rows;
@@ -159,6 +147,6 @@ export async function getSkuDetail(orgId: string, skuId: string, asOfDate: strin
     expirationLots,
     reorder: reorderFor(reorderCtx, result.descriptor, analysis, calendar),
     turnover30: turnover30(result.observations, analysis),
-    nowcast: nowcastFor(result, analysis, asOfDate, resolvedSettings, calendar),
+    nowcast: nowcastFor(result, analysis, asOfDate, calendar),
   };
 }
