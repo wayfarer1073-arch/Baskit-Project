@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
 import { shiftDate } from '@/domain/inventory/shipping-calendar';
 import { detectMenuSalesLayout, findPeriod, parseMenuSales, type MenuSalesLayout } from '@/domain/excel/menu-sales';
+import { parseReceiptText, RECEIPT_LAYOUT, receiptToAoa } from '@/domain/excel/receipt-text';
 import { estimateStock, recipeUsage } from '@/domain/segments/recipe-usage';
 import { compareLoss, countIntervalLoss, type CountPoint } from '@/domain/segments/loss-report';
 import type { LossReport, LossReportRow, MenuSalesPreview, RecipeOverview } from '@/domain/segments/read-model';
@@ -72,6 +73,23 @@ export async function previewMenuSales(orgId: string, aoa: string[][], options: 
     skipped: parsed.skipped,
     missing: parsed.missing,
     names: [...byName.values()].sort((a, b) => b.quantity - a.quantity).map((n) => ({ ...n, match: matches.get(n.name) ?? { kind: 'none' } })),
+  };
+}
+
+/**
+ * 영수증 글자 미리보기 — 판매 줄을 뽑아 파일 미리보기와 같은 메뉴 연결 단계로 넘긴다.
+ * 날짜는 영수증에 찍힌 날짜를 제안만 하고(화면에서 바꿀 수 있게) 줄에는 넣지 않는다.
+ */
+export async function previewReceipt(orgId: string, text: string, engine: string): Promise<MenuSalesPreview> {
+  const receipt = parseReceiptText(text);
+  const preview = await previewMenuSales(orgId, receiptToAoa(receipt), { layout: RECEIPT_LAYOUT, date: null });
+  return {
+    ...preview,
+    source: 'receipt',
+    periodDate: receipt.date,
+    skipped: preview.skipped + receipt.skipped,
+    topRows: [],
+    receipt: { text, engine, date: receipt.date, key: receipt.key, kind: receipt.kind },
   };
 }
 

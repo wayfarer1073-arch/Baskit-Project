@@ -25,6 +25,7 @@ interface MenuRecipesProps {
   menus: StoreMenuRow[];
   overview: RecipeOverview;
   loss: LossReport;
+  serverOcr: boolean;
   days: number;
   today: string;
   readOnly: boolean;
@@ -42,7 +43,7 @@ async function send(url: string, method: string, body?: unknown) {
   return data;
 }
 
-export function MenuRecipes({ items, menus, overview, loss, days, today, readOnly }: MenuRecipesProps) {
+export function MenuRecipes({ items, menus, overview, loss, serverOcr, days, today, readOnly }: MenuRecipesProps) {
   const { m } = useI18n();
   const t = m.store.menus;
   const [editing, setEditing] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function MenuRecipes({ items, menus, overview, loss, days, today, readOnl
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t.description}</p>
       </div>
 
-      <MenuSalesUpload menus={menus} today={today} readOnly={readOnly} />
+      <MenuSalesUpload menus={menus} today={today} readOnly={readOnly} serverOcr={serverOcr} />
       <UsagePanel overview={overview} days={days} />
       <LossPanel report={loss} />
       <MenuList menus={menus} items={items} readOnly={readOnly} onEdit={setEditing} />

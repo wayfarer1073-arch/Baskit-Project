@@ -188,6 +188,7 @@ export async function deleteWorkspace(orgId: string) {
       await tx.skuPackagingUpload.deleteMany({ where: inOrgWarehouse });
       // 메뉴(레시피는 DB cascade)·메뉴 판매·메뉴 이름 연결 — 매장 품목보다 먼저 지워도 되고 나중이어도 된다.
       await tx.menuSale.deleteMany({ where: { organizationId: orgId } });
+      await tx.menuReceipt.deleteMany({ where: { organizationId: orgId } });
       await tx.storeMenuAlias.deleteMany({ where: { organizationId: orgId } });
       await tx.storeMenu.deleteMany({ where: { organizationId: orgId } });
       await tx.sku.deleteMany({ where: inOrgWarehouse }); // 소비기한 로트·즐겨찾기·매장 발주·Easy Count 기록은 DB cascade

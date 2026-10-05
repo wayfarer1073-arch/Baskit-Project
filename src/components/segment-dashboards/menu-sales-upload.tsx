@@ -2,11 +2,12 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileSpreadsheet, SlidersHorizontal } from 'lucide-react';
+import { Camera, FileSpreadsheet, RotateCw, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel } from '@/components/segment-dashboards/dashboard-parts';
@@ -16,17 +17,30 @@ import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { readInBrowser, shrinkImage } from '@/components/segment-dashboards/receipt-image';
 
 const NONE = '__none__';
 const NEW = '__new__';
 const IGNORE = '__ignore__';
 
-/** 파일 한 개의 미리보기 → (열 지정) → 메뉴 연결 → 저장. 저장 전에는 아무것도 바뀌지 않는다. */
-export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRow[]; today: string; readOnly: boolean }) {
+type SaveMode = 'replace' | 'add';
+
+/**
+ * 파일 한 개(또는 영수증 사진 한 장)의 미리보기 → (열 지정) → 메뉴 연결 → 저장. 저장 전에는 아무것도 바뀌지 않는다.
+ * 영수증은 서버 OCR(OCR.space 무료 키가 있을 때) → 안 되면 브라우저 OCR로 읽고, 인식한 글자를 고쳐 다시 읽을 수 있다.
+ */
+export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: StoreMenuRow[]; today: string; readOnly: boolean; serverOcr: boolean }) {
   const { m, locale } = useI18n();
   const t = m.store.menus.upload;
+  const r = t.receipt;
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [receiptText, setReceiptText] = useState('');
+  const [photoName, setPhotoName] = useState('');
+  const [showText, setShowText] = useState(false);
+  const [mode, setMode] = useState<SaveMode>('replace');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<MenuSalesPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,12 +61,8 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
       const res = await fetch('/api/store/menu-sales/preview', { method: 'POST', body });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? t.failed);
-      const p = data as MenuSalesPreview;
-      setPreview(p);
-      setLayout({ headerRowIndex: p.headerRowIndex, columns: p.columns });
-      if (p.source === 'none') setCustomizing(true);
-      if (!chosenDate && p.periodDate) setDate(p.periodDate);
-      setLinks(Object.fromEntries(p.names.map((n) => [n.name, n.match.kind === 'menu' ? n.match.menuId : n.match.kind === 'ignore' ? IGNORE : NEW])));
+      apply(data as MenuSalesPreview, chosenDate);
+      setMode('replace');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t.failed);
     } finally {
@@ -60,7 +70,78 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
     }
   }
 
+  function apply(p: MenuSalesPreview, chosenDate: string) {
+    setPreview(p);
+    setLayout({ headerRowIndex: p.headerRowIndex, columns: p.columns });
+    if (p.source === 'none') setCustomizing(true);
+    if (!chosenDate && p.periodDate) setDate(p.periodDate);
+    setLinks(Object.fromEntries(p.names.map((n) => [n.name, n.match.kind === 'menu' ? n.match.menuId : n.match.kind === 'ignore' ? IGNORE : NEW])));
+  }
+
+  async function previewText(text: string, engine: 'browser' | 'edited') {
+    const res = await fetch('/api/store/menu-sales/receipt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, engine }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? r.failed);
+    return data as MenuSalesPreview;
+  }
+
+  /** 영수증 사진 → (줄이기) → 서버 OCR, 안 되면 브라우저 OCR → 미리보기. */
+  async function readReceipt(photo: File) {
+    reset();
+    setPhotoName(photo.name);
+    setBusy(true);
+    try {
+      setStage(r.stageShrink);
+      let small: Blob;
+      try {
+        small = await shrinkImage(photo);
+      } catch {
+        throw new Error(r.badImage);
+      }
+      let p: MenuSalesPreview | null = null;
+      if (serverOcr) {
+        setStage(r.stageServer);
+        const body = new FormData();
+        body.append('image', small, 'receipt.jpg');
+        const res = await fetch('/api/store/menu-sales/receipt', { method: 'POST', body });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) p = data as MenuSalesPreview;
+        else if (data.fallback) toast.message(r.fallback);
+        else throw new Error(data.error ?? r.failed);
+      }
+      if (!p) {
+        setStage(format(r.stageBrowser, { percent: 0 }));
+        const text = await readInBrowser(small, (percent) => setStage(format(r.stageBrowser, { percent })));
+        p = await previewText(text, 'browser');
+      }
+      apply(p, '');
+      setReceiptText(p.receipt?.text ?? '');
+      setShowText(p.names.length === 0);
+      setMode(p.receipt?.kind === 'daily' ? 'replace' : 'add');
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : r.failed);
+    } finally {
+      setStage(null);
+      setBusy(false);
+    }
+  }
+
+  async function rereadText() {
+    setBusy(true);
+    try {
+      const p = await previewText(receiptText, 'edited');
+      apply({ ...p, receipt: p.receipt && preview?.receipt ? { ...p.receipt, engine: preview.receipt.engine } : p.receipt }, date);
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : r.failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function reset() {
+    setReceiptText('');
+    setShowText(false);
+    if (photoInput.current) photoInput.current.value = '';
     setFile(null);
     setPreview(null);
     setLayout(null);
@@ -70,9 +151,10 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
     if (fileInput.current) fileInput.current.value = '';
   }
 
-  const rows = useMemo(() => (preview ? preview.rows.map((r) => ({ ...r, date: r.date ?? (date || null) })) : []), [preview, date]);
+  const rows = useMemo(() => (preview ? preview.rows.map((row) => ({ ...row, date: row.date ?? (date || null) })) : []), [preview, date]);
   const dates = useMemo(() => [...new Set(rows.map((r) => r.date).filter(Boolean))].sort() as string[], [rows]);
-  const missingDate = rows.some((r) => !r.date);
+  const missingDate = rows.some((row) => !row.date);
+  const isReceipt = preview?.source === 'receipt';
 
   async function save() {
     if (!preview || rows.length === 0) return;
@@ -94,9 +176,11 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lines: rows.map((r) => ({ date: r.date, name: r.name, quantity: r.quantity, amount: r.amount })),
+          lines: rows.map((row) => ({ date: row.date, name: row.name, quantity: row.quantity, amount: row.amount })),
           decisions,
-          template: layout ? { save: saveTemplate, name: templateName.trim() || t.defaultTemplateName, headers: preview.headers, layout } : null,
+          template: layout && !isReceipt ? { save: saveTemplate, name: templateName.trim() || t.defaultTemplateName, headers: preview.headers, layout } : null,
+          mode,
+          receipt: mode === 'add' && preview.receipt?.key && dates.length === 1 ? { date: dates[0], key: preview.receipt.key } : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -111,7 +195,13 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
     }
   }
 
-  const sourceText = preview ? (preview.source === 'template' ? format(t.source.template, { name: preview.templateName ?? '' }) : t.source[preview.source]) : '';
+  const sourceText = preview
+    ? preview.source === 'template'
+      ? format(t.source.template, { name: preview.templateName ?? '' })
+      : preview.source === 'receipt'
+        ? format(r.source, { engine: preview.receipt?.engine.startsWith('ocr.space') ? r.engineServer : r.engineBrowser })
+        : t.source[preview.source]
+    : '';
 
   return (
     <SectionPanel title={t.title} description={t.help}>
@@ -139,7 +229,35 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
               {busy && !preview ? t.reading : t.choose}
             </label>
           </Button>
-          {file ? <span className="truncate text-sm text-foreground">{file.name}</span> : <span className="text-xs text-muted-foreground">{t.fileHint}</span>}
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            id="menu-sales-photo"
+            disabled={readOnly || busy}
+            onChange={(e) => {
+              const next = e.target.files?.[0];
+              if (next) void readReceipt(next);
+            }}
+          />
+          <Button asChild variant={preview ? 'outline' : 'secondary'} disabled={readOnly || busy}>
+            <label htmlFor="menu-sales-photo" className={cn('cursor-pointer', (readOnly || busy) && 'pointer-events-none opacity-50')}>
+              <Camera aria-hidden="true" />
+              {r.choose}
+            </label>
+          </Button>
+          {stage ? (
+            <span className="text-sm text-muted-foreground tabular-nums" role="status">
+              {stage}
+            </span>
+          ) : file ? (
+            <span className="truncate text-sm text-foreground">{file.name}</span>
+          ) : isReceipt ? (
+            <span className="truncate text-sm text-foreground">{photoName || r.photo}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">{t.fileHint}</span>
+          )}
           {preview && (
             <Button variant="ghost" size="sm" onClick={reset} disabled={busy} className="ml-auto">
               {t.cancel}
@@ -147,24 +265,74 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
           )}
         </div>
 
-        {preview && file && (
+        {preview && (file || isReceipt) && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3.5 py-2.5 text-sm">
               <span className={cn(preview.source === 'none' ? 'text-status-warning' : 'text-foreground')}>{sourceText}</span>
-              <Button variant="outline" size="sm" onClick={() => setCustomizing((v) => !v)}>
-                <SlidersHorizontal aria-hidden="true" />
-                {customizing ? t.hideCustomize : t.customize}
-              </Button>
+              {isReceipt ? (
+                <Button variant="outline" size="sm" onClick={() => setShowText((v) => !v)} aria-expanded={showText}>
+                  {showText ? r.hideText : r.showText}
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setCustomizing((v) => !v)}>
+                  <SlidersHorizontal aria-hidden="true" />
+                  {customizing ? t.hideCustomize : t.customize}
+                </Button>
+              )}
             </div>
 
-            {customizing && layout && (
+            {isReceipt && showText && (
+              <div className="space-y-2 rounded-lg border border-border p-4">
+                <p className="text-xs text-muted-foreground">{r.textHelp}</p>
+                <Textarea
+                  value={receiptText}
+                  onChange={(e) => setReceiptText(e.target.value)}
+                  rows={10}
+                  aria-label={r.showText}
+                  className="font-mono text-xs leading-relaxed"
+                  maxLength={20000}
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={rereadText} disabled={busy || !receiptText.trim()}>
+                    <RotateCw aria-hidden="true" />
+                    {r.reread}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {isReceipt && preview.names.length > 0 && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold">{r.modeTitle}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(['add', 'replace'] as const).map((value) => (
+                    <label
+                      key={value}
+                      className={cn(
+                        'flex cursor-pointer gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm transition-colors',
+                        mode === value ? 'border-foreground bg-muted/40' : 'border-border hover:bg-muted/30',
+                      )}
+                    >
+                      <input type="radio" name="receipt-mode" value={value} checked={mode === value} onChange={() => setMode(value)} className="mt-1 accent-foreground" />
+                      <span>
+                        <span className="font-medium">{r.mode[value].label}</span>
+                        <span className="block text-xs text-muted-foreground">{r.mode[value].help}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {mode === 'add' && !preview.receipt?.key && <p className="text-xs text-status-warning">{r.noKey}</p>}
+              </fieldset>
+            )}
+
+            {customizing && layout && !isReceipt && (
               <ColumnPicker
                 preview={preview}
                 layout={layout}
                 onChange={setLayout}
                 onApply={() => {
                   setSaveTemplate(true);
-                  void load(file, layout, date);
+                  if (file) void load(file, layout, date);
                 }}
                 busy={busy}
               />
@@ -179,7 +347,9 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
                       <Input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} className="h-9 w-40" />
                     </label>
                   )}
-                  {preview.periodDate && date === preview.periodDate && <span className="text-xs text-muted-foreground">{format(t.periodDate, { date: preview.periodDate })}</span>}
+                  {preview.periodDate && date === preview.periodDate && (
+                    <span className="text-xs text-muted-foreground">{format(isReceipt ? r.dateFound : t.periodDate, { date: preview.periodDate })}</span>
+                  )}
                   {preview.needsDate && !date && <span className="text-xs text-status-warning">{t.needsDate}</span>}
                   {preview.periodRange && preview.needsDate && (
                     <span className="text-xs text-status-warning">{format(t.periodRange, { from: preview.periodRange[0], to: preview.periodRange[1] })}</span>
@@ -188,7 +358,7 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
                 </div>
 
                 {preview.names.length === 0 ? (
-                  <p className="text-sm text-status-warning">{t.noRows}</p>
+                  <p className="text-sm text-status-warning">{isReceipt ? r.noRows : t.noRows}</p>
                 ) : (
                   <div className="space-y-2">
                     <div>
@@ -248,7 +418,7 @@ export function MenuSalesUpload({ menus, today, readOnly }: { menus: StoreMenuRo
                         dates: dates.length === 0 ? '—' : dates.length === 1 ? dates[0] : `${dates[0]} ~ ${dates[dates.length - 1]}`,
                       })}
                     </p>
-                    {preview.source !== 'template' && (
+                    {preview.source !== 'template' && !isReceipt && (
                       <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Checkbox checked={saveTemplate} onCheckedChange={(v) => setSaveTemplate(v === true)} />
                         {t.saveTemplate}

@@ -209,7 +209,9 @@ export interface MenuSalesPreview {
   headers: string[];
   columns: Partial<Record<import('@/domain/excel/menu-sales-fields').MenuSalesField, string>>;
   /** 열을 어떻게 정했는지 — 저장한 양식 / 기본 인식(OKPOS 등) / 직접 지정 / 못 찾음. */
-  source: 'template' | 'auto' | 'manual' | 'none';
+  source: 'template' | 'auto' | 'manual' | 'none' | 'receipt';
+  /** 영수증 사진으로 읽었을 때 — 인식한 글자(고쳐서 다시 읽을 수 있다)와 영수증 정보. */
+  receipt?: { text: string; engine: string; date: string | null; key: string | null; kind: 'daily' | 'single' };
   templateName: string | null;
   /** 파일 위쪽 조회기간이 하루면 그 날짜, 여러 날이면 range. */
   periodDate: string | null;

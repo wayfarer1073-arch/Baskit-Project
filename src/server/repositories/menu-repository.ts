@@ -17,6 +17,8 @@ const storeItemWhere = (orgId: string) => ({ isActive: true, warehouse: { organi
 const RECENT_DAYS = 7;
 
 export class MenuNameTakenError extends Error {}
+/** 이미 더한 손님 영수증을 또 저장하려 할 때. */
+export class DuplicateReceiptError extends Error {}
 
 // ── 품목(레시피 재료) ─────────────────────────────────────────────────────────────────────────
 
@@ -149,13 +151,22 @@ export interface MenuSaleLine {
 /**
  * 메뉴 판매를 저장한다. 사용자가 고른 대로 새 메뉴를 만들고, 파일 이름 ↔ 메뉴 연결(또는 무시)을 기억한 뒤,
  * 같은 날·같은 메뉴를 합쳐 덮어쓴다(다시 올려도 두 번 더해지지 않는다).
+ * 손님 영수증은 mode 'add'로 기존 판매에 더한다 — receipt가 있으면 같은 영수증을 두 번 더하지 않도록 기억한다.
  */
-export async function importMenuSales(orgId: string, input: { lines: MenuSaleLine[]; decisions: MenuDecision[] }) {
+export async function importMenuSales(
+  orgId: string,
+  input: { lines: MenuSaleLine[]; decisions: MenuDecision[]; mode?: 'replace' | 'add'; receipt?: { date: string; key: string } | null },
+) {
   const menus = await prisma.storeMenu.findMany({ where: { organizationId: orgId }, select: { id: true, name: true, isActive: true } });
   const ownIds = new Set(menus.filter((m) => m.isActive).map((m) => m.id));
   if (input.decisions.some((d) => d.action === 'menu' && !ownIds.has(d.menuId))) return null;
 
   return prisma.$transaction(async (tx) => {
+    if (input.receipt) {
+      const where = { organizationId_date_key: { organizationId: orgId, date: toDateOnly(input.receipt.date), key: input.receipt.key } };
+      if (await tx.menuReceipt.findUnique({ where })) throw new DuplicateReceiptError();
+      await tx.menuReceipt.create({ data: { organizationId: orgId, date: toDateOnly(input.receipt.date), key: input.receipt.key } });
+    }
     const menuOf = new Map<string, string | null>();
     let created = 0;
     for (const d of input.decisions) {
@@ -207,10 +218,11 @@ export async function importMenuSales(orgId: string, input: { lines: MenuSaleLin
     }
     for (const t of totals.values()) {
       const data = { quantity: t.quantity, amount: t.amount };
+      const add = input.mode === 'add';
       await tx.menuSale.upsert({
         where: { menuId_date: { menuId: t.menuId, date: toDateOnly(t.date) } },
         create: { organizationId: orgId, menuId: t.menuId, date: toDateOnly(t.date), ...data },
-        update: data,
+        update: add ? { quantity: { increment: t.quantity }, ...(t.amount !== null ? { amount: { increment: t.amount } } : {}) } : data,
       });
     }
     const dates = [...new Set([...totals.values()].map((t) => t.date))].sort();

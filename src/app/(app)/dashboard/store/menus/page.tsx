@@ -2,6 +2,7 @@ import { requireTenant } from '@/server/tenant';
 import { requireEnabledSegment } from '@/server/segments';
 import { listMenus, listRecipeItems } from '@/server/repositories/menu-repository';
 import { getLossReport, getRecipeOverview } from '@/server/services/menu-service';
+import { serverOcrAvailable } from '@/server/services/receipt-ocr';
 import { MenuRecipes } from '@/components/segment-dashboards/menu-recipes';
 import { USAGE_PERIODS } from '@/domain/segments/recipe-usage';
 import { shiftDate } from '@/domain/inventory/shipping-calendar';
@@ -20,5 +21,5 @@ export default async function MenuRecipesPage({ searchParams }: { searchParams: 
     getRecipeOverview(tenant.orgId, shiftDate(today, -(days - 1)), today),
     getLossReport(tenant.orgId, today),
   ]);
-  return <MenuRecipes items={items} menus={menus} overview={overview} loss={loss} days={days} today={today} readOnly={tenant.role === 'VIEWER'} />;
+  return <MenuRecipes items={items} menus={menus} overview={overview} loss={loss} serverOcr={serverOcrAvailable()} days={days} today={today} readOnly={tenant.role === 'VIEWER'} />;
 }

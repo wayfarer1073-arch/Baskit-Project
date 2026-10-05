@@ -50,6 +50,9 @@ services:
       # 보내는 주소 — Resend에서 인증한 도메인이어야 한다. 예: Limenote <no-reply@limenote.cc>
       - key: MAIL_FROM
         sync: false
+      # 영수증 사진 인식(OCR.space 무료 키, ocr.space/ocrapi 에서 이메일로 발급). 없으면 브라우저 안에서 읽는다.
+      - key: OCR_SPACE_API_KEY
+        sync: false
       # 메일 속 링크 주소
       - key: APP_URL
         value: https://limenote.cc
