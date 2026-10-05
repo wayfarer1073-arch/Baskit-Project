@@ -8,7 +8,7 @@ const MAX_TEXT = 20_000;
 const textSchema = z.object({ text: z.string().max(MAX_TEXT), engine: z.enum(['browser', 'edited']).default('browser') });
 
 /**
- * 영수증 미리보기 — 사진(서버 OCR, OCR_SPACE_API_KEY가 있을 때) 또는 이미 읽은 글자(브라우저 OCR·직접 고친 글자)를 받아
+ * 마감 정산서 미리보기 — 사진(서버 OCR, OCR_SPACE_API_KEY가 있을 때) 또는 이미 읽은 글자(브라우저 OCR·직접 고친 글자)를 받아
  * 판매 줄을 뽑고 메뉴를 맞춰 본다. 저장은 하지 않는다.
  */
 export async function POST(request: Request) {

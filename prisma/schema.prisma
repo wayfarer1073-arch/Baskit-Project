@@ -55,7 +55,6 @@ model Organization {
   storeMenus       StoreMenu[]
   storeMenuAliases StoreMenuAlias[]
   menuSales        MenuSale[]
-  menuReceipts     MenuReceipt[]
   invitations      Invitation[]
   uploadFiles      UploadFile[]
   uploadJobs       UploadJob[]
@@ -631,19 +630,6 @@ model MenuSale {
   @@unique([menuId, date])
   @@index([organizationId, date])
   @@map("menu_sales")
-}
-
-/// 더하기로 저장한 손님 영수증 — 같은 영수증(날짜 + 영수증·승인 번호/시각)을 두 번 더하지 않도록 기억한다.
-model MenuReceipt {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  date           DateTime     @db.Date
-  key            String
-  createdAt      DateTime     @default(now())
-
-  @@unique([organizationId, date, key])
-  @@map("menu_receipts")
 }
 
 /// 하루 매출 합계(원). 같은 날짜를 다시 입력하면 덮어쓴다.

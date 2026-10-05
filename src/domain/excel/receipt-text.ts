@@ -1,10 +1,9 @@
 /**
- * POS 영수증 OCR 글자에서 메뉴 판매 줄을 뽑는다.
+ * POS 마감 정산서(하루치 상품별 매출) 사진의 OCR 글자에서 메뉴 판매 줄을 뽑는다.
  *
- * 손님 영수증(상품명 단가 수량 금액)과 마감 정산서(상품별 매출: 상품명 수량 금액) 모두 같은 규칙으로 읽는다.
- * - 줄 끝의 숫자들을 떼어 내고, 단가 × 수량 ≈ 금액이 맞는 짝이 있으면 그 수량을 쓴다.
+ * - 줄 끝의 숫자들을 떼어 내고 수량·금액을 정한다(상품명 수량 금액, 단가가 함께 찍혀 있으면 단가 × 수량 ≈ 금액으로 수량을 찾는다).
  * - 좁은 영수증처럼 이름만 있는 줄 다음에 숫자만 있는 줄이 오면 한 줄로 합친다.
- * - 합계·부가세·결제·카드·사업자 정보 같은 줄은 건너뛴다.
+ * - 합계·부가세·결제수단·사업자 정보·시간대별 매출·[분류] 소계 같은 줄은 건너뛴다.
  * OCR이 흔히 틀리는 숫자(O→0, l→1, 4.500→4500)는 숫자 자리에서만 바로잡는다.
  */
 import { isDateString } from '@/lib/date';
@@ -19,18 +18,16 @@ export interface ReceiptLine {
 export interface ParsedReceipt {
   /** 영수증에 찍힌 날짜(없으면 null). */
   date: string | null;
-  /** 같은 영수증을 두 번 올리는지 알아보는 표시 — 영수증·승인 번호와 시각. 못 찾으면 null. */
-  key: string | null;
-  /** 마감 정산서(상품별 매출)처럼 보이면 'daily', 아니면 손님 영수증 'single'. */
-  kind: 'daily' | 'single';
   lines: ReceiptLine[];
   /** 숫자는 있지만 판매 줄로 읽지 못한 줄 수. */
   skipped: number;
 }
 
 const SKIP =
-  /합\s*계|총\s*(액|금액|매출|수량|판매)|소\s*계|부\s*가\s*세|과\s*세|면\s*세|받\s*을|받\s*은|결\s*제|카\s*드|현\s*금|거스름|잔\s*돈|승\s*인|사업자|대\s*표|전\s*화|tel|주\s*소|영수증|할\s*인|포인트|적\s*립|봉사료|단\s*가|수\s*량|금\s*액|상품명|품\s*명|pos|테이블|주문\s*번호|일\s*시|가맹|회\s*원|쿠\s*폰|담\s*당|캐셔|감사|이용|교환|환불|신용|체크|현금영수증|번\s*호|no\./i;
-const DAILY = /상품별|메뉴별|정\s*산|마\s*감|판매\s*현황|매출\s*현황/;
+  /합\s*계|총\s*(액|금액|매출|수량|판매)|소\s*계|부\s*가\s*세|과\s*세|면\s*세|받\s*을|받\s*은|결\s*제|카\s*드|현\s*금|거스름|잔\s*돈|승\s*인|사업자|대\s*표|전\s*화|tel|주\s*소|영수증|할\s*인|포인트|적\s*립|봉사료|단\s*가|수\s*량|금\s*액|상품명|품\s*명|pos|테이블|주문\s*번호|일\s*시|가맹|회\s*원|쿠\s*폰|담\s*당|캐셔|감사|이용|교환|환불|신용|체크|현금영수증|번\s*호|no\.|객\s*수|객단가|건\s*수|순\s*매출|실\s*매출|공급가|에누리|반\s*품|취\s*소/i;
+/** 시간대별 매출(10시, 10시~11시)과 [분류]·<분류> 소계 줄. */
+const TIME_BAND = /^\d{1,2}\s*시/;
+const SECTION = /^[\[<【(].*[\]>】)]$/;
 const HANGUL_OR_LETTER = /[가-힣A-Za-z]/;
 
 /** 숫자 앞뒤에 OCR이 흔히 붙이는 잡티(_ . ] | ' 등). */
@@ -128,13 +125,6 @@ function findDate(text: string): string | null {
   return null;
 }
 
-function findKey(text: string): string | null {
-  const number = text.match(/(?:영수증|거래|승인|전표)\s*(?:번호|no\.?)?\s*[:：#]?\s*([A-Za-z0-9-]{4,})/i)?.[1] ?? null;
-  const time = text.match(/\b([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b/)?.[0] ?? null;
-  const parts = [number, time].filter(Boolean);
-  return parts.length > 0 ? parts.join(' ') : null;
-}
-
 export function parseReceiptText(text: string): ParsedReceipt {
   const rawLines = text
     .split(/\r?\n/)
@@ -158,6 +148,7 @@ export function parseReceiptText(text: string): ParsedReceipt {
     }
     if (!HANGUL_OR_LETTER.test(name) && pendingName) name = `${pendingName} ${name}`.trim();
     pendingName = null;
+    if (SECTION.test(name.trim()) || TIME_BAND.test(name.trim())) continue;
     const cleaned = cleanName(name);
     const qty = quantityOf(numbers);
     if (!HANGUL_OR_LETTER.test(cleaned.name) || !qty || qty.quantity === 0) {
@@ -166,7 +157,7 @@ export function parseReceiptText(text: string): ParsedReceipt {
     }
     lines.push({ name: cleaned.name, code: cleaned.code, quantity: qty.quantity, amount: qty.amount });
   }
-  return { date: findDate(text), key: findKey(text), kind: DAILY.test(text) ? 'daily' : 'single', lines, skipped };
+  return { date: findDate(text), lines, skipped };
 }
 
 /** 미리보기·저장 흐름을 그대로 쓰도록 영수증 줄을 표(머리글 + 줄)로 바꾼다. */

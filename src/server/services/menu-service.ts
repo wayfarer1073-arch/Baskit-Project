@@ -77,7 +77,7 @@ export async function previewMenuSales(orgId: string, aoa: string[][], options: 
 }
 
 /**
- * 영수증 글자 미리보기 — 판매 줄을 뽑아 파일 미리보기와 같은 메뉴 연결 단계로 넘긴다.
+ * 마감 정산서 글자 미리보기 — 판매 줄을 뽑아 파일 미리보기와 같은 메뉴 연결 단계로 넘긴다.
  * 날짜는 영수증에 찍힌 날짜를 제안만 하고(화면에서 바꿀 수 있게) 줄에는 넣지 않는다.
  */
 export async function previewReceipt(orgId: string, text: string, engine: string): Promise<MenuSalesPreview> {
@@ -89,7 +89,7 @@ export async function previewReceipt(orgId: string, text: string, engine: string
     periodDate: receipt.date,
     skipped: preview.skipped + receipt.skipped,
     topRows: [],
-    receipt: { text, engine, date: receipt.date, key: receipt.key, kind: receipt.kind },
+    receipt: { text, engine, date: receipt.date },
   };
 }
 

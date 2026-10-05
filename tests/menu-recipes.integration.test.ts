@@ -2,16 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
 import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, requireTestDatabase } from './db-fixtures';
 import { addPurchaseOrders, createStoreItem, saveEasyCount } from '../src/server/repositories/store-repository';
-import {
-  createMenu,
-  DuplicateReceiptError,
-  importMenuSales,
-  matchMenuNames,
-  saveMenuSalesTemplate,
-  findMenuSalesTemplate,
-  setItemContent,
-  setRecipe,
-} from '../src/server/repositories/menu-repository';
+import { createMenu, importMenuSales, matchMenuNames, saveMenuSalesTemplate, findMenuSalesTemplate, setItemContent, setRecipe } from '../src/server/repositories/menu-repository';
 import { getLossReport, getRecipeOverview, previewMenuSales, previewReceipt } from '../src/server/services/menu-service';
 
 requireTestDatabase();
@@ -29,7 +20,6 @@ afterEach(async () => {
   await prisma.menuSale.deleteMany({ where: { organizationId: f.org.id } });
   await prisma.storeMenuAlias.deleteMany({ where: { organizationId: f.org.id } });
   await prisma.storeMenu.deleteMany({ where: { organizationId: f.org.id } });
-  await prisma.menuReceipt.deleteMany({ where: { organizationId: f.org.id } });
   await prisma.importTemplate.deleteMany({ where: { organizationId: f.org.id } });
   await cleanupFixture(f);
 });
@@ -195,15 +185,16 @@ it('reports loss between the last two Easy Counts against recipe usage', async (
   expect(second.loss).toMatchObject({ actualUsed: 100, theoretical: 100, orderedUnits: 50, difference: 0, level: 'ok' });
 });
 
-it('reads receipt text into the same preview, adds customer receipts once, and replaces with a daily report', async () => {
+it('reads a closing report photo text into the same preview and replaces that day', async () => {
   const americano = await createMenu(f.org.id, { name: '아메리카노' });
-  const receiptText = '[영수증] 2026-10-04 14:23:11\n아메리카노 4,500 2 9,000\n쿠키 3,000 1 3,000\n합계 12,000\n승인번호: 12345678';
-  const preview = await previewReceipt(f.org.id, receiptText, 'browser');
+  const text =
+    '[마감 정산서]\n영업일자 2026-10-04\n총매출액 214,500\n신용카드 40 200,000\n상품명 수량 금액\n[커피] 45 202,500\n아메리카노 45 202,500\n쿠키 4 12,000\n10시 12 54,000\n합계 49 214,500';
+  const preview = await previewReceipt(f.org.id, text, 'browser');
   expect(preview).toMatchObject({ source: 'receipt', periodDate: '2026-10-04', needsDate: true, missing: [] });
-  expect(preview.receipt).toMatchObject({ key: '12345678 14:23:11', kind: 'single', engine: 'browser' });
+  expect(preview.receipt).toEqual({ text, engine: 'browser', date: '2026-10-04' });
   expect(preview.names.map((n) => [n.name, n.quantity, n.match.kind])).toEqual([
-    ['아메리카노', 2, 'menu'],
-    ['쿠키', 1, 'none'],
+    ['아메리카노', 45, 'menu'],
+    ['쿠키', 4, 'none'],
   ]);
 
   const decisions = [
@@ -212,15 +203,8 @@ it('reads receipt text into the same preview, adds customer receipts once, and r
   ];
   const lines = preview.rows.map((r) => ({ date: '2026-10-04', name: r.name, quantity: r.quantity, amount: r.amount }));
   const sold = () => prisma.menuSale.findFirstOrThrow({ where: { menuId: americano.id } }).then((s) => Number(s.quantity));
-  await importMenuSales(f.org.id, { lines, decisions, mode: 'add', receipt: { date: '2026-10-04', key: '12345678 14:23:11' } });
-  await importMenuSales(f.org.id, { lines, decisions, mode: 'add', receipt: { date: '2026-10-04', key: '99999999 15:00:00' } });
-  expect(await sold()).toBe(4);
-  // 같은 영수증은 다시 더하지 않는다(판매도 그대로).
-  await expect(importMenuSales(f.org.id, { lines, decisions, mode: 'add', receipt: { date: '2026-10-04', key: '12345678 14:23:11' } })).rejects.toBeInstanceOf(
-    DuplicateReceiptError,
-  );
-  expect(await sold()).toBe(4);
-  // 마감 정산서는 그날 판매를 바꾼다.
-  await importMenuSales(f.org.id, { lines: [{ date: '2026-10-04', name: '아메리카노', quantity: 30, amount: null }], decisions, mode: 'replace' });
-  expect(await sold()).toBe(30);
+  await importMenuSales(f.org.id, { lines, decisions });
+  // 같은 정산서를 다시 올려도 그날 판매는 그대로(덮어쓰기).
+  await importMenuSales(f.org.id, { lines, decisions });
+  expect(await sold()).toBe(45);
 });

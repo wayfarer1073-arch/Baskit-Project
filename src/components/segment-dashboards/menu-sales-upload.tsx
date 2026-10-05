@@ -23,11 +23,9 @@ const NONE = '__none__';
 const NEW = '__new__';
 const IGNORE = '__ignore__';
 
-type SaveMode = 'replace' | 'add';
-
 /**
- * 파일 한 개(또는 영수증 사진 한 장)의 미리보기 → (열 지정) → 메뉴 연결 → 저장. 저장 전에는 아무것도 바뀌지 않는다.
- * 영수증은 서버 OCR(OCR.space 무료 키가 있을 때) → 안 되면 브라우저 OCR로 읽고, 인식한 글자를 고쳐 다시 읽을 수 있다.
+ * 파일 한 개(또는 마감 정산서 사진 한 장)의 미리보기 → (열 지정) → 메뉴 연결 → 저장. 저장 전에는 아무것도 바뀌지 않는다.
+ * 마감 정산서 사진은 서버 OCR(OCR.space 무료 키가 있을 때) → 안 되면 브라우저 OCR로 읽고, 인식한 글자를 고쳐 다시 읽을 수 있다.
  */
 export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: StoreMenuRow[]; today: string; readOnly: boolean; serverOcr: boolean }) {
   const { m, locale } = useI18n();
@@ -40,7 +38,6 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
   const [receiptText, setReceiptText] = useState('');
   const [photoName, setPhotoName] = useState('');
   const [showText, setShowText] = useState(false);
-  const [mode, setMode] = useState<SaveMode>('replace');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<MenuSalesPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +59,6 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? t.failed);
       apply(data as MenuSalesPreview, chosenDate);
-      setMode('replace');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t.failed);
     } finally {
@@ -85,7 +81,7 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
     return data as MenuSalesPreview;
   }
 
-  /** 영수증 사진 → (줄이기) → 서버 OCR, 안 되면 브라우저 OCR → 미리보기. */
+  /** 마감 정산서 사진 → (줄이기) → 서버 OCR, 안 되면 브라우저 OCR → 미리보기. */
   async function readReceipt(photo: File) {
     reset();
     setPhotoName(photo.name);
@@ -117,7 +113,6 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
       apply(p, '');
       setReceiptText(p.receipt?.text ?? '');
       setShowText(p.names.length === 0);
-      setMode(p.receipt?.kind === 'daily' ? 'replace' : 'add');
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : r.failed);
     } finally {
@@ -179,8 +174,6 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
           lines: rows.map((row) => ({ date: row.date, name: row.name, quantity: row.quantity, amount: row.amount })),
           decisions,
           template: layout && !isReceipt ? { save: saveTemplate, name: templateName.trim() || t.defaultTemplateName, headers: preview.headers, layout } : null,
-          mode,
-          receipt: mode === 'add' && preview.receipt?.key && dates.length === 1 ? { date: dates[0], key: preview.receipt.key } : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -299,30 +292,6 @@ export function MenuSalesUpload({ menus, today, readOnly, serverOcr }: { menus: 
                   </Button>
                 </div>
               </div>
-            )}
-
-            {isReceipt && preview.names.length > 0 && (
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-semibold">{r.modeTitle}</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(['add', 'replace'] as const).map((value) => (
-                    <label
-                      key={value}
-                      className={cn(
-                        'flex cursor-pointer gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm transition-colors',
-                        mode === value ? 'border-foreground bg-muted/40' : 'border-border hover:bg-muted/30',
-                      )}
-                    >
-                      <input type="radio" name="receipt-mode" value={value} checked={mode === value} onChange={() => setMode(value)} className="mt-1 accent-foreground" />
-                      <span>
-                        <span className="font-medium">{r.mode[value].label}</span>
-                        <span className="block text-xs text-muted-foreground">{r.mode[value].help}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {mode === 'add' && !preview.receipt?.key && <p className="text-xs text-status-warning">{r.noKey}</p>}
-              </fieldset>
             )}
 
             {customizing && layout && !isReceipt && (
