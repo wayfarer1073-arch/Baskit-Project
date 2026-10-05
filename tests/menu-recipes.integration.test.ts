@@ -3,7 +3,7 @@ import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, requireTestDatabase } from './db-fixtures';
 import { addPurchaseOrders, createStoreItem, saveEasyCount } from '../src/server/repositories/store-repository';
 import { createMenu, importMenuSales, matchMenuNames, saveMenuSalesTemplate, findMenuSalesTemplate, setItemContent, setRecipe } from '../src/server/repositories/menu-repository';
-import { getRecipeOverview, previewMenuSales } from '../src/server/services/menu-service';
+import { getLossReport, getRecipeOverview, previewMenuSales } from '../src/server/services/menu-service';
 
 requireTestDatabase();
 
@@ -140,4 +140,47 @@ it('remembers ignored names and refuses foreign menus', async () => {
   } finally {
     await cleanupFixture(other);
   }
+});
+
+it('reports loss between the last two Easy Counts against recipe usage', async () => {
+  const americano = await createMenu(f.org.id, { name: '아메리카노' });
+  await setItemContent(f.org.id, beans, { contentPerUnit: 1000, contentUnit: 'g' });
+  await setRecipe(f.org.id, americano.id, [
+    { itemId: beans, quantity: 20 },
+    { itemId: cups, quantity: 1 },
+  ]);
+  await prisma.sku.update({ where: { id: beans }, data: { currentUnitCost: 20000 } });
+
+  // 실사 한 번뿐이면 비교할 수 없다.
+  const count = (date: string, beansUnits: number, beansPct: number | null, cupsUnits: number) =>
+    saveEasyCount(f.org.id, {
+      date,
+      lines: [
+        { itemId: beans, fullUnits: beansUnits, openedPercent: beansPct },
+        { itemId: cups, fullUnits: cupsUnits, openedPercent: null },
+      ],
+      createdById: f.user.id,
+    });
+  await count('2026-09-30', 3, 0, 100);
+  expect(await getLossReport(f.org.id, '2026-10-05')).toMatchObject({ rows: [], waiting: 2, inRecipes: 2 });
+
+  // 10/1~10/3 판매 100잔 → 원두 2봉, 컵 100개. 10/2 컵 50개 발주.
+  const sell = (date: string, quantity: number) => ({ date, name: '아메리카노', quantity, amount: null });
+  await importMenuSales(f.org.id, {
+    lines: [sell('2026-09-30', 999), sell('2026-10-01', 40), sell('2026-10-02', 30), sell('2026-10-03', 30)],
+    decisions: [{ name: '아메리카노', code: null, action: 'menu', menuId: americano.id }],
+  });
+  await addPurchaseOrders(f.org.id, { date: '2026-10-02', lines: [{ itemId: cups, quantity: 50, coverageAmount: null, leftoverQuantity: null }], createdById: f.user.id });
+  await count('2026-10-04', 0, 50, 50); // 원두 실제 2.5봉(+0.5, 25% 초과), 컵 실제 100개(정상)
+
+  const report = await getLossReport(f.org.id, '2026-10-05');
+  expect(report.waiting).toBe(0);
+  const [first, second] = report.rows;
+  expect(first.item.id).toBe(beans);
+  expect(first.unitCost).toBe(20000);
+  expect(first.loss).toMatchObject({ from: '2026-09-30', to: '2026-10-04', days: 4, salesDays: 3, startUnits: 3, endUnits: 0.5, orderedUnits: 0, level: 'check' });
+  expect(first.loss.theoretical).toBeCloseTo(2);
+  expect(first.loss.difference).toBeCloseTo(0.5);
+  expect(second.item.id).toBe(cups);
+  expect(second.loss).toMatchObject({ actualUsed: 100, theoretical: 100, orderedUnits: 50, difference: 0, level: 'ok' });
 });

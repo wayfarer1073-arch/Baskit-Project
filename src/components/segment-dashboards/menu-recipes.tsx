@@ -12,16 +12,19 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { MenuSalesUpload } from '@/components/segment-dashboards/menu-sales-upload';
-import type { RecipeItemRow, RecipeOverview, StoreMenuRow } from '@/domain/segments/read-model';
+import type { LossReport, RecipeItemRow, RecipeOverview, StoreMenuRow } from '@/domain/segments/read-model';
+import type { LossLevel } from '@/domain/segments/loss-report';
 import { USAGE_PERIODS } from '@/domain/segments/recipe-usage';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
+import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 interface MenuRecipesProps {
   items: RecipeItemRow[];
   menus: StoreMenuRow[];
   overview: RecipeOverview;
+  loss: LossReport;
   days: number;
   today: string;
   readOnly: boolean;
@@ -39,7 +42,7 @@ async function send(url: string, method: string, body?: unknown) {
   return data;
 }
 
-export function MenuRecipes({ items, menus, overview, days, today, readOnly }: MenuRecipesProps) {
+export function MenuRecipes({ items, menus, overview, loss, days, today, readOnly }: MenuRecipesProps) {
   const { m } = useI18n();
   const t = m.store.menus;
   const [editing, setEditing] = useState<string | null>(null);
@@ -58,6 +61,7 @@ export function MenuRecipes({ items, menus, overview, days, today, readOnly }: M
 
       <MenuSalesUpload menus={menus} today={today} readOnly={readOnly} />
       <UsagePanel overview={overview} days={days} />
+      <LossPanel report={loss} />
       <MenuList menus={menus} items={items} readOnly={readOnly} onEdit={setEditing} />
       <ContentPanel items={items} readOnly={readOnly} />
 
@@ -151,6 +155,141 @@ function UsagePanel({ overview, days }: { overview: RecipeOverview; days: number
                         <Link href="/dashboard/store/easy-count" className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
                           {t.noCount}
                         </Link>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
+    </SectionPanel>
+  );
+}
+
+// ── 로스 리포트 ──────────────────────────────────────────────────────────────────────────────
+
+const LEVEL_TONE: Record<LossLevel, string> = {
+  check: 'bg-status-danger-bg text-status-danger',
+  watch: 'bg-status-warning-bg text-status-warning',
+  ok: 'bg-status-normal-bg text-status-normal',
+  no_sales: 'bg-muted text-muted-foreground',
+};
+const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${amount(Math.abs(v))}`;
+const shortDate = (d: string) => d.slice(5).replace('-', '/');
+
+function LossPanel({ report }: { report: LossReport }) {
+  const { m, locale } = useI18n();
+  const t = m.store.menus.loss;
+  const counts = { check: 0, watch: 0, ok: 0, no_sales: 0 };
+  let overValue = 0;
+  for (const row of report.rows) {
+    counts[row.loss.level]++;
+    if (row.unitCost && row.loss.level !== 'ok' && row.loss.difference > 0) overValue += row.loss.difference * row.unitCost;
+  }
+  const countLink = (
+    <Link href="/dashboard/store/easy-count" className="font-medium text-foreground underline-offset-2 hover:underline">
+      {t.goCount}
+    </Link>
+  );
+
+  return (
+    <SectionPanel title={t.title} description={t.help}>
+      {report.inRecipes === 0 ? (
+        <p className="p-5 text-sm text-muted-foreground">{t.noRecipes}</p>
+      ) : report.rows.length === 0 ? (
+        <p className="p-5 text-sm text-muted-foreground">
+          {t.empty} {countLink}
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pt-4 text-xs text-muted-foreground">
+            <span className="tabular-nums">{format(t.summary, counts)}</span>
+            {overValue > 0 && <span className="font-medium text-status-danger tabular-nums">{format(t.overValue, { value: formatMoney(overValue, locale) })}</span>}
+            {report.waiting > 0 && (
+              <span>
+                {format(t.waiting, { count: report.waiting })} {countLink}
+              </span>
+            )}
+          </div>
+          <ul className="divide-y divide-border px-5 pt-2 sm:hidden">
+            {report.rows.map(({ item, unitCost, loss }) => (
+              <li key={item.id} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 font-medium">{item.name}</span>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap', LEVEL_TONE[loss.level])}>{t.level[loss.level]}</span>
+                </div>
+                <p className="mt-1 text-sm font-semibold tabular-nums">
+                  {signed(loss.difference)}
+                  {item.unit}
+                  {loss.rate !== null && <span className="ml-1 text-xs font-normal text-muted-foreground">({signed(Math.round(loss.rate * 100))}%)</span>}
+                  {unitCost !== null && loss.level !== 'ok' && Math.abs(loss.difference) > 0 && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {loss.difference > 0 ? '+' : '−'}
+                      {formatMoney(Math.abs(loss.difference) * unitCost, locale)}
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                  {t.actual} {amount(loss.actualUsed)}
+                  {item.unit} · {t.theoretical} {amount(loss.theoretical)}
+                  {item.unit}
+                </p>
+                <p className="text-[11px] text-muted-foreground tabular-nums">
+                  {format(t.intervalValue, { from: shortDate(loss.from), to: shortDate(loss.to) })} · {format(t.days, { days: loss.days })}
+                  {loss.salesDays < loss.days && <span className="text-status-warning"> · {format(t.salesGap, { sales: loss.salesDays, days: loss.days })}</span>}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto p-5 pt-3 sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t.item}</TableHead>
+                  <TableHead>{t.interval}</TableHead>
+                  <TableHead className="text-right">{t.actual}</TableHead>
+                  <TableHead className="text-right">{t.theoretical}</TableHead>
+                  <TableHead className="text-right">{t.difference}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.rows.map(({ item, unitCost, loss }) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                      {format(t.intervalValue, { from: shortDate(loss.from), to: shortDate(loss.to) })}
+                      <span className="block text-[11px] text-muted-foreground">
+                        {format(t.days, { days: loss.days })}
+                        {loss.salesDays < loss.days && <span className="text-status-warning"> · {format(t.salesGap, { sales: loss.salesDays, days: loss.days })}</span>}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {amount(loss.actualUsed)}
+                      {item.unit}
+                      <span className="block text-[11px] whitespace-nowrap text-muted-foreground">
+                        {format(t.actualDetail, { start: amount(loss.startUnits), ordered: amount(loss.orderedUnits), end: amount(loss.endUnits) })}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {amount(loss.theoretical)}
+                      {item.unit}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                        <span className="font-semibold whitespace-nowrap">
+                          {signed(loss.difference)}
+                          {item.unit}
+                          {loss.rate !== null && <span className="ml-1 text-xs font-normal text-muted-foreground">({signed(Math.round(loss.rate * 100))}%)</span>}
+                        </span>
+                        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap', LEVEL_TONE[loss.level])}>{t.level[loss.level]}</span>
+                      </span>
+                      {unitCost !== null && loss.level !== 'ok' && Math.abs(loss.difference) > 0 && (
+                        <span className="block text-[11px] text-muted-foreground">
+                          {loss.difference > 0 ? '+' : '−'}
+                          {formatMoney(Math.abs(loss.difference) * unitCost, locale)}
+                        </span>
                       )}
                     </TableCell>
                   </TableRow>

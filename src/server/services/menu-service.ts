@@ -3,7 +3,8 @@ import { dateOnlyToString } from '@/lib/date';
 import { shiftDate } from '@/domain/inventory/shipping-calendar';
 import { detectMenuSalesLayout, findPeriod, parseMenuSales, type MenuSalesLayout } from '@/domain/excel/menu-sales';
 import { estimateStock, recipeUsage } from '@/domain/segments/recipe-usage';
-import type { MenuSalesPreview, RecipeOverview } from '@/domain/segments/read-model';
+import { compareLoss, countIntervalLoss, type CountPoint } from '@/domain/segments/loss-report';
+import type { LossReport, LossReportRow, MenuSalesPreview, RecipeOverview } from '@/domain/segments/read-model';
 import { findMenuSalesTemplate, lastMenuSalesDate, listMenuSales, listMenus, listRecipeItems, matchMenuNames } from '@/server/repositories/menu-repository';
 
 const TOP_ROWS = 15;
@@ -112,4 +113,55 @@ export async function getRecipeOverview(orgId: string, from: string, to: string)
   });
   rows.sort((a, b) => b.units - a.units || a.item.name.localeCompare(b.item.name));
   return { from, to, asOfDate: to, rows, menusWithoutRecipe: period.menusWithoutRecipe, salesDays: days, lastSalesDate: lastSales };
+}
+
+/** 로스 리포트를 볼 때 거슬러 올라가는 실사 기간(일) — 두 실사가 이보다 멀면 비교하지 않는다. */
+const LOSS_LOOKBACK_DAYS = 120;
+
+/**
+ * 로스 리포트 — 레시피에 쓰이는 품목마다 가장 최근 두 번의 Easy Count 사이에서
+ * 실제 사용(앞 실사 + 발주 − 뒤 실사)과 레시피 기준 소모량을 비교한다.
+ */
+export async function getLossReport(orgId: string, asOfDate: string): Promise<LossReport> {
+  const [items, menus] = await Promise.all([listRecipeItems(orgId), listMenus(orgId, asOfDate)]);
+  const inRecipes = new Set(menus.flatMap((m) => m.lines.map((l) => l.itemId)));
+  const recipeItems = items.filter((i) => inRecipes.has(i.id));
+  const ids = recipeItems.map((i) => i.id);
+  const lookback = new Date(`${shiftDate(asOfDate, -LOSS_LOOKBACK_DAYS)}T00:00:00.000Z`);
+  const counts = await prisma.storeStockCount.findMany({
+    where: { skuId: { in: ids }, countDate: { gte: lookback, lte: new Date(`${asOfDate}T00:00:00.000Z`) } },
+    orderBy: { countDate: 'desc' },
+    select: { skuId: true, countDate: true, fullUnits: true, openedPercent: true },
+  });
+  const pairs = new Map<string, CountPoint[]>();
+  for (const c of counts) {
+    const list = pairs.get(c.skuId) ?? [];
+    if (list.length < 2) list.push({ date: dateOnlyToString(c.countDate), fullUnits: Number(c.fullUnits), openedPercent: c.openedPercent });
+    pairs.set(c.skuId, list);
+  }
+  const ready = recipeItems.filter((i) => pairs.get(i.id)?.length === 2);
+  if (ready.length === 0) return { asOfDate, rows: [], waiting: recipeItems.length, inRecipes: recipeItems.length };
+
+  const earliest = ready.map((i) => pairs.get(i.id)![1].date).reduce((min, d) => (d < min ? d : min));
+  const latest = ready.map((i) => pairs.get(i.id)![0].date).reduce((max, d) => (d > max ? d : max));
+  const readyIds = ready.map((i) => i.id);
+  const [sales, orders, costs] = await Promise.all([
+    listMenuSales(orgId, shiftDate(earliest, 1), latest),
+    prisma.purchaseOrder.findMany({
+      where: { skuId: { in: readyIds }, orderDate: { gt: new Date(`${earliest}T00:00:00.000Z`), lte: new Date(`${latest}T00:00:00.000Z`) } },
+      select: { skuId: true, orderDate: true, quantity: true },
+    }),
+    prisma.sku.findMany({ where: { id: { in: readyIds } }, select: { id: true, currentUnitCost: true } }),
+  ]);
+  const usage = recipeUsage(items, menus, sales, shiftDate(earliest, 1), latest);
+  const salesDates = new Set(sales.map((s) => s.date));
+  const costById = new Map(costs.map((c) => [c.id, Number(c.currentUnitCost)]));
+  const rows: LossReportRow[] = ready.map((item) => {
+    const [end, start] = pairs.get(item.id)!;
+    const itemOrders = orders.filter((o) => o.skuId === item.id).map((o) => ({ date: dateOnlyToString(o.orderDate), quantity: Number(o.quantity) }));
+    const cost = costById.get(item.id) ?? 0;
+    return { item, unitCost: cost > 0 ? cost : null, loss: countIntervalLoss(start, end, itemOrders, usage.items.get(item.id)?.byDate, salesDates) };
+  });
+  rows.sort(compareLoss);
+  return { asOfDate, rows, waiting: recipeItems.length - ready.length, inRecipes: recipeItems.length };
 }

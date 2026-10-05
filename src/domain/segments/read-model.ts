@@ -244,3 +244,20 @@ export interface RecipeOverview {
   salesDays: number;
   lastSalesDate: string | null;
 }
+
+export interface LossReportRow {
+  item: RecipeItemRow;
+  /** 단가(원) — 등록돼 있지 않으면 null. */
+  unitCost: number | null;
+  loss: import('@/domain/segments/loss-report').CountIntervalLoss;
+}
+
+export interface LossReport {
+  asOfDate: string;
+  /** 레시피에 쓰이고 Easy Count를 두 번 이상 센 품목 — 가장 최근 두 실사 사이. */
+  rows: LossReportRow[];
+  /** 레시피에 쓰이지만 아직 한 번 이하로 센 품목 수 — 두 번째 실사부터 비교할 수 있다. */
+  waiting: number;
+  /** 레시피에 쓰이는 품목 수. */
+  inRecipes: number;
+}
