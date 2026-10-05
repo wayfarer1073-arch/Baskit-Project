@@ -173,3 +173,74 @@ export interface EasyCountLine {
   fullUnits: number | null;
   openedPercent: number | null;
 }
+
+// ── 메뉴·레시피(레시피 기반 소모량) ──
+
+export interface RecipeItemRow {
+  id: string;
+  name: string;
+  unit: string;
+  /** 1단위에 든 양(레시피 단위, 예: 1봉 = 1000 g). */
+  contentPerUnit: number | null;
+  contentUnit: string | null;
+}
+
+export interface StoreMenuRow {
+  id: string;
+  name: string;
+  code: string | null;
+  lines: { itemId: string; quantity: number }[];
+  /** 최근 7일 판매 수. */
+  soldRecent: number;
+}
+
+export type MenuMatch = { kind: 'menu'; menuId: string; via: 'code' | 'name' | 'alias' } | { kind: 'ignore' } | { kind: 'none' };
+
+export interface MenuSalesPreviewName {
+  name: string;
+  code: string | null;
+  quantity: number;
+  amount: number | null;
+  match: MenuMatch;
+}
+
+export interface MenuSalesPreview {
+  headerRowIndex: number;
+  headers: string[];
+  columns: Partial<Record<import('@/domain/excel/menu-sales-fields').MenuSalesField, string>>;
+  /** 열을 어떻게 정했는지 — 저장한 양식 / 기본 인식(OKPOS 등) / 직접 지정 / 못 찾음. */
+  source: 'template' | 'auto' | 'manual' | 'none';
+  templateName: string | null;
+  /** 파일 위쪽 조회기간이 하루면 그 날짜, 여러 날이면 range. */
+  periodDate: string | null;
+  periodRange: [string, string] | null;
+  /** 날짜를 알 수 없는 줄이 있어 날짜를 골라야 하는지. */
+  needsDate: boolean;
+  rows: { date: string | null; code: string | null; name: string; quantity: number; amount: number | null }[];
+  dates: string[];
+  skipped: number;
+  missing: import('@/domain/excel/menu-sales-fields').MenuSalesField[];
+  names: MenuSalesPreviewName[];
+  /** 머리글 행을 직접 고를 때 보여 줄 파일 윗부분. */
+  topRows: string[][];
+}
+
+export interface RecipeOverviewRow {
+  item: RecipeItemRow;
+  /** 기간 소모량(품목 단위)과 레시피 단위 소모량. */
+  units: number;
+  content: number | null;
+  dailyAverage: number | null;
+  estimate: import('@/domain/segments/recipe-usage').StockEstimate | null;
+}
+
+export interface RecipeOverview {
+  from: string;
+  to: string;
+  asOfDate: string;
+  rows: RecipeOverviewRow[];
+  menusWithoutRecipe: { menuId: string; name: string; quantity: number }[];
+  /** 기간 중 메뉴 판매가 있는 날 수와 마지막 판매 기록일. */
+  salesDays: number;
+  lastSalesDate: string | null;
+}

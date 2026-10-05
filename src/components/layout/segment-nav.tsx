@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, LayoutDashboard, MessagesSquare, NotebookPen, Settings, ShieldCheck } from 'lucide-react';
+import { CalendarDays, ChefHat, LayoutDashboard, MessagesSquare, NotebookPen, Settings, ShieldCheck } from 'lucide-react';
 import { CALENDAR_HREF, SEGMENT_COOKIE, SEGMENT_META, segmentForPath, type Segment } from '@/lib/segments';
 import { postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
 import { cn } from '@/lib/utils';
@@ -47,6 +47,7 @@ interface AppNavProps {
 }
 
 const EASY_COUNT_HREF = '/dashboard/store/easy-count';
+const MENUS_HREF = '/dashboard/store/menus';
 
 const ICONS = { calendar: CalendarDays, dashboard: LayoutDashboard, board: MessagesSquare, settings: Settings, admin: ShieldCheck };
 
@@ -90,6 +91,8 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
 
   const onDashboard = pathname.startsWith('/dashboard');
   const onEasyCount = isActive(EASY_COUNT_HREF);
+  const onMenus = isActive(MENUS_HREF);
+  const onStoreSub = onEasyCount || onMenus;
   return (
     <>
       {item(CALENDAR_HREF, 'calendar', m.nav.items.calendar, isActive(CALENDAR_HREF))}
@@ -101,7 +104,7 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
             const href = SEGMENT_META[value].dashboardHref;
             const active = isActive(href);
             const link = (
-              <Link key={value} href={href} onClick={onNavigate} className={subClass(active && !(value === 'ORDER_CYCLE' && onEasyCount))} aria-current={active && !onEasyCount ? 'page' : undefined}>
+              <Link key={value} href={href} onClick={onNavigate} className={subClass(active && !(value === 'ORDER_CYCLE' && onStoreSub))} aria-current={active && !onStoreSub ? 'page' : undefined}>
                 <span
                   className={cn('size-1 shrink-0 rounded-full', active ? 'bg-brand-accent' : dark ? 'bg-sidebar-muted-foreground/60' : 'bg-muted-foreground/60')}
                   aria-hidden="true"
@@ -122,6 +125,10 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
               >
                 <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{m.store.easyCount.title}</span>
+              </Link>,
+              <Link key="menus" href={MENUS_HREF} onClick={onNavigate} className={cn(subClass(onMenus), 'pl-14')} aria-current={onMenus ? 'page' : undefined}>
+                <ChefHat className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{m.store.menus.navLabel}</span>
               </Link>,
             ];
           })}

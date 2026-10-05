@@ -43,18 +43,21 @@ model Organization {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
-  users           User[]
-  warehouses      Warehouse[]
-  settings        Settings?
-  holidays        Holiday[]
-  posts           Post[]
-  schedules       EventSchedule[]
-  suppliers       Supplier[]
-  importTemplates ImportTemplate[]
-  dailySales      DailySales[]
-  invitations     Invitation[]
-  uploadFiles     UploadFile[]
-  uploadJobs      UploadJob[]
+  users            User[]
+  warehouses       Warehouse[]
+  settings         Settings?
+  holidays         Holiday[]
+  posts            Post[]
+  schedules        EventSchedule[]
+  suppliers        Supplier[]
+  importTemplates  ImportTemplate[]
+  dailySales       DailySales[]
+  storeMenus       StoreMenu[]
+  storeMenuAliases StoreMenuAlias[]
+  menuSales        MenuSale[]
+  invitations      Invitation[]
+  uploadFiles      UploadFile[]
+  uploadJobs       UploadJob[]
 
   @@map("organizations")
 }
@@ -210,7 +213,11 @@ model Sku {
   isHiddenFromDashboard Boolean @default(false)
 
   // 매장 품목(STORE 창고)의 발주 단위(박스·kg·팩 등). 재고 창고 SKU는 비어 있다.
-  unit String?
+  unit                String?
+  /// 매장 품목 환산 — 레시피에 쓰는 단위로 1단위에 든 양(예: 원두 1봉 = 1000 g). 없으면 레시피도 품목 단위로 적는다.
+  storeContentPerUnit Decimal?          @db.Decimal(12, 3)
+  storeContentUnit    String?
+  recipeLines         StoreRecipeLine[]
 
   // 이 SKU에 등록된 로트 중 가장 이른(soonest) 소비기한 — expirationLots가 바뀔 때마다
   // 자동으로 다시 계산되는 캐시값이다. 위험 판정 등 도메인 계산은 로트를 직접 보지 않고
@@ -558,6 +565,71 @@ model StoreStockCount {
 
   @@unique([skuId, countDate])
   @@map("store_stock_counts")
+}
+
+/// 매장에서 파는 메뉴(아메리카노 등). 메뉴별 판매 수 × 레시피로 품목 소모량을 계산한다.
+model StoreMenu {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  name           String
+  /// POS 상품코드(있으면 이름보다 먼저 맞춘다).
+  code           String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  recipeLines    StoreRecipeLine[]
+  aliases        StoreMenuAlias[]
+  sales          MenuSale[]
+
+  @@unique([organizationId, name])
+  @@map("store_menus")
+}
+
+/// 메뉴 1개에 드는 매장 품목의 양 — 품목에 환산(1봉 = 1000 g)이 있으면 그 단위(g), 없으면 품목 단위.
+model StoreRecipeLine {
+  id       String    @id @default(cuid())
+  menuId   String
+  menu     StoreMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  skuId    String
+  sku      Sku       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  quantity Decimal   @db.Decimal(12, 3)
+
+  @@unique([menuId, skuId])
+  @@map("store_recipe_lines")
+}
+
+/// POS 파일에 찍힌 메뉴 이름 → 앱의 메뉴. 처음 한 번 짝지으면 다음 업로드부터 자동으로 연결한다. menuId가 없으면 '무시'.
+model StoreMenuAlias {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  alias          String
+  menuId         String?
+  menu           StoreMenu?   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, alias])
+  @@map("store_menu_aliases")
+}
+
+/// 메뉴별 하루 판매 수(POS 파일 업로드). 같은 날·같은 메뉴는 덮어쓴다.
+model MenuSale {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  menuId         String
+  menu           StoreMenu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  date           DateTime     @db.Date
+  quantity       Decimal      @db.Decimal(12, 2)
+  amount         Decimal?     @db.Decimal(14, 0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([menuId, date])
+  @@index([organizationId, date])
+  @@map("menu_sales")
 }
 
 /// 하루 매출 합계(원). 같은 날짜를 다시 입력하면 덮어쓴다.

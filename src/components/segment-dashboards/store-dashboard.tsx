@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { NotebookPen } from 'lucide-react';
+import { ChefHat, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
@@ -174,12 +174,20 @@ export function StoreDashboard({ asOfDate, fromDate, rangeSummary, rows, sales, 
       asOfDate={asOfDate}
       fromDate={fromDate}
       actions={
-        <Button asChild variant="outline" size="sm">
-          <Link href="/dashboard/store/easy-count">
-            <NotebookPen aria-hidden="true" />
-            {m.store.easyCount.open}
-          </Link>
-        </Button>
+        <>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/store/menus">
+              <ChefHat aria-hidden="true" />
+              {m.store.menus.title}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/store/easy-count">
+              <NotebookPen aria-hidden="true" />
+              {m.store.easyCount.open}
+            </Link>
+          </Button>
+        </>
       }
     />
   );
