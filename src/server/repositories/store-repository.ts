@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
-import type { OrderEntryRow, SalesEntryRow, StoreItemExtras } from '@/domain/segments/read-model';
+import type { EasyCountItem, EasyCountLine, OrderEntryRow, SalesEntryRow, StoreItemExtras } from '@/domain/segments/read-model';
 
 function toDateOnly(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
@@ -350,4 +350,64 @@ export function upsertDailySales(orgId: string, date: string, amount: number) {
 export async function deleteDailySales(orgId: string, date: string) {
   const result = await prisma.dailySales.deleteMany({ where: { organizationId: orgId, date: toDateOnly(date) } });
   return result.count > 0;
+}
+
+// ── Easy Count(매장 재고 기록) ────────────────────────────────────────────────────────────────
+// 한 화면에서 매장 품목 재고를 적는다 — 미개봉 완제품 개수(EA)와 개봉품 잔량(%)을 나눠 기록한다.
+
+export async function getEasyCountSheet(orgId: string, date: string): Promise<EasyCountItem[]> {
+  const day = toDateOnly(date);
+  const items = await prisma.sku.findMany({
+    where: storeItemWhere(orgId),
+    orderBy: { currentProductName: 'asc' },
+    select: {
+      id: true,
+      currentProductName: true,
+      unit: true,
+      supplier: { select: { name: true } },
+      storeStockCounts: { where: { countDate: { lte: day } }, orderBy: { countDate: 'desc' }, take: 2, select: { countDate: true, fullUnits: true, openedPercent: true } },
+      purchaseOrders: { where: { orderDate: { lte: day } }, orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { orderDate: true, quantity: true } },
+    },
+  });
+  return items.map((item) => {
+    const counts = item.storeStockCounts.map((c) => ({ date: dateOnlyToString(c.countDate), fullUnits: Number(c.fullUnits), openedPercent: c.openedPercent }));
+    const current = counts[0]?.date === date ? counts[0] : null;
+    const previous = (current ? counts[1] : counts[0]) ?? null;
+    const order = item.purchaseOrders[0];
+    return {
+      id: item.id,
+      name: item.currentProductName,
+      unit: item.unit ?? DEFAULT_UNIT,
+      supplierName: item.supplier?.name ?? null,
+      current: current ? { fullUnits: current.fullUnits, openedPercent: current.openedPercent } : null,
+      previous,
+      lastOrder: order ? { date: dateOnlyToString(order.orderDate), quantity: Number(order.quantity) } : null,
+    };
+  });
+}
+
+/** 한 날짜의 재고 기록을 품목 여러 개 한 번에 저장한다. 하나라도 이 조직의 품목이 아니면 아무것도 저장하지 않는다. */
+export async function saveEasyCount(orgId: string, input: { date: string; lines: EasyCountLine[]; createdById: string }): Promise<{ saved: number; cleared: number } | null> {
+  const ids = [...new Set(input.lines.map((l) => l.itemId))];
+  const owned = await prisma.sku.count({ where: { id: { in: ids }, ...storeItemWhere(orgId) } });
+  if (owned !== ids.length) return null;
+  const countDate = toDateOnly(input.date);
+  let saved = 0;
+  let cleared = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const line of input.lines) {
+      if (line.fullUnits === null && line.openedPercent === null) {
+        cleared += (await tx.storeStockCount.deleteMany({ where: { skuId: line.itemId, countDate } })).count;
+        continue;
+      }
+      const data = { fullUnits: line.fullUnits ?? 0, openedPercent: line.openedPercent, createdById: input.createdById };
+      await tx.storeStockCount.upsert({
+        where: { skuId_countDate: { skuId: line.itemId, countDate } },
+        create: { skuId: line.itemId, countDate, ...data },
+        update: data,
+      });
+      saved++;
+    }
+  });
+  return { saved, cleared };
 }

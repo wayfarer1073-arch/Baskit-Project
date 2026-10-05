@@ -115,6 +115,7 @@ model User {
   favorites         SkuFavorite[]
   packagingUploads  SkuPackagingUpload[]
   purchaseOrders    PurchaseOrder[]
+  storeStockCounts  StoreStockCount[]
   platformActions   PlatformAuditLog[]
   authTokens        AuthToken[]
   sentInvites       Invitation[]
@@ -245,6 +246,7 @@ model Sku {
   favoritedBy       SkuFavorite[]
   codeAliases       SkuCodeAlias[]
   purchaseOrders    PurchaseOrder[]
+  storeStockCounts  StoreStockCount[]
   attributeVersions SkuAttributeVersion[]
 
   @@unique([warehouseId, productCode])
@@ -535,6 +537,27 @@ model PurchaseOrder {
 
   @@index([skuId, orderDate])
   @@map("purchase_orders")
+}
+
+/// Easy Count — 매장 품목을 직접 센 기록. 미개봉 완제품 개수(EA)와 개봉품 잔량(%)을 나눠 적는다.
+/// 같은 품목·같은 날짜는 하나만 둔다(다시 저장하면 덮어쓴다).
+model StoreStockCount {
+  id            String   @id @default(cuid())
+  /// 매장 품목 — '매장 품목' 가상 창고(STORE)의 SKU.
+  skuId         String
+  sku           Sku      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  countDate     DateTime @db.Date
+  /// 미개봉 완제품 개수(품목 단위).
+  fullUnits     Decimal  @db.Decimal(12, 2)
+  /// 개봉한 제품의 남은 양(0~100%). 개봉품이 없으면 null.
+  openedPercent Int?
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([skuId, countDate])
+  @@map("store_stock_counts")
 }
 
 /// 하루 매출 합계(원). 같은 날짜를 다시 입력하면 덮어쓴다.

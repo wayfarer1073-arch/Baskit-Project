@@ -186,7 +186,7 @@ export async function deleteWorkspace(orgId: string) {
       await tx.eventSchedule.deleteMany({ where: { organizationId: orgId } });
       await tx.inventorySnapshot.deleteMany({ where: inOrgWarehouse }); // 스냅샷 품목은 DB cascade
       await tx.skuPackagingUpload.deleteMany({ where: inOrgWarehouse });
-      await tx.sku.deleteMany({ where: inOrgWarehouse }); // 소비기한 로트·즐겨찾기·매장 발주 기록은 DB cascade
+      await tx.sku.deleteMany({ where: inOrgWarehouse }); // 소비기한 로트·즐겨찾기·매장 발주·Easy Count 기록은 DB cascade
       await tx.warehouse.deleteMany({ where: { organizationId: orgId } });
       await tx.supplier.deleteMany({ where: { organizationId: orgId } });
       await tx.importTemplate.deleteMany({ where: { organizationId: orgId } });

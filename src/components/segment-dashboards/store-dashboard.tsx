@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { NotebookPen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SectionPanel, SummaryMetric, SummaryPanel } from '@/components/segment-dashboards/dashboard-parts';
 import { DashboardEmptyState, DashboardMasthead } from '@/components/dashboard/dashboard-masthead';
@@ -171,6 +173,14 @@ export function StoreDashboard({ asOfDate, fromDate, rangeSummary, rows, sales, 
       description={fromDate ? format(m.dashboard.range, { from: fromDate, to: asOfDate }) : format(m.dashboard.asOf, { date: asOfDate })}
       asOfDate={asOfDate}
       fromDate={fromDate}
+      actions={
+        <Button asChild variant="outline" size="sm">
+          <Link href="/dashboard/store/easy-count">
+            <NotebookPen aria-hidden="true" />
+            {m.store.easyCount.open}
+          </Link>
+        </Button>
+      }
     />
   );
 

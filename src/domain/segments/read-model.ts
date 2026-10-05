@@ -146,3 +146,30 @@ export interface SupplierRow {
   leadTimeDays: number;
   itemCount: number;
 }
+
+// ── Easy Count(매장 재고 기록) ──
+
+export interface EasyCountEntry {
+  fullUnits: number;
+  openedPercent: number | null;
+}
+
+export interface EasyCountItem {
+  id: string;
+  name: string;
+  unit: string;
+  supplierName: string | null;
+  /** 이 날짜에 이미 적은 값(있으면 입력칸에 채운다). */
+  current: EasyCountEntry | null;
+  /** 이 날짜 전 마지막 기록. */
+  previous: (EasyCountEntry & { date: string }) | null;
+  /** 기록이 한 번도 없을 때 대신 보여 주는, 이 날짜까지의 가장 최근 발주. */
+  lastOrder: { date: string; quantity: number } | null;
+}
+
+export interface EasyCountLine {
+  itemId: string;
+  /** 둘 다 null이면 이 날짜의 기록을 지운다. */
+  fullUnits: number | null;
+  openedPercent: number | null;
+}

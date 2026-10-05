@@ -12,13 +12,15 @@ interface DashboardMastheadProps {
   description: string;
   asOfDate: string;
   fromDate: string | null;
+  /** 날짜 컨트롤 옆에 둘 버튼(예: 매장 발주 예측의 Easy Count). */
+  actions?: React.ReactNode;
 }
 
 /**
  * 세 대시보드(일일 재고 연동·비정기 실사·매장 발주 예측)가 함께 쓰는 머리글 — 같은 제목 옆에 방식 태그를 달고,
  * 오른쪽에 오늘/어제/특정 날짜/기간 비교 조회를 둔다. 태그는 버튼처럼 보이지만 누를 수 없는 표시다.
  */
-export function DashboardMasthead({ segment, title, segmentLabel, description, asOfDate, fromDate }: DashboardMastheadProps) {
+export function DashboardMasthead({ segment, title, segmentLabel, description, asOfDate, fromDate, actions }: DashboardMastheadProps) {
   return (
     <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
@@ -30,7 +32,10 @@ export function DashboardMasthead({ segment, title, segmentLabel, description, a
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {actions}
+        <DateRangeControl key={`${fromDate ?? 'day'}-${asOfDate}`} asOfDate={asOfDate} fromDate={fromDate} maxDate={todayKstDateString()} />
+      </div>
     </div>
   );
 }

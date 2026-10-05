@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, LayoutDashboard, MessagesSquare, Settings, ShieldCheck } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, MessagesSquare, NotebookPen, Settings, ShieldCheck } from 'lucide-react';
 import { CALENDAR_HREF, SEGMENT_COOKIE, SEGMENT_META, segmentForPath, type Segment } from '@/lib/segments';
 import { postTagDotClassName, type PostTagValue } from '@/lib/post-tags';
 import { cn } from '@/lib/utils';
@@ -46,6 +46,8 @@ interface AppNavProps {
   onNavigate?: () => void;
 }
 
+const EASY_COUNT_HREF = '/dashboard/store/easy-count';
+
 const ICONS = { calendar: CalendarDays, dashboard: LayoutDashboard, board: MessagesSquare, settings: Settings, admin: ShieldCheck };
 
 /** 사이드바·모바일 메뉴 공용: 캘린더 / 대시보드(유형별 하위 메뉴) / 게시판(유형별 최근 글) / 설정 / 운영자 콘솔. */
@@ -87,6 +89,7 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
   }
 
   const onDashboard = pathname.startsWith('/dashboard');
+  const onEasyCount = isActive(EASY_COUNT_HREF);
   return (
     <>
       {item(CALENDAR_HREF, 'calendar', m.nav.items.calendar, isActive(CALENDAR_HREF))}
@@ -97,8 +100,8 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
           {enabled.map((value) => {
             const href = SEGMENT_META[value].dashboardHref;
             const active = isActive(href);
-            return (
-              <Link key={value} href={href} onClick={onNavigate} className={subClass(active)} aria-current={active ? 'page' : undefined}>
+            const link = (
+              <Link key={value} href={href} onClick={onNavigate} className={subClass(active && !(value === 'ORDER_CYCLE' && onEasyCount))} aria-current={active && !onEasyCount ? 'page' : undefined}>
                 <span
                   className={cn('size-1 shrink-0 rounded-full', active ? 'bg-brand-accent' : dark ? 'bg-sidebar-muted-foreground/60' : 'bg-muted-foreground/60')}
                   aria-hidden="true"
@@ -106,6 +109,21 @@ export function AppNav({ segment, enabled, variant, recentPosts, isPlatformAdmin
                 <span className="truncate">{m.segments[value].label}</span>
               </Link>
             );
+            if (value !== 'ORDER_CYCLE') return link;
+            // 매장 발주 예측 아래 — 재고를 한 장에 적는 Easy Count.
+            return [
+              link,
+              <Link
+                key="easy-count"
+                href={EASY_COUNT_HREF}
+                onClick={onNavigate}
+                className={cn(subClass(onEasyCount), 'pl-14')}
+                aria-current={onEasyCount ? 'page' : undefined}
+              >
+                <NotebookPen className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{m.store.easyCount.title}</span>
+              </Link>,
+            ];
           })}
         </div>
       </div>
