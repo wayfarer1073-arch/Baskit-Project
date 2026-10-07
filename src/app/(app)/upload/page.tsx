@@ -18,6 +18,7 @@ import { isDateString, todayKstDateString } from '@/lib/date';
 import { isSegment } from '@/lib/segments';
 import { getPeriodicRows } from '@/server/services/periodic-service';
 import { missingSalesDates } from '@/domain/segments/calendar-todo';
+import { isPeriodUploadSource } from '@/domain/excel/period-plan';
 import type { CalendarTodo } from '@/components/upload/upload-calendar';
 
 /** 공용 캘린더 — 날짜를 누르면 켜 둔 방식별 업로드·입력 패널이 뜬다. ?date=&mode=로 특정 날짜 패널을 바로 연다. */
@@ -63,6 +64,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
             snapshotId: s.id,
             sourceFile: files.get(s.id) ?? null,
             isManual: s.sourceFileName === MANUAL_COUNT_SOURCE,
+            isPeriodUpload: isPeriodUploadSource(s.sourceFileName),
           };
         });
       }),
@@ -92,7 +94,12 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
     <div className="space-y-6">
       {tenant.role === 'VIEWER' && <ViewerNotice message={(await getMessages()).account.viewerNotice} />}
       <UploadCalendar
-        warehouses={warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name, segment: w.segment === 'PERIODIC_COUNT' ? ('PERIODIC_COUNT' as const) : ('DAILY_SYNC' as const) }))}
+        warehouses={warehouses.map((w) => ({
+          id: w.id,
+          code: w.code,
+          name: w.name,
+          segment: w.segment === 'PERIODIC_COUNT' ? ('PERIODIC_COUNT' as const) : ('DAILY_SYNC' as const),
+        }))}
         entries={calendarEntries}
         holidays={holidays.map((h) => ({ date: h.date, name: h.name }))}
         schedules={schedules}

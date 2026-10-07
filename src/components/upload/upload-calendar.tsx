@@ -38,6 +38,8 @@ export interface CalendarEntry {
   sourceFile: { fileName: string; size: number } | null;
   /** 실사 입력 화면에서 직접 적은 수량인지(엑셀 업로드가 아닌). */
   isManual: boolean;
+  /** 기간 일괄 업로드로 저장된 날인지 — 날짜별 원본 파일이 없다. */
+  isPeriodUpload: boolean;
 }
 
 interface UploadCalendarProps {

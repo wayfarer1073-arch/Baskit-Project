@@ -8,6 +8,13 @@
  */
 import type { PeriodSheet } from '@/domain/excel/period-sheet';
 
+/**
+ * 기간 일괄 업로드로 만든 스냅샷의 파일명 머리말 — 날짜별 원본 파일이 없으므로 원본 내려받기 대신 안내를 보인다.
+ * (직접 입력 실사의 MANUAL_COUNT_SOURCE처럼 파일명 자리로 출처를 구분한다.)
+ */
+export const PERIOD_UPLOAD_SOURCE_PREFIX = '기간 일괄 업로드 · ';
+export const isPeriodUploadSource = (sourceFileName: string) => sourceFileName.startsWith(PERIOD_UPLOAD_SOURCE_PREFIX);
+
 export type PeriodDateStatus = 'upload' | 'existing' | 'blocked' | 'future';
 
 export interface PeriodPlanRow {

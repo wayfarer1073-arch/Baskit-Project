@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma';
 import { cleanupFixture, createFixture, row } from './db-fixtures';
 import { createSnapshot } from '../src/server/repositories/snapshot-repository';
 import { previewPeriodUpload, runPeriodUpload, type PeriodUploadInput } from '../src/server/services/period-upload-service';
+import { isPeriodUploadSource } from '../src/domain/excel/period-plan';
 
 let f: Awaited<ReturnType<typeof createFixture>>;
 beforeEach(async () => {
@@ -79,6 +80,14 @@ it('fills only the dates not uploaded yet, treats blanks after registration as s
   expect(result).toMatchObject({ uploadedDays: 3, skippedDays: 0, inboundCreated: 2, inboundSkipped: 0 });
   expect(await stockOn('2026-09-29')).toEqual({ '001': 10, '004': 0 });
   expect(await stockOn('2026-09-30')).toEqual({ '001': 99, '004': 7 }); // 이미 올린 날은 그대로
+  // 일괄 업로드로 만든 날은 파일명 머리말로 구분한다(원본 파일 내려받기 대신 안내).
+  const sources = await prisma.inventorySnapshot.findMany({
+    where: { warehouseId: f.warehouse.id, status: 'ACTIVE' },
+    orderBy: { snapshotDate: 'asc' },
+    select: { sourceFileName: true },
+  });
+  expect(sources.map((s) => isPeriodUploadSource(s.sourceFileName))).toEqual([false, true, false, true, true]);
+  expect(await prisma.uploadFile.count({ where: { snapshot: { warehouseId: f.warehouse.id } } })).toBe(0);
   expect(await stockOn('2026-10-01')).toEqual({ '001': 0, '002': 20, '004': 0, '005': 0 });
   expect(await stockOn('2026-10-02')).toEqual({ '001': 5, '002': 18, '004': 0, '005': 3 });
 

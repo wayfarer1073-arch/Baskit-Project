@@ -25,7 +25,14 @@ interface WarehouseDayPanelProps {
   warehouseId: string;
   warehouseName: string;
   date: string;
-  existing: { uploadedByName: string; uploadedAt: string; rowCount: number; snapshotId?: string; sourceFile?: { fileName: string; size: number } | null } | null;
+  existing: {
+    uploadedByName: string;
+    uploadedAt: string;
+    rowCount: number;
+    snapshotId?: string;
+    sourceFile?: { fileName: string; size: number } | null;
+    periodUpload?: boolean;
+  } | null;
   blocked: boolean;
   isAdmin: boolean;
   /** 미리보기에서 이 파일로 품절 처리될 기존 SKU를 함께 받는다(비정기 실사). */
@@ -199,12 +206,30 @@ export function WarehouseDayPanel({ warehouseId, warehouseName, date, existing, 
         </a>
       )}
 
+      {/* 기간 일괄 업로드로 저장된 날은 날짜별 원본 파일이 없다 — 내려받기를 누르면 그 이유를 알린다. */}
+      {existing?.snapshotId && !existing.sourceFile && existing.periodUpload && (
+        <button
+          type="button"
+          onClick={() => toast.error(m.upload.periodNoOriginal)}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+        >
+          <Download className="size-3.5" aria-hidden="true" />
+          {m.upload.downloadOriginalPeriod}
+        </button>
+      )}
+
       {blocked && !existing && <p className="text-xs text-muted-foreground">{m.upload.blockedHoliday}</p>}
 
       {!blocked && (
         <div className="space-y-1.5">
           <Label htmlFor={`warehouse-day-file-${warehouseId}`}>{m.upload.fileLabel}</Label>
-          <Input ref={fileInputRef} id={`warehouse-day-file-${warehouseId}`} type="file" accept=".xls,.xlsx,.csv,.tsv,.txt" onChange={(e) => chooseFile(e.target.files?.[0] ?? null)} />
+          <Input
+            ref={fileInputRef}
+            id={`warehouse-day-file-${warehouseId}`}
+            type="file"
+            accept=".xls,.xlsx,.csv,.tsv,.txt"
+            onChange={(e) => chooseFile(e.target.files?.[0] ?? null)}
+          />
           <p className="text-xs text-muted-foreground">{format(m.upload.rowLimit, { rows: MAX_UPLOAD_DATA_ROWS })}</p>
           {file && (
             <LayoutReview

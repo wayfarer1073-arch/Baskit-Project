@@ -12,7 +12,7 @@ import { todayKstDateString, dateOnlyToString } from '@/lib/date';
 import { isShippingDay } from '@/domain/inventory/shipping-calendar';
 import { markZeroStock } from '@/domain/excel/normalize';
 import { dateFromFileName, detectPeriodSheet, parsePeriodSheet, type PeriodSheet } from '@/domain/excel/period-sheet';
-import { buildPeriodPlan, type PeriodPlan, type PeriodPlanRow, type PeriodUploadPreview, type PeriodUploadResult } from '@/domain/excel/period-plan';
+import { buildPeriodPlan, PERIOD_UPLOAD_SOURCE_PREFIX, type PeriodPlan, type PeriodPlanRow, type PeriodUploadPreview, type PeriodUploadResult } from '@/domain/excel/period-plan';
 export type { PeriodUploadPreview, PeriodUploadResult };
 import type { ParsedInventoryRow } from '@/domain/excel/types';
 import { getSegmentSettings } from '@/server/repositories/settings-repository';
@@ -192,7 +192,7 @@ export async function runPeriodUpload(input: PeriodUploadInput, onProgress?: (do
       await createSnapshot({
         warehouseId: input.warehouseId,
         snapshotDate,
-        sourceFileName: `${fileName} · ${day.date.slice(5)}`,
+        sourceFileName: `${PERIOD_UPLOAD_SOURCE_PREFIX}${fileName} · ${day.date.slice(5)}`,
         fileHash: signature(day.rows),
         uploadedById: input.userId,
         rows,

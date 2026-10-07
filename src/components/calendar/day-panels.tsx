@@ -32,7 +32,14 @@ export interface WarehouseOption {
 
 function toExisting(entry: CalendarEntry | undefined) {
   return entry
-    ? { uploadedByName: entry.uploadedByName, uploadedAt: entry.uploadedAt, rowCount: entry.rowCount, snapshotId: entry.snapshotId, sourceFile: entry.sourceFile }
+    ? {
+        uploadedByName: entry.uploadedByName,
+        uploadedAt: entry.uploadedAt,
+        rowCount: entry.rowCount,
+        snapshotId: entry.snapshotId,
+        sourceFile: entry.sourceFile,
+        periodUpload: entry.isPeriodUpload,
+      }
     : null;
 }
 
@@ -77,7 +84,16 @@ function WarehouseUploadTabs({
       </TabsList>
       {warehouses.map((w) => (
         <TabsContent key={w.id} value={w.id}>
-          <WarehouseDayPanel warehouseId={w.id} warehouseName={w.name} date={date} existing={toExisting(entryByWarehouseId.get(w.id))} blocked={blocked} isAdmin={isAdmin} checkMissing={checkMissing} showInbound={!checkMissing} />
+          <WarehouseDayPanel
+            warehouseId={w.id}
+            warehouseName={w.name}
+            date={date}
+            existing={toExisting(entryByWarehouseId.get(w.id))}
+            blocked={blocked}
+            isAdmin={isAdmin}
+            checkMissing={checkMissing}
+            showInbound={!checkMissing}
+          />
         </TabsContent>
       ))}
     </Tabs>
