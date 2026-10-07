@@ -79,22 +79,22 @@ describe('dataReliabilityLevel', () => {
     return result;
   }
 
-  it('과거 자료로 1주 앞을 되짚어 맞혀 본 오차가 작으면 상', () => {
+  it('과거 자료로 2주 앞을 되짚어 맞혀 본 오차가 작으면 상', () => {
     const a = analyzeOperationalSku(longDaily(), '2026-09-18')!;
-    expect(a.reliability?.horizon).toBe(5);
+    expect(a.reliability?.horizon).toBe(10);
     expect(a.reliability?.reason).toBeNull();
     expect(dataReliabilityLevel(a)).toBe('HIGH');
   });
 
-  it('업로드가 밀리면 밀린 기간만큼 앞을 맞혀 본 오차로 매긴다(흐름이 규칙적이면 그대로 상)', () => {
+  it('업로드가 밀려도 2주보다 짧으면 2주 앞을 맞혀 본 오차로 매긴다(흐름이 규칙적이면 그대로 상)', () => {
     const stale = analyzeOperationalSku(longDaily(), '2026-09-28')!;
     expect(stale.operating?.reason).toBe('자료 갱신 필요');
-    expect(stale.reliability?.horizon).toBe(6);
+    expect(stale.reliability?.horizon).toBe(10);
     expect(dataReliabilityLevel(stale)).toBe('HIGH');
   });
 
-  it('특수 관리 품목이나 자료가 짧은 품목은 하', () => {
-    expect(dataReliabilityLevel(analyzeOperationalSku(longDaily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!)).toBe('LOW');
+  it('특수 관리 품목은 제외, 자료가 짧은 품목은 하', () => {
+    expect(dataReliabilityLevel(analyzeOperationalSku(longDaily(), '2026-09-18', undefined, undefined, undefined, { isB2B: true })!)).toBe('NONE');
     const short = analyzeOperationalSku(daily(), '2026-09-18')!;
     expect(short.reliability?.reason).toBe('insufficient_history');
     expect(dataReliabilityLevel(short)).toBe('LOW');

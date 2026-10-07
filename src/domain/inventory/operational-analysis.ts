@@ -2,7 +2,7 @@ import { daysBetween, demandDaysBetween, latestShippingDay, NO_HOLIDAYS, shiftDa
 import { analyzeSku, buildDailyDeltas, calculateCoverage, calculateThresholdRisk, resolveEffectiveThresholds } from './calculations';
 import type { DailyDelta, ManualRiskThresholds, RiskThresholdSettings, SkuAnalysis, StockObservation, WindowDepletion } from './types';
 import { DEFAULT_EXPIRATION_RISK_DAYS, DEFAULT_RISK_SETTINGS } from './types';
-import { forecastReliability, RELIABILITY_HORIZON_DEMAND_DAYS } from './nowcast';
+import { forecastReliability } from './nowcast';
 
 /** 소진 속도를 잴 근거 기간 안의 업로드 간격 상한(출고일) — 매일이 아니어도 주 1회처럼 규칙적으로 올리면 쓴다. */
 const MAX_BASIS_GAP_SHIPPING_DAYS = 5;
@@ -102,11 +102,11 @@ export function analyzeOperationalSku(
                   : null;
   const canEstimate = reason === null;
   // 신뢰도 = 품목 자신의 과거로 앞으로의 누적 소진량을 되짚어 맞혀 본 오차(미업로드일 추정과 같은 기준).
-  // 자료가 최신이면 1주 앞, 업로드가 밀렸으면 밀린 기간만큼 앞을 맞히는 정도로 본다.
+  // 2주 앞(업로드가 그보다 오래 밀렸으면 밀린 기간만큼) 누적 소진량을 맞히는 정도로 본다.
   const reliability = forecastReliability({
     observations: sorted,
     holidays,
-    horizonDays: staleDays > 0 ? demandDaysBetween(latest.date, latestShippingDay(asOfDate, holidays), holidays) : RELIABILITY_HORIZON_DEMAND_DAYS,
+    horizonDays: staleDays > 0 ? demandDaysBetween(latest.date, latestShippingDay(asOfDate, holidays), holidays) : 0,
     isB2B: context.isB2B,
     isSoldOut: context.isMissing,
   })!;

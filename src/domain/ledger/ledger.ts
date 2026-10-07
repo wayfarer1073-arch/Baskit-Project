@@ -55,7 +55,10 @@ export function observationsFromLedger(entries: LedgerEntry[], calendar: ClosedD
     const existing = levelsByDate.get(entry.date);
     if (!existing || (existing.source === 'SNAPSHOT' && entry.source === 'COUNT')) levelsByDate.set(entry.date, entry);
   }
-  const levels = [...levelsByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  // 자료로 알아낸 쉬는 날의 재고는 빼고 본다 — 그날 쌓인 주문은 다음 출고일 소진에 함께 들어간다(마지막 관측은 남긴다).
+  const sortedLevels = [...levelsByDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const detected = calendar.detectedClosed;
+  const levels = detected?.size ? sortedLevels.filter((l, i) => i === sortedLevels.length - 1 || !detected.has(l.date)) : sortedLevels;
   const observations: StockObservation[] = levels.map((level) => {
     const v = level.valuation ?? EMPTY_VALUATION;
     return {

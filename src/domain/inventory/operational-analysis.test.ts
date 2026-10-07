@@ -135,14 +135,14 @@ describe('shipping-day trading inventory', () => {
     rows[rows.length - 1] = obs('2026-09-18', 300, 200);
     expect(analyzeOperationalSku(rows, '2026-09-18')!.coverage.coverageDays).toBe(30);
   });
-  it('uses the backtest-based reliability: one week ahead when fresh, the gap length when uploads are late', () => {
+  it('uses the backtest-based reliability: two weeks ahead, or the gap length when uploads are later than that', () => {
     const long = daily(10, new Set(), '2026-07-01', '2026-09-18', 5000);
     const fresh = analyzeOperationalSku(long, '2026-09-18')!;
-    expect(fresh.reliability?.horizon).toBe(5);
+    expect(fresh.reliability?.horizon).toBe(10);
     expect(fresh.forecast.confidence).toBe('HIGH');
     const stale = analyzeOperationalSku(long, '2026-09-28')!;
     expect(stale.operating?.reason).toBe('자료 갱신 필요');
-    expect(stale.reliability?.horizon).toBe(6);
+    expect(stale.reliability?.horizon).toBe(10);
     expect(stale.forecast.confidence).toBe('HIGH');
     expect(stale.thresholdRisk.level).toBe('UNKNOWN');
     expect(analyzeOperationalSku(daily(), '2026-09-18')!.forecast.confidence).toBe('LOW');

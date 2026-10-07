@@ -3,7 +3,7 @@ import type { Dictionary } from '../dictionary';
 /** 계산 결과(도메인)가 만드는 한국어 문구의 화면 표시용 번역 — 원문은 엑셀 내보내기·필터 매칭에 그대로 쓴다. */
 export const ko = {
   risk: { DANGER: '위험', WARNING: '주의', UNKNOWN: '개별 확인', NORMAL: '기준 내' },
-  reliability: { HIGH: '상', MEDIUM: '중', LOW: '하', label: '신뢰도 {level}' },
+  reliability: { HIGH: '상', MEDIUM: '중', LOW: '하', NONE: '제외', label: '신뢰도 {level}' },
   defaultWarehouse: '기본 창고',
   eventTypes: { INBOUND: '입고', RETURN: '반품', ADJUSTMENT: '재고조정', PROMOTION: '프로모션', SOLD_OUT: '품절', OTHER: '기타' },
   reasons: {
@@ -42,7 +42,7 @@ export const ko = {
 
 export const en: Dictionary<typeof ko> = {
   risk: { DANGER: 'Danger', WARNING: 'Watch', UNKNOWN: 'Check', NORMAL: 'OK' },
-  reliability: { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low', label: 'Reliability {level}' },
+  reliability: { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low', NONE: 'n/a', label: 'Reliability {level}' },
   defaultWarehouse: 'Main warehouse',
   eventTypes: { INBOUND: 'Inbound', RETURN: 'Return', ADJUSTMENT: 'Adjustment', PROMOTION: 'Promotion', SOLD_OUT: 'Sold out', OTHER: 'Other' },
   reasons: {

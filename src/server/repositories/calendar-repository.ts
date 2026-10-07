@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
-import { closedDays, isShippingDay, type ClosedDays } from '@/domain/inventory/shipping-calendar';
+import { closedDays, detectClosedDays, isShippingDay, type ClosedDays } from '@/domain/inventory/shipping-calendar';
 import { listHolidayDateStrings } from '@/server/repositories/holiday-repository';
 
 export type CalendarFor = (warehouseId: string) => ClosedDays;
@@ -23,6 +23,36 @@ export async function loadWarehouseCalendars(orgId: string): Promise<{ holidays:
     worked.set(u.warehouseId, [...(worked.get(u.warehouseId) ?? []), date]);
   }
   const base = closedDays(holidays);
-  const byWarehouse = new Map([...worked].map(([warehouseId, dates]) => [warehouseId, closedDays(holidays, dates)]));
+  const detected = await detectWarehouseClosedDays(orgId, closedDays(holidays));
+  const ids = new Set([...worked.keys(), ...detected.keys()]);
+  const byWarehouse = new Map([...ids].map((warehouseId) => [warehouseId, closedDays(holidays, worked.get(warehouseId) ?? [], detected.get(warehouseId) ?? [])]));
   return { holidays: base, calendarFor: (warehouseId) => byWarehouse.get(warehouseId) ?? base };
+}
+
+/** 자료로 알아낸 창고별 쉬는 날을 다시 볼 기간(일). */
+const CLOSED_DETECTION_LOOKBACK_DAYS = 400;
+
+/** 창고·날짜별로 '전날 대비 재고가 바뀐 품목 수 / 이틀 다 있던 품목 수'를 세어 멈춘 평일을 찾는다. */
+async function detectWarehouseClosedDays(orgId: string, holidays: ClosedDays): Promise<Map<string, string[]>> {
+  const since = new Date(Date.now() - CLOSED_DETECTION_LOOKBACK_DAYS * 86_400_000);
+  const rows = await prisma.$queryRaw<{ warehouseId: string; date: Date; present: bigint; changed: bigint }[]>`
+    WITH obs AS (
+      SELECT s."warehouseId", s."snapshotDate", i."normalStock",
+             LAG(i."normalStock") OVER (PARTITION BY i."skuId" ORDER BY s."snapshotDate") AS prev
+      FROM inventory_items i
+      JOIN inventory_snapshots s ON s.id = i."snapshotId"
+      JOIN warehouses w ON w.id = s."warehouseId"
+      WHERE s.status = 'ACTIVE' AND w."organizationId" = ${orgId} AND s."snapshotDate" >= ${since}
+    )
+    SELECT "warehouseId", "snapshotDate" AS date,
+           COUNT(*) FILTER (WHERE prev IS NOT NULL) AS present,
+           COUNT(*) FILTER (WHERE prev IS NOT NULL AND "normalStock" <> prev) AS changed
+    FROM obs GROUP BY "warehouseId", "snapshotDate"`;
+  const byWarehouse = new Map<string, { date: string; present: number; changed: number }[]>();
+  for (const r of rows) {
+    const list = byWarehouse.get(r.warehouseId) ?? [];
+    list.push({ date: dateOnlyToString(r.date), present: Number(r.present), changed: Number(r.changed) });
+    byWarehouse.set(r.warehouseId, list);
+  }
+  return new Map([...byWarehouse].map(([warehouseId, stats]) => [warehouseId, detectClosedDays(stats, holidays)]));
 }

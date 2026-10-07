@@ -37,6 +37,13 @@ const WEEKDAY_MIN_VALUES = 20;
 const WEEKDAY_SHRINK = 2;
 const INTERVAL_QUANTILE = 0.8;
 const INTEGRITY_LOOKBACK_DAYS = 30;
+/** 간헐 수요 판정 — 출고가 있는 날 사이 평균 간격(ADI, Syntetos–Boylan 기준 1.32). */
+const INTERMITTENT_ADI = 1.32;
+/** 간헐 수요는 며칠 단위로는 언제 나갈지 맞힐 수 없으니, 4주(평일 20일) 누적 소진량을 얼마나 맞히는지로 신뢰도를 본다. */
+export const INTERMITTENT_EVAL_DEMAND_DAYS = 20;
+/** 대량 출고 — 평소 출고일 하루 소진량(중앙값)의 이 배수를 넘는 날. 언제 올지 예측할 수 없는 일회성 주문으로 보고 학습·검증에서 뺀다. */
+const BULK_FACTOR = 4;
+const BULK_MIN_ACTIVE_DAYS = 10;
 
 export type NowcastUnavailableReason =
   | 'sold_out' // 품절 표시 품목
@@ -46,7 +53,9 @@ export type NowcastUnavailableReason =
   | 'insufficient_history' // 학습·검증할 자료가 모자람
   | 'unstable_pattern'; // 소진 흐름이 불규칙해 같은 길이 백테스트 오차가 50% 초과
 
-export type NowcastMethod = 'ewma' | 'ewma_weekday' | 'mean';
+export type NowcastMethod = 'ewma' | 'ewma_weekday' | 'mean' | 'croston';
+/** 소진 흐름 — 거의 매일 나가는지(smooth), 가끔 몰아서 나가는지(intermittent: 출고 간격이 평균 1.32일 이상). */
+export type DemandPattern = 'smooth' | 'intermittent';
 export type NowcastGrade = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export interface NowcastBacktest {
@@ -104,6 +113,27 @@ export function demandDaySeries(sorted: StockObservation[], holidays: ClosedDays
   return series.slice(-maxDays);
 }
 
+/**
+ * 대량 출고일을 '모름'으로 바꾼다 — 출고가 있는 날이 충분할 때, 그 날들의 중앙값의 BULK_FACTOR배를 넘는 날.
+ * 평소 흐름을 맞히는 능력만 평가·학습하고, 대량 출고는 따로 세어 알려 준다.
+ */
+export function maskBulkDays(series: DemandDay[]): { series: DemandDay[]; bulkDays: number } {
+  const positive = series.filter((d) => d.value !== null && d.value > 0).map((d) => d.value!);
+  if (positive.length < BULK_MIN_ACTIVE_DAYS) return { series, bulkDays: 0 };
+  const sorted = [...positive].sort((a, b) => a - b);
+  const median = sorted[Math.floor((sorted.length - 1) / 2)];
+  const limit = median * BULK_FACTOR;
+  let bulkDays = 0;
+  const masked = series.map((d) => {
+    if (d.value !== null && d.value > limit) {
+      bulkDays++;
+      return { ...d, value: null };
+    }
+    return d;
+  });
+  return { series: masked, bulkDays };
+}
+
 // ── 모델 ─────────────────────────────────────────────────────────────────────────────────────
 
 interface ModelSpec {
@@ -116,7 +146,33 @@ const MODELS: ModelSpec[] = [
   ...[0.1, 0.2, 0.3].map((alpha) => ({ method: 'ewma_weekday' as const, parameter: alpha })),
   { method: 'mean', parameter: 10 },
   { method: 'mean', parameter: 20 },
+  { method: 'mean', parameter: 60 },
+  // 간헐 수요(가끔 몰아서 출고)용 — Croston(SBA): 출고량과 출고 간격을 따로 평활해 하루 평균을 낸다.
+  ...[0.1, 0.2].map((alpha) => ({ method: 'croston' as const, parameter: alpha })),
 ];
+
+/** Croston SBA — 0이 아닌 출고량 z와 출고 간격 p를 각각 지수평활해 하루 평균 (1 − α/2)·z/p. */
+function crostonRate(values: number[], alpha: number): number {
+  let size: number | null = null;
+  let interval: number | null = null;
+  let gap = 1;
+  for (const v of values) {
+    if (v > 0) {
+      size = size === null ? v : size + alpha * (v - size);
+      interval = interval === null ? gap : interval + alpha * (gap - interval);
+      gap = 1;
+    } else gap++;
+  }
+  return size === null || interval === null ? 0 : ((1 - alpha / 2) * size) / interval;
+}
+
+/** 출고가 있는 날 사이 평균 간격으로 소진 흐름을 나눈다(아는 날 기준). */
+export function demandPattern(series: DemandDay[]): DemandPattern {
+  const known = series.filter((d) => d.value !== null);
+  const active = known.filter((d) => d.value! > 0).length;
+  if (active === 0) return 'smooth';
+  return known.length / active >= INTERMITTENT_ADI ? 'intermittent' : 'smooth';
+}
 
 /** 요일 계수 — 요일 평균 ÷ 전체 평균, 자료가 적은 요일은 1 쪽으로 당긴다. */
 function weekdayFactors(history: DemandDay[]): number[] | null {
@@ -153,6 +209,13 @@ function forecast(spec: ModelSpec, history: DemandDay[], futureWeekdays: number[
     const recent = known.slice(-spec.parameter).map((d) => d.value!);
     const mean = recent.reduce((s, v) => s + v, 0) / recent.length;
     return futureWeekdays.map(() => mean);
+  }
+  if (spec.method === 'croston') {
+    const rate = crostonRate(
+      known.map((d) => d.value!),
+      spec.parameter,
+    );
+    return futureWeekdays.map(() => rate);
   }
   if (spec.method === 'ewma') {
     const level = ewmaLevel(
@@ -239,35 +302,39 @@ export function gradeOf(wape: number): NowcastGrade | null {
 
 // ── 평가(추정 신뢰도) ────────────────────────────────────────────────────────────────────────
 
-/** 자료가 최신인 품목의 추정 신뢰도는 1주(평일 5일) 앞을 얼마나 맞히는지로 본다. */
-export const RELIABILITY_HORIZON_DEMAND_DAYS = 5;
+/** 신뢰도 배지는 2주(평일 10일) 앞 누적 소진량을 얼마나 맞히는지로 본다 — 재고가 버티는 기간·발주 판단에 쓰는 길이(업로드가 더 밀렸으면 밀린 만큼). */
+export const RELIABILITY_HORIZON_DEMAND_DAYS = 10;
 
 type Evaluation =
-  | { kind: 'graded'; grade: NowcastGrade; best: BacktestResult; series: DemandDay[]; horizon: number }
+  | { kind: 'graded'; grade: NowcastGrade; best: BacktestResult; series: DemandDay[]; horizon: number; pattern: DemandPattern }
   | { kind: 'flat' }
-  | { kind: 'unavailable'; reason: NowcastUnavailableReason; best: BacktestResult | null; horizon: number };
+  | { kind: 'unavailable'; reason: NowcastUnavailableReason; best: BacktestResult | null; horizon: number; pattern: DemandPattern | null };
 
 interface EvaluationInput {
   /** 날짜 오름차순, 마지막이 기준이 되는 최신 관측. */
   sorted: StockObservation[];
   holidays: ClosedDays;
-  /** 앞으로 맞혀야 할 수요일 수(자료 공백 또는 1주). */
+  /** 실제 자료 공백(수요일 수). 공백이 너무 길면 추정하지 않는다. */
   horizonDays: number;
+  /** 평가 기간의 최소 길이(신뢰도 배지는 2주). 자료가 짧으면 가능한 만큼으로 줄인다. */
+  minHorizonDays?: number;
   isB2B?: boolean;
   isSoldOut?: boolean;
 }
 
 /** 품목의 과거 자료로 horizon만큼 앞의 누적 소진량을 얼마나 맞히는지 평가한다. 추정치와 신뢰도 배지가 같은 평가를 쓴다. */
-function evaluate({ sorted, holidays, horizonDays, isB2B, isSoldOut }: EvaluationInput): Evaluation {
+function evaluate({ sorted, holidays, horizonDays, minHorizonDays = 0, isB2B, isSoldOut }: EvaluationInput): Evaluation {
   const horizon = Math.max(1, horizonDays);
-  const unavailable = (reason: NowcastUnavailableReason, best: BacktestResult | null = null): Evaluation => ({ kind: 'unavailable', reason, best, horizon });
+  let pattern: DemandPattern | null = null;
+  let evalHorizon = horizon;
+  const unavailable = (reason: NowcastUnavailableReason, best: BacktestResult | null = null): Evaluation => ({ kind: 'unavailable', reason, best, horizon: evalHorizon, pattern });
   const latest = sorted[sorted.length - 1];
   if (isSoldOut) return unavailable('sold_out');
   if (isB2B) return unavailable('special');
   const integrityFrom = shiftDate(latest.date, -INTEGRITY_LOOKBACK_DAYS);
   if (sorted.some((o) => o.date >= integrityFrom && o.normalStock < 0)) return unavailable('integrity');
 
-  const series = demandDaySeries(sorted, holidays);
+  const { series } = maskBulkDays(demandDaySeries(sorted, holidays));
   // 최근 소진이 없으면 직전 재고가 그대로라고 본다.
   const recentKnown = series.slice(-FLAT_LOOKBACK_DAYS).filter((d) => d.value !== null);
   if (recentKnown.length >= FLAT_MIN_KNOWN_DAYS && recentKnown.every((d) => d.value === 0)) return { kind: 'flat' };
@@ -275,11 +342,17 @@ function evaluate({ sorted, holidays, horizonDays, isB2B, isSoldOut }: Evaluatio
   const maxGap = Math.min(NOWCAST_MAX_GAP_DEMAND_DAYS, Math.floor(series.length / 2));
   if (horizonDays > maxGap) return unavailable('gap_too_long');
 
-  const best = selectModel(series, horizon);
+  // 가끔 몰아서 나가는 품목은 며칠 단위 타이밍을 맞힐 수 없으니 4주 누적 소진량으로 평가한다(재고가 버티는 기간·발주 판단에 쓰는 길이).
+  pattern = demandPattern(series);
+  // 평가 길이: 실제 공백 이상, 배지는 2주, 간헐 수요는 4주 — 단 자료가 짧으면 비교 시점을 NOWCAST_MIN_ORIGINS개 확보할 수 있는 만큼으로 줄인다.
+  const target = Math.max(horizon, minHorizonDays, pattern === 'intermittent' ? INTERMITTENT_EVAL_DEMAND_DAYS : 0);
+  const fits = series.length - MIN_TRAIN - NOWCAST_MIN_ORIGINS + 1;
+  evalHorizon = Math.max(horizon, Math.min(target, fits));
+  const best = selectModel(series, evalHorizon);
   if (!best || best.origins < NOWCAST_MIN_ORIGINS) return unavailable('insufficient_history', best);
   const grade = gradeOf(best.wape);
   if (!grade) return unavailable('unstable_pattern', best);
-  return { kind: 'graded', grade, best, series, horizon };
+  return { kind: 'graded', grade, best, series, horizon: evalHorizon, pattern };
 }
 
 const summaryOf = (best: BacktestResult | null, horizon: number): NowcastBacktest | null => (best ? { origins: best.origins, horizon, wape: best.wape } : null);
@@ -298,6 +371,8 @@ export interface ForecastReliability {
   reason: ForecastReliabilityReason | null;
   backtest: NowcastBacktest | null;
   horizon: number;
+  /** 가끔 몰아서 나가는 품목이면 'intermittent' — 이때 horizon은 4주(평일 20일) 이상이다. */
+  pattern: DemandPattern | null;
 }
 
 export function forecastReliability(input: {
@@ -309,10 +384,10 @@ export function forecastReliability(input: {
 }): ForecastReliability | null {
   const sorted = [...input.observations].sort((a, b) => a.date.localeCompare(b.date));
   if (sorted.length === 0) return null;
-  const e = evaluate({ ...input, sorted, holidays: input.holidays ?? NO_HOLIDAYS });
-  if (e.kind === 'flat') return { level: 'MEDIUM', reason: 'no_depletion', backtest: null, horizon: Math.max(1, input.horizonDays) };
-  if (e.kind === 'unavailable') return { level: 'LOW', reason: e.reason, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon };
-  return { level: e.grade, reason: null, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon };
+  const e = evaluate({ ...input, sorted, holidays: input.holidays ?? NO_HOLIDAYS, minHorizonDays: RELIABILITY_HORIZON_DEMAND_DAYS });
+  if (e.kind === 'flat') return { level: 'MEDIUM', reason: 'no_depletion', backtest: null, horizon: Math.max(RELIABILITY_HORIZON_DEMAND_DAYS, input.horizonDays), pattern: null };
+  if (e.kind === 'unavailable') return { level: 'LOW', reason: e.reason, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon, pattern: e.pattern };
+  return { level: e.grade, reason: null, backtest: summaryOf(e.best, e.horizon), horizon: e.horizon, pattern: e.pattern };
 }
 
 // ── 추정 ─────────────────────────────────────────────────────────────────────────────────────
@@ -368,7 +443,8 @@ export function nowcastStock(input: NowcastInput): Nowcast | null {
   }
   const predicted = forecast(best.spec, series, futureWeekdays) ?? [];
   const expectedDepletion = predicted.reduce((s, v) => s + v, 0);
-  const spread = horizonDays === 0 ? 0 : quantile(best.errors, INTERVAL_QUANTILE);
+  // 간헐 수요는 더 긴 기간(e.horizon)으로 검증했으니, 그 오차를 실제 공백 길이에 맞춰 줄인다.
+  const spread = horizonDays === 0 ? 0 : (quantile(best.errors, INTERVAL_QUANTILE) * horizonDays) / Math.max(horizonDays, e.horizon);
   const stock = latest.normalStock;
   const round = (v: number) => Math.round(Math.max(0, v));
   return {

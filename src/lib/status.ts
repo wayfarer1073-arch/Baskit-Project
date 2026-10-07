@@ -7,7 +7,7 @@ export function riskBadgeVariant(level: RiskLevel): 'danger' | 'warning' | 'norm
   return 'normal';
 }
 
-export type DataReliability = 'HIGH' | 'MEDIUM' | 'LOW';
+export type DataReliability = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
 
 /**
  * 이 SKU의 소진량 추정이 얼마나 믿을 만한 관측 근거를 갖고 있는지 상/중/하로 나눈다.
@@ -17,11 +17,13 @@ export type DataReliability = 'HIGH' | 'MEDIUM' | 'LOW';
  * 나뉜다 — 두 번 계산해 값이 어긋나는 일이 없도록 단일 소스를 그대로 사용한다.
  */
 export function dataReliabilityLevel(analysis: SkuAnalysis): DataReliability {
+  // 품절·특수 관리 품목은 예측 대상이 아니라 '하'가 아닌 '제외'로 보인다.
+  if (analysis.reliability?.reason === 'sold_out' || analysis.reliability?.reason === 'special') return 'NONE';
   return analysis.forecast.confidence ?? 'LOW';
 }
 
 export function dataReliabilityClassName(level: DataReliability): string {
-  return level === 'HIGH' ? 'text-status-normal' : level === 'MEDIUM' ? 'text-status-warning' : 'text-status-danger';
+  return level === 'HIGH' ? 'text-status-normal' : level === 'MEDIUM' ? 'text-status-warning' : level === 'NONE' ? 'text-muted-foreground' : 'text-status-danger';
 }
 
 /** "[관측 2026-09-18]" 형태의 날짜 태그인지. 화면에는 이제 신뢰도(상/중/하)로 대체해 보여주므로

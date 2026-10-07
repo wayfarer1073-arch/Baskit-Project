@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demandDaySeries, gradeOf, nowcastStock } from './nowcast';
+import { demandDaySeries, demandPattern, forecastReliability, gradeOf, maskBulkDays, nowcastStock } from './nowcast';
 import { closedDays, isDemandDay, isShippingDay, shiftDate, type ClosedDays } from './shipping-calendar';
 import type { StockObservation } from './types';
 
@@ -91,7 +91,8 @@ describe('nowcastStock', () => {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    const erratic = history(() => (noise() < 0.85 ? 0 : Math.round(noise() * 200)), '2026-07-01', '2026-09-25', 20000);
+    // 거의 매일 나가지만 양이 들쭉날쭉한 품목은 같은 길이로 되짚어 맞히지 못하면 추정하지 않는다.
+    const erratic = history(() => Math.round(noise() ** 3 * 400), '2026-07-01', '2026-09-25', 20000);
     const noisy = nowcastAt(erratic, '2026-09-29');
     expect(['unstable_pattern', 'insufficient_history']).toContain(noisy.reason);
     expect(noisy.estimatedStock).toBeNull();
@@ -148,5 +149,21 @@ describe('nowcastStock', () => {
     expect(n.status).toBe('estimated');
     expect(n.estimatedStock).toBe(0);
     expect(n.low).toBe(0);
+  });
+
+  it('reads intermittent items (occasional big shipments) over four weeks, with a Croston average and bulk days set aside', () => {
+    // 평일 5일 중 1일꼴로 50개씩 나가는 품목 — 며칠 단위로는 타이밍을 맞힐 수 없지만 4주 누적은 꽤 맞는다.
+    const intermittent = history((d) => (Number(d.slice(8, 10)) % 5 === 0 ? 50 : 0), '2026-06-01', '2026-09-25', 20000);
+    const series = demandDaySeries(intermittent);
+    expect(demandPattern(series)).toBe('intermittent');
+    const rel = forecastReliability({ observations: intermittent, horizonDays: 0 })!;
+    expect(rel.pattern).toBe('intermittent');
+    expect(rel.horizon).toBe(20);
+    expect(rel.reason).toBeNull();
+    // 평소 10개씩 나가다 하루 300개(대량 주문)가 끼면 그날은 평가·학습에서 뺀다.
+    const days = Array.from({ length: 30 }, (_, i) => ({ date: shiftDate('2026-08-03', i), weekday: 1, value: i === 12 ? 300 : 10 }));
+    const masked = maskBulkDays(days);
+    expect(masked.bulkDays).toBe(1);
+    expect(masked.series[12].value).toBeNull();
   });
 });

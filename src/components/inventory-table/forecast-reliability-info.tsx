@@ -12,11 +12,13 @@ export function ForecastReliabilityInfo({ reliability, className }: { reliabilit
   const t = m.dashboard.nowcast.reliabilityInfo;
   const reasons = m.dashboard.nowcast.reasons;
   const error = reliability.backtest ? (reliability.backtest.wape * 100).toFixed(1) : '—';
+  const excluded = reliability.reason === 'sold_out' || reliability.reason === 'special';
   return (
     <InfoTooltip className={className}>
       <div className="space-y-1">
-        <div className="font-semibold">{format(t.title, { level: m.domain.reliability[reliability.level] })}</div>
+        <div className="font-semibold">{format(t.title, { level: m.domain.reliability[excluded ? 'NONE' : reliability.level] })}</div>
         {reliability.backtest && !reliability.reason && <p>{format(t.body, { horizon: reliability.horizon, origins: reliability.backtest.origins, error })}</p>}
+        {reliability.pattern === 'intermittent' && !excluded && <p>{t.intermittent}</p>}
         {reliability.reason === 'no_depletion' && <p>{t.noDepletion}</p>}
         {reliability.reason && reliability.reason !== 'no_depletion' && <p>{format(reasons[reliability.reason], { error })}</p>}
         <p className="opacity-75">{t.scale}</p>
