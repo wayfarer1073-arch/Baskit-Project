@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { formatMoney, formatNumber, formatSigned } from '@/lib/format';
 import { formatKstDate } from '@/lib/date';
 import { analysisStatusText, dataReliabilityClassName, dataReliabilityLevel, dataReliabilityText, formatExpirationDday, humanizeTagText, isB2BTag, isBasisWindowTag, isEstimateCaveatTag, isExpirationRiskTag, isObservedDateTag, isSoldOutTag, isStaleDepletionTag, localizeReason } from '@/lib/status';
-import { TABLE_TABS, matchesQuickFilter, matchesTab, type QuickFilter, type TableTab } from '@/lib/inventory-filters';
+import { SOLD_OUT_HIDE_DAYS, TABLE_TABS, matchesQuickFilter, matchesSoldOutFilter, matchesTab, type QuickFilter, type SoldOutHideDays, type TableTab } from '@/lib/inventory-filters';
 import { buildInventorySheetRows, type ExportRowInput } from '@/domain/excel/export';
 import { downloadSheetsAsExcel } from '@/lib/xlsx-download';
 import type { InventoryRow } from '@/domain/inventory/read-model';
@@ -141,6 +141,8 @@ export function InventoryTable({
   const [costMax, setCostMax] = useState('');
   const [showNormal, setShowNormal] = useState(true);
   const [showB2B, setShowB2B] = useState(true);
+  const [showSoldOut, setShowSoldOut] = useState(true);
+  const [hideSoldOutAfter, setHideSoldOutAfter] = useState<SoldOutHideDays>(0);
   const [trendFilter, setTrendFilter] = useState<'ALL' | 'ACCELERATING' | 'DECELERATING'>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('coverageAsc');
   const [sortAsc, setSortAsc] = useState(true);
@@ -173,9 +175,10 @@ export function InventoryTable({
       if (trendFilter !== 'ALL' && r.analysis.acceleration.trend !== trendFilter) return false;
       if (!showNormal && !r.descriptor.isB2B) return false;
       if (!showB2B && r.descriptor.isB2B) return false;
+      if (!matchesSoldOutFilter(r.descriptor, { showSoldOut, hideAfterDays: hideSoldOutAfter }, asOfDate)) return false;
       return true;
     });
-  }, [rows, warehouseFilter, tab, quickFilter, search, riskFilter, coverageMin, coverageMax, costMin, costMax, trendFilter, showNormal, showB2B]);
+  }, [rows, warehouseFilter, tab, quickFilter, search, riskFilter, coverageMin, coverageMax, costMin, costMax, trendFilter, showNormal, showB2B, showSoldOut, hideSoldOutAfter, asOfDate]);
 
   const sorted = useMemo(() => {
     const withValue = filtered.map((r) => ({ row: r, value: sortValue(r, sortKey) }));
@@ -330,6 +333,22 @@ export function InventoryTable({
             <Checkbox checked={showB2B} onCheckedChange={(c) => setShowB2B(c === true)} />
             {t.special}
           </label>
+          <label className="flex items-center gap-1.5">
+            <Checkbox checked={showSoldOut} onCheckedChange={(c) => setShowSoldOut(c === true)} />
+            {t.soldOutFilter}
+          </label>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          {t.hideSoldOutAfter}
+          <Select value={String(hideSoldOutAfter)} onValueChange={(v) => setHideSoldOutAfter(Number(v) as SoldOutHideDays)} disabled={!showSoldOut}>
+            <SelectTrigger className="h-8 text-xs" aria-label={t.hideSoldOutAfter}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SOLD_OUT_HIDE_DAYS.map((d) => (
+                <SelectItem key={d} value={String(d)}>{d === 0 ? t.soldOutShowAll : format(t.soldOutDays, { days: d })}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="ml-auto flex items-center gap-2">

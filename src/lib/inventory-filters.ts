@@ -1,4 +1,5 @@
 import type { SkuAnalysis } from '@/domain/inventory/types';
+import { daysBetween } from '@/domain/inventory/shipping-calendar';
 
 export type TableTab = 'ALL' | 'STOCKOUT_RISK' | 'ACCELERATING' | 'OVERSTOCK_CANDIDATE' | 'STAGNANT' | 'EXPIRATION_RISK';
 
@@ -38,4 +39,26 @@ export function matchesQuickFilter(analysis: SkuAnalysis, quickFilter: QuickFilt
   if (quickFilter === 'NEW_DANGER') return analysis.tags.includes('[신규 위험]');
   if (quickFilter === 'STOCKOUT_SOON_ONLY') return analysis.coverage.band === 'STOCKOUT_SOON';
   return true;
+}
+
+/** "n일 이상 품절 숨기기" 선택지 — 0은 전체 보기. */
+export const SOLD_OUT_HIDE_DAYS = [0, 7, 14, 30, 90] as const;
+export type SoldOutHideDays = (typeof SOLD_OUT_HIDE_DAYS)[number];
+
+export interface SoldOutFilter {
+  /** 품절 품목을 표에 보일지(체크박스). */
+  showSoldOut: boolean;
+  /** 품절된 지 이만큼 이상 지난 품목은 숨긴다. 0이면 숨기지 않는다. */
+  hideAfterDays: SoldOutHideDays;
+}
+
+/** 기준일까지 품절이 이어진 일수(품절 인식일 당일은 0일). 인식일을 모르면 0. */
+export function soldOutDays(soldOutDetectedDate: string | null, asOfDate: string): number {
+  return soldOutDetectedDate ? Math.max(0, daysBetween(soldOutDetectedDate, asOfDate)) : 0;
+}
+
+export function matchesSoldOutFilter(descriptor: { isSoldOut: boolean; soldOutDetectedDate: string | null }, filter: SoldOutFilter, asOfDate: string): boolean {
+  if (!descriptor.isSoldOut) return true;
+  if (!filter.showSoldOut) return false;
+  return filter.hideAfterDays === 0 || soldOutDays(descriptor.soldOutDetectedDate, asOfDate) < filter.hideAfterDays;
 }
