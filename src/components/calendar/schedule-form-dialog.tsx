@@ -221,7 +221,7 @@ export function ScheduleFormDialog({ schedule, defaultDate, enabledSegments, can
                   autoComplete="off"
                 />
                 {query.trim() !== '' && (
-                  <ul className="absolute top-full right-0 left-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-md" role="listbox">
+                  <ul className="mt-1 max-h-64 overflow-y-auto overscroll-contain rounded-md border bg-popover shadow-sm" role="listbox">
                     {results === null && <li className="px-3 py-2 text-xs text-muted-foreground">{t.searching}</li>}
                     {results?.length === 0 && <li className="px-3 py-2 text-xs text-muted-foreground">{t.noMatch}</li>}
                     {results?.map((r) => {

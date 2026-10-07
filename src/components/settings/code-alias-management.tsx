@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { OptionList, useOptionListOpen } from '@/components/ui/option-list';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,7 @@ export function CodeAliasManagement({ aliases, warehouses }: { aliases: CodeAlia
   const [externalCode, setExternalCode] = useState('');
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<SkuOption[]>([]);
+  const optionList = useOptionListOpen();
   const [target, setTarget] = useState<SkuOption | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -127,7 +129,7 @@ export function CodeAliasManagement({ aliases, warehouses }: { aliases: CodeAlia
         )}
 
         {warehouses.length > 0 && (
-          <form onSubmit={add} className="grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-[auto_1fr_1.4fr_auto] sm:items-end">
+          <form onSubmit={add} className="grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-[auto_1fr_1.4fr_auto] sm:items-start">
             {warehouses.length > 1 ? (
               <div className="space-y-1">
                 <Label className="text-xs">{t.warehouse}</Label>
@@ -175,31 +177,30 @@ export function CodeAliasManagement({ aliases, warehouses }: { aliases: CodeAlia
                 }}
                 aria-autocomplete="list"
                 aria-controls="alias-target-options"
+                {...optionList.inputProps}
               />
-              {!target && options.length > 0 && query.trim() && (
-                <ul
-                  id="alias-target-options"
-                  role="listbox"
-                  className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md"
-                >
+              {optionList.focused && !target && options.length > 0 && query.trim() && (
+                <OptionList id="alias-target-options">
                   {options.map((o) => (
                     <li key={o.skuId} role="option" aria-selected={false}>
                       <button
                         type="button"
                         className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
+                        {...optionList.optionProps}
                         onClick={() => {
                           setTarget(o);
                           setOptions([]);
+                          optionList.close();
                         }}
                       >
                         <code className="text-xs">{o.productCode}</code> {o.productName}
                       </button>
                     </li>
                   ))}
-                </ul>
+                </OptionList>
               )}
             </div>
-            <Button type="submit" disabled={busy || !target || !externalCode.trim()}>
+            <Button type="submit" className="sm:mt-5" disabled={busy || !target || !externalCode.trim()}>
               {t.add}
             </Button>
           </form>

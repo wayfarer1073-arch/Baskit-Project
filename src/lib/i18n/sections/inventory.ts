@@ -98,6 +98,13 @@ export const ko = {
   detail: {
     b2bOn: '특수 관리 재고로 표시했습니다.',
     b2bOff: '특수 관리 재고 표시를 해제했습니다.',
+    hideTitle: '항목 숨기기',
+    hideTip: '대시보드의 요약 숫자·그래프·재고 표·알림·다운로드 파일에서 이 SKU를 뺍니다. 업로드한 자료는 그대로 남고, 설정에서 다시 표시할 수 있습니다.',
+    hideConfirmTitle: 'SKU를 숨기시겠습니까?',
+    hideConfirmBody: '숨김 처리된 SKU는 설정에서 확인 가능합니다.',
+    hideYes: '예',
+    hideNo: '아니오',
+    hidden: '{name}을(를) 숨겼습니다. 설정에서 다시 표시할 수 있습니다.',
     changeFailed: '변경에 실패했습니다.',
     integerOnly: '0 이상의 정수만 입력할 수 있습니다.',
     thresholdsSaved: '위험/경고수량을 저장했습니다.',
@@ -273,7 +280,8 @@ export const en: Dictionary<typeof ko> = {
     soldOut: 'Sold out',
     soldOutTip:
       'Recognized as sold out because the item was missing from the latest data or uploaded with 0 stock. It stays visible for reference for one month from {date} and is not counted in current stock totals.',
-    b2bTip: 'Stock managed separately, such as scheduled orders, B2B deliveries or free giveaways. It’s excluded from stock-out forecasts that assume small daily sales, so check its schedule and expiry directly.',
+    b2bTip:
+      'Stock managed separately, such as scheduled orders, B2B deliveries or free giveaways. It’s excluded from stock-out forecasts that assume small daily sales, so check its schedule and expiry directly.',
     periodDetail: 'Est. usage {depletion} · unexplained increase {increase}',
     notComparable: 'Not comparable',
     accumulating: 'Collecting data',
@@ -287,6 +295,13 @@ export const en: Dictionary<typeof ko> = {
   detail: {
     b2bOn: 'Marked as special stock.',
     b2bOff: 'Special stock mark removed.',
+    hideTitle: 'Hide item',
+    hideTip: 'Removes this SKU from the dashboard summary, charts, stock table, alerts and downloads. Uploaded data is kept, and you can show it again in Settings.',
+    hideConfirmTitle: 'Hide this SKU?',
+    hideConfirmBody: 'Hidden SKUs can be reviewed in Settings.',
+    hideYes: 'Yes',
+    hideNo: 'No',
+    hidden: '{name} is now hidden. You can show it again in Settings.',
     changeFailed: 'Could not apply the change.',
     integerOnly: 'Enter whole numbers of 0 or more.',
     thresholdsSaved: 'Danger/warning quantities saved.',
@@ -300,7 +315,8 @@ export const en: Dictionary<typeof ko> = {
     favoriteAdd: 'Add to favorites',
     soldOutTip:
       'Recognized as sold out because it was missing from the latest data or uploaded with 0 stock. The quantities and values below are the last ones seen before it sold out and are not counted in current stock totals.',
-    b2bTip: 'Stock managed separately, such as scheduled orders, B2B deliveries or free giveaways. The stock-out forecasts below assume small daily sales, so they may not fit this item well.',
+    b2bTip:
+      'Stock managed separately, such as scheduled orders, B2B deliveries or free giveaways. The stock-out forecasts below assume small daily sales, so they may not fit this item well.',
     firstSeen: ' · first seen ',
     initialStock: '[Opening stock]',
     extraInfo: 'Item details',
@@ -324,7 +340,8 @@ export const en: Dictionary<typeof ko> = {
     revertAuto: 'Revert to automatic',
     cancel: 'Cancel',
     b2bTitle: 'Special stock',
-    b2bSwitchTip: 'Shows special items separately, such as scheduled-order or B2B-delivery SKUs and free giveaways. When on, the item is left out of stock-out calculations that assume small daily sales.',
+    b2bSwitchTip:
+      'Shows special items separately, such as scheduled-order or B2B-delivery SKUs and free giveaways. When on, the item is left out of stock-out calculations that assume small daily sales.',
     b2bSwitch: 'Mark as special stock',
     specialNote: 'Management note',
     specialNotePlaceholder: 'e.g. Order every Monday / Deliver Oct 15 / Free dessert in store',

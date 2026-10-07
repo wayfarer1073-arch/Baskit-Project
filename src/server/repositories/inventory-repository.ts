@@ -181,13 +181,7 @@ function currentAttributes(sku: {
  * 스냅샷 행(날짜순)과 입고 기록을 품목 하나의 재고 원장으로 바꾼다. 원가가 비어 있는 행은 직전에 알려진
  * 단가를 이어받아 평가한다(resolveInventoryCost).
  */
-function ledgerForItem(
-  skuId: string,
-  items: ObservationItem[],
-  inbounds: DatedInbound[],
-  history: SkuAttributeVersionRow[] | undefined,
-  fallback: SkuAttributes,
-): LedgerEntry[] {
+function ledgerForItem(skuId: string, items: ObservationItem[], inbounds: DatedInbound[], history: SkuAttributeVersionRow[] | undefined, fallback: SkuAttributes): LedgerEntry[] {
   let latestKnownUnitCost: number | null = null;
   const entries: LedgerEntry[] = items.map((item) => {
     const resolved = resolveInventoryCost(
@@ -319,39 +313,41 @@ export async function loadActiveSkusWithSeries(
     else zeroSoldOutSince.set(id, start);
   }
 
-  return skus.filter((sku) => !expired.has(sku.id)).map((sku) => {
-    const attrs = attributesOf(sku.id);
-    return {
-      descriptor: {
-        skuId: sku.id,
-        warehouseId: sku.warehouseId,
-        warehouseCode: sku.warehouse.code,
-        warehouseName: sku.warehouse.name,
-        productCode: sku.productCode,
-        productName: attrs?.productName ?? sku.currentProductName,
-        option: attrs ? attrs.option : sku.currentOption,
-        barcode: attrs ? attrs.barcode : sku.currentBarcode,
-        location: attrs ? attrs.location : sku.currentLocation,
-        manualDangerQty: sku.manualDangerQty,
-        manualWarningQty: sku.manualWarningQty,
-        expirationDate: sku.expirationDate ? dateOnlyToString(sku.expirationDate) : null,
-        expirationRiskDays: sku.expirationRiskDays,
-        isB2B: sku.isB2B,
-        specialNote: sku.specialNote,
-        firstSeenDate: dateOnlyToString(sku.firstSeenDate),
-        isSoldOut: soldOutSkuIds.has(sku.id),
-        soldOutDetectedDate: zeroSoldOutSince.get(sku.id) ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
-        eaPerBox: sku.eaPerBox,
-        eaPerPallet: sku.eaPerPallet,
-        packagingBarcode: sku.packagingBarcode,
-        ...supplierFields(sku),
-      },
-      observations: observationsFromLedger(
-        ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], historyBySku.get(sku.id), currentAttributes(sku)),
-        calendarOf(holidays, sku.warehouseId),
-      ),
-    };
-  });
+  return skus
+    .filter((sku) => !expired.has(sku.id))
+    .map((sku) => {
+      const attrs = attributesOf(sku.id);
+      return {
+        descriptor: {
+          skuId: sku.id,
+          warehouseId: sku.warehouseId,
+          warehouseCode: sku.warehouse.code,
+          warehouseName: sku.warehouse.name,
+          productCode: sku.productCode,
+          productName: attrs?.productName ?? sku.currentProductName,
+          option: attrs ? attrs.option : sku.currentOption,
+          barcode: attrs ? attrs.barcode : sku.currentBarcode,
+          location: attrs ? attrs.location : sku.currentLocation,
+          manualDangerQty: sku.manualDangerQty,
+          manualWarningQty: sku.manualWarningQty,
+          expirationDate: sku.expirationDate ? dateOnlyToString(sku.expirationDate) : null,
+          expirationRiskDays: sku.expirationRiskDays,
+          isB2B: sku.isB2B,
+          specialNote: sku.specialNote,
+          firstSeenDate: dateOnlyToString(sku.firstSeenDate),
+          isSoldOut: soldOutSkuIds.has(sku.id),
+          soldOutDetectedDate: zeroSoldOutSince.get(sku.id) ?? (sku.soldOutDetectedDate ? dateOnlyToString(sku.soldOutDetectedDate) : null),
+          eaPerBox: sku.eaPerBox,
+          eaPerPallet: sku.eaPerPallet,
+          packagingBarcode: sku.packagingBarcode,
+          ...supplierFields(sku),
+        },
+        observations: observationsFromLedger(
+          ledgerForItem(sku.id, itemsBySku.get(sku.id) ?? [], inboundsBySku.get(sku.id) ?? [], historyBySku.get(sku.id), currentAttributes(sku)),
+          calendarOf(holidays, sku.warehouseId),
+        ),
+      };
+    });
 }
 
 /** 차트용 일자별 창고별 합계(재고수량/재고자산). ACTIVE 스냅샷만 집계하며, 숨김 처리된 SKU는 제외한다. */
@@ -468,10 +464,7 @@ export async function loadSkuWithSeries(
   const [inboundsBySku, historyBySku] = await Promise.all([loadInboundsBySku([skuId], asOfDate), loadSkuAttributeHistory([skuId], asOfDate)]);
   const history = historyBySku.get(skuId);
 
-  const observations = observationsFromLedger(
-    ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? [], history, currentAttributes(sku)),
-    calendarOf(holidays, sku.warehouseId),
-  );
+  const observations = observationsFromLedger(ledgerForItem(skuId, items, inboundsBySku.get(skuId) ?? [], history, currentAttributes(sku)), calendarOf(holidays, sku.warehouseId));
 
   // asOfDate 시점 기준 가장 최근 관측일에 효력 있던 상품 속성을 쓴다(과거 조회에 이후 변경분이 섞이지 않도록).
   const latestItem = items.at(-1);
@@ -517,10 +510,13 @@ export interface SkuVisibilityRow {
   isHiddenFromDashboard: boolean;
 }
 
-/** 설정 화면의 "SKU 숨기기" 관리용 — 최신 업로드에 남아 있는 SKU만 나열한다. */
+/**
+ * 설정 화면의 "SKU 숨기기" 관리용 — 최신 업로드에 남아 있는 SKU와, 목록에서 빠졌더라도(품절로 빠진 SKU 등) 숨겨 둔 SKU를 나열한다.
+ * 숨긴 SKU는 상세 화면에서도 숨길 수 있으므로 최신 업로드에 없어도 여기서 다시 표시할 수 있어야 한다.
+ */
 export async function listAllSkusForVisibilityAdmin(orgId: string): Promise<SkuVisibilityRow[]> {
   const skus = await prisma.sku.findMany({
-    where: { isActive: true, warehouse: activeWarehouseOf(orgId) },
+    where: { OR: [{ isActive: true }, { isHiddenFromDashboard: true }], warehouse: activeWarehouseOf(orgId) },
     include: { warehouse: { select: { code: true, name: true } } },
     orderBy: [{ warehouse: { sortOrder: 'asc' } }, { productCode: 'asc' }],
   });

@@ -4,7 +4,7 @@ import type { Nowcast } from '@/domain/inventory/nowcast';
 import { NowcastDetail } from '@/components/inventory-table/nowcast-stock';
 import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { CalendarDays, ClipboardList, PackageX, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { CalendarDays, ClipboardList, EyeOff, PackageX, Pencil, Plus, RotateCcw, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { EventFormDialog, type EditingEvent } from '@/components/events/event-form-dialog';
@@ -21,7 +22,21 @@ import { buildDailyDeltas, calculatePeriodComparison, sortObservations } from '@
 import type { InventoryValueBreakdown, SkuAnalysis, StockObservation } from '@/domain/inventory/types';
 import { formatMoney, formatNumber, formatSigned } from '@/lib/format';
 import { formatKstDate } from '@/lib/date';
-import { riskBadgeVariant, analysisStatusText, dataReliabilityClassName, dataReliabilityLevel, dataReliabilityText, humanizeTagText, localizeReason, isB2BTag, isBasisWindowTag, isEstimateCaveatTag, isObservedDateTag, isSoldOutTag, isStaleDepletionTag } from '@/lib/status';
+import {
+  riskBadgeVariant,
+  analysisStatusText,
+  dataReliabilityClassName,
+  dataReliabilityLevel,
+  dataReliabilityText,
+  humanizeTagText,
+  localizeReason,
+  isB2BTag,
+  isBasisWindowTag,
+  isEstimateCaveatTag,
+  isObservedDateTag,
+  isSoldOutTag,
+  isStaleDepletionTag,
+} from '@/lib/status';
 import { eventTypeText } from '@/lib/event-types';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
@@ -82,6 +97,8 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
   const [warningInput, setWarningInput] = useState('');
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [togglingB2B, setTogglingB2B] = useState(false);
+  const [hideConfirmOpen, setHideConfirmOpen] = useState(false);
+  const [hiding, setHiding] = useState(false);
   const [specialNoteInput, setSpecialNoteInput] = useState<string | null>(null);
   const [savingSpecialNote, setSavingSpecialNote] = useState(false);
   const router = useRouter();
@@ -90,10 +107,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
     if (!skuId) return;
     setLoading(true);
     try {
-      const [detailRes, eventsRes] = await Promise.all([
-        fetch(`/api/sku/${skuId}?asOf=${asOfDate}`),
-        fetch(`/api/events?skuId=${skuId}`),
-      ]);
+      const [detailRes, eventsRes] = await Promise.all([fetch(`/api/sku/${skuId}?asOf=${asOfDate}`), fetch(`/api/events?skuId=${skuId}`)]);
       if (detailRes.ok) setDetail(await detailRes.json());
       if (eventsRes.ok) {
         const body = await eventsRes.json();
@@ -166,6 +180,28 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
       toast.error(t.changeFailed);
     } finally {
       setTogglingB2B(false);
+    }
+  }
+
+  /** 숨기기 — 확인을 받은 뒤 숨기고 상세를 닫는다. 숨긴 SKU는 상세·표·품절 목록에서 빠지고, 설정의 "숨김 처리된 SKU"에서 되돌린다. */
+  async function hideSku() {
+    if (!skuId || !detail) return;
+    setHiding(true);
+    try {
+      const res = await fetch(`/api/sku/${skuId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isHiddenFromDashboard: true }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(format(t.hidden, { name: detail.descriptor.productName }));
+      setHideConfirmOpen(false);
+      onOpenChange(false);
+      router.refresh();
+    } catch {
+      toast.error(t.changeFailed);
+    } finally {
+      setHiding(false);
     }
   }
 
@@ -313,9 +349,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       <PackageX className="size-3" aria-hidden="true" />
                       {m.inventory.row.soldOut}
                     </Badge>
-                    <InfoTooltip>
-                      {t.soldOutTip}
-                    </InfoTooltip>
+                    <InfoTooltip>{t.soldOutTip}</InfoTooltip>
                   </>
                 )}
                 {!detail.descriptor.isSoldOut && !detail.descriptor.isB2B && (
@@ -327,9 +361,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       <ClipboardList className="size-3" aria-hidden="true" />
                       {m.inventory.special}
                     </Badge>
-                    <InfoTooltip>
-                      {t.b2bTip}
-                    </InfoTooltip>
+                    <InfoTooltip>{t.b2bTip}</InfoTooltip>
                   </>
                 )}
               </div>
@@ -337,8 +369,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 {detail.descriptor.productCode} · {detail.descriptor.warehouseName}
                 {detail.descriptor.option ? ` · ${detail.descriptor.option}` : ''}
                 {t.firstSeen}
-                {formatKstDate(detail.descriptor.firstSeenDate)}
-                {' '}
+                {formatKstDate(detail.descriptor.firstSeenDate)}{' '}
                 <span className={`rounded-md bg-muted px-2 py-0.5 text-xs font-medium ${dataReliabilityClassName(dataReliabilityLevel(detail.analysis))}`}>
                   {dataReliabilityText(dataReliabilityLevel(detail.analysis), m.domain)}
                 </span>
@@ -349,12 +380,16 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
             <div className="space-y-5 p-4 sm:p-5">
               {(detail.analysis.tags.length > 0 || isInitialObservation) && (
                 <div className="flex flex-wrap gap-1.5">
-                  {isInitialObservation && (
-                    <span className="rounded-md bg-status-increase-bg px-2 py-0.5 text-xs text-status-increase">{t.initialStock}</span>
-                  )}
-                  {detail.analysis.tags.filter((tag) => !isObservedDateTag(tag) && !isEstimateCaveatTag(tag) && !isBasisWindowTag(tag) && !isSoldOutTag(tag) && !isStaleDepletionTag(tag) && !isB2BTag(tag)).map((tag) => (
-                    <span key={tag} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{humanizeTagText(tag, m.domain)}</span>
-                  ))}
+                  {isInitialObservation && <span className="rounded-md bg-status-increase-bg px-2 py-0.5 text-xs text-status-increase">{t.initialStock}</span>}
+                  {detail.analysis.tags
+                    .filter(
+                      (tag) => !isObservedDateTag(tag) && !isEstimateCaveatTag(tag) && !isBasisWindowTag(tag) && !isSoldOutTag(tag) && !isStaleDepletionTag(tag) && !isB2BTag(tag),
+                    )
+                    .map((tag) => (
+                      <span key={tag} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        {humanizeTagText(tag, m.domain)}
+                      </span>
+                    ))}
                 </div>
               )}
 
@@ -387,11 +422,23 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
 
               <section className="grid grid-cols-2 gap-2">
                 <MetricCard label={detail.descriptor.isSoldOut ? t.lastObservedStock : t.observedStock} value={qty(detail.analysis.latest.availableStock)} />
-                <MetricCard label={detail.descriptor.isSoldOut ? t.lastObservedValue : t.observedValue} value={detail.analysis.latest.valuationKnown === false ? t.unknownCost : formatMoney(detail.valueBreakdown.normalStockValue, locale)} />
-                <MetricCard label={t.coverage} value={detail.analysis.coverage.coverageDays === null ? t.notComputable : format(t.shippingDays, { days: formatNumber(detail.analysis.coverage.coverageDays) })} />
+                <MetricCard
+                  label={detail.descriptor.isSoldOut ? t.lastObservedValue : t.observedValue}
+                  value={detail.analysis.latest.valuationKnown === false ? t.unknownCost : formatMoney(detail.valueBreakdown.normalStockValue, locale)}
+                />
+                <MetricCard
+                  label={t.coverage}
+                  value={detail.analysis.coverage.coverageDays === null ? t.notComputable : format(t.shippingDays, { days: formatNumber(detail.analysis.coverage.coverageDays) })}
+                />
                 <MetricCard
                   label={t.stockoutDate}
-                  value={detail.analysis.forecast.expectedStockoutDate ? formatKstDate(detail.analysis.forecast.expectedStockoutDate) : (detail.analysis.operating?.reason ? localizeReason(detail.analysis.operating.reason, m.domain) : t.notComputable)}
+                  value={
+                    detail.analysis.forecast.expectedStockoutDate
+                      ? formatKstDate(detail.analysis.forecast.expectedStockoutDate)
+                      : detail.analysis.operating?.reason
+                        ? localizeReason(detail.analysis.operating.reason, m.domain)
+                        : t.notComputable
+                  }
                 />
               </section>
 
@@ -420,11 +467,15 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                 {editingThresholds ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs">
-                      <label htmlFor="danger-qty-input" className="w-16 text-muted-foreground">{t.dangerQty}</label>
+                      <label htmlFor="danger-qty-input" className="w-16 text-muted-foreground">
+                        {t.dangerQty}
+                      </label>
                       <Input id="danger-qty-input" value={dangerInput} onChange={(e) => setDangerInput(e.target.value)} inputMode="numeric" className="h-8 text-xs" />
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <label htmlFor="warning-qty-input" className="w-16 text-muted-foreground">{t.warningQty}</label>
+                      <label htmlFor="warning-qty-input" className="w-16 text-muted-foreground">
+                        {t.warningQty}
+                      </label>
                       <Input id="warning-qty-input" value={warningInput} onChange={(e) => setWarningInput(e.target.value)} inputMode="numeric" className="h-8 text-xs" />
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -495,7 +546,9 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-xs font-semibold">{t.period}</h3>
                     <span className="text-[11px] text-muted-foreground">
-                      {periodMetrics ? format(t.periodObserved, { from: periodMetrics.actualStartDate.slice(5), to: periodMetrics.actualEndDate.slice(5) }) : `${fromDate.slice(5)} — ${asOfDate.slice(5)}`}
+                      {periodMetrics
+                        ? format(t.periodObserved, { from: periodMetrics.actualStartDate.slice(5), to: periodMetrics.actualEndDate.slice(5) })
+                        : `${fromDate.slice(5)} — ${asOfDate.slice(5)}`}
                     </span>
                   </div>
                   {periodMetrics ? (
@@ -506,14 +559,24 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       <Field label={t.periodInbound} value={qty(periodMetrics.totalInboundQuantity ?? 0)} />
                       <Field label={t.periodAvg} value={fmtRate(periodMetrics.averageDailyDepletion, t, t.unitCalendar)} />
                     </div>
-                  ) : <p className="text-xs text-muted-foreground">{t.periodShort}</p>}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t.periodShort}</p>
+                  )}
                 </section>
               )}
 
               <Separator />
 
               <section>
-                <h3 className="mb-2 text-sm font-semibold">{t.trendTitle}</h3><p className="mb-3 text-xs text-muted-foreground">{format(t.trendNote, { reason: detail.analysis.operating?.reason ? localizeReason(detail.analysis.operating.reason, m.domain) : t.trendReference, window: detail.analysis.operating?.basisWindowDays ?? '—', observed: detail.analysis.operating?.observedShippingDays ?? 0, date: detail.analysis.latest.date })}</p>
+                <h3 className="mb-2 text-sm font-semibold">{t.trendTitle}</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {format(t.trendNote, {
+                    reason: detail.analysis.operating?.reason ? localizeReason(detail.analysis.operating.reason, m.domain) : t.trendReference,
+                    window: detail.analysis.operating?.basisWindowDays ?? '—',
+                    observed: detail.analysis.operating?.observedShippingDays ?? 0,
+                    date: detail.analysis.latest.date,
+                  })}
+                </p>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   <Field label={t.avg7} value={fmtRate(detail.analysis.window7.averageDailyDepletion, t)} />
                   <Field label={t.inbound7} value={qty(detail.analysis.window7.totalInboundQuantity ?? 0)} />
@@ -529,13 +592,15 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
               <section>
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">{t.stockTrend}</h3>
-                  {!fromDate && <Tabs value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v) as 30 | 60 | 90)}>
-                    <TabsList>
-                      <TabsTrigger value="30">{format(t.days, { days: 30 })}</TabsTrigger>
-                      <TabsTrigger value="60">{format(t.days, { days: 60 })}</TabsTrigger>
-                      <TabsTrigger value="90">{format(t.days, { days: 90 })}</TabsTrigger>
-                    </TabsList>
-                  </Tabs>}
+                  {!fromDate && (
+                    <Tabs value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v) as 30 | 60 | 90)}>
+                      <TabsList>
+                        <TabsTrigger value="30">{format(t.days, { days: 30 })}</TabsTrigger>
+                        <TabsTrigger value="60">{format(t.days, { days: 60 })}</TabsTrigger>
+                        <TabsTrigger value="90">{format(t.days, { days: 90 })}</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  )}
                 </div>
                 <div className="h-48">
                   {chartData.length < 2 ? (
@@ -550,9 +615,20 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                           </linearGradient>
                         </defs>
                         <CartesianGrid stroke="var(--color-border)" vertical={false} />
-                        <XAxis dataKey="date" tickFormatter={(d: string) => formatKstDate(d).slice(5)} fontSize={11} stroke="var(--color-muted-foreground)" tickLine={false} axisLine={false} />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(d: string) => formatKstDate(d).slice(5)}
+                          fontSize={11}
+                          stroke="var(--color-muted-foreground)"
+                          tickLine={false}
+                          axisLine={false}
+                        />
                         <YAxis width={44} fontSize={11} stroke="var(--color-muted-foreground)" tickLine={false} axisLine={false} />
-                        <Tooltip labelFormatter={(d) => formatKstDate(String(d))} formatter={(v) => [qty(Number(v)), t.availableStock]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        <Tooltip
+                          labelFormatter={(d) => formatKstDate(String(d))}
+                          formatter={(v) => [qty(Number(v)), t.availableStock]}
+                          contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                        />
                         <Area type="monotone" dataKey="availableStock" stroke="var(--color-chart-1)" fill="url(#stockGradient)" strokeWidth={2} />
                         {eventMarkers.map((m, i) => (
                           <ReferenceDot key={i} x={m.date} y={m.availableStock} r={4} fill="var(--color-chart-4)" stroke="var(--color-background)" />
@@ -571,9 +647,7 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                       <>
                         {pageItems.map((d, i) => (
                           <div key={i} className="flex items-center justify-between text-xs">
-                            <span>
-                              {format(t.increaseOn, { date: formatKstDate(d.toDate), qty: formatNumber(d.increase) })}
-                            </span>
+                            <span>{format(t.increaseOn, { date: formatKstDate(d.toDate), qty: formatNumber(d.increase) })}</span>
                             <Button
                               size="sm"
                               variant="outline"
@@ -624,7 +698,9 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                             <div key={e.id} className="rounded-md border p-2.5 text-sm">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <Badge variant="outline" className="shrink-0">{eventTypeText(e.eventType, m.domain.eventTypes)}</Badge>
+                                  <Badge variant="outline" className="shrink-0">
+                                    {eventTypeText(e.eventType, m.domain.eventTypes)}
+                                  </Badge>
                                   {e.scheduleId && (
                                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                                       <CalendarDays className="size-3" aria-hidden="true" />
@@ -674,6 +750,18 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
                   </Paged>
                 </div>
               </section>
+
+              {isAdmin && (
+                <section className="flex items-center justify-between rounded-xl border bg-muted/30 p-3">
+                  <div className="flex items-center gap-1.5">
+                    <EyeOff className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span className="text-xs font-semibold">{t.hideTitle}</span>
+                    <InfoTooltip>{t.hideTip}</InfoTooltip>
+                  </div>
+                  {/* 켜는 순간 바로 숨기지 않고 확인을 받는다 — 숨기면 상세가 닫히므로 스위치는 늘 꺼진 상태에서 시작한다. */}
+                  <Switch checked={hideConfirmOpen} onCheckedChange={(checked) => checked && setHideConfirmOpen(true)} disabled={hiding} aria-label={t.hideTitle} />
+                </section>
+              )}
             </div>
 
             <EventFormDialog
@@ -690,6 +778,27 @@ export function SkuDetailSheet({ skuId, asOfDate, fromDate, isAdmin, isFavorited
               editingEvent={editingEvent}
               onCreated={reload}
             />
+
+            <Dialog open={hideConfirmOpen} onOpenChange={(open) => !hiding && setHideConfirmOpen(open)}>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>{t.hideConfirmTitle}</DialogTitle>
+                  <DialogDescription>{t.hideConfirmBody}</DialogDescription>
+                </DialogHeader>
+                <p className="text-sm">
+                  <span className="font-medium">{detail.descriptor.productName}</span>
+                  <span className="ml-1.5 text-muted-foreground">{detail.descriptor.productCode}</span>
+                </p>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setHideConfirmOpen(false)} disabled={hiding}>
+                    {t.hideNo}
+                  </Button>
+                  <Button onClick={hideSku} disabled={hiding}>
+                    {t.hideYes}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </SheetContent>

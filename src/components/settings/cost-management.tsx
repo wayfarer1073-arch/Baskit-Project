@@ -6,6 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { OptionList, useOptionListOpen } from '@/components/ui/option-list';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,6 +48,7 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '');
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<SkuOption[]>([]);
+  const optionList = useOptionListOpen();
   const [target, setTarget] = useState<SkuOption | null>(null);
   const [newCost, setNewCost] = useState('');
 
@@ -171,7 +173,7 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
         )}
 
         {isAdmin && warehouses.length > 0 && (
-          <form onSubmit={add} className="grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-[auto_1.6fr_1fr_auto] sm:items-end">
+          <form onSubmit={add} className="grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-[auto_1.6fr_1fr_auto] sm:items-start">
             {warehouses.length > 1 ? (
               <div className="space-y-1">
                 <Label className="text-xs">{t.warehouse}</Label>
@@ -213,28 +215,27 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
                 }}
                 aria-autocomplete="list"
                 aria-controls="cost-target-options"
+                {...optionList.inputProps}
               />
-              {!target && options.length > 0 && query.trim() && (
-                <ul
-                  id="cost-target-options"
-                  role="listbox"
-                  className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md"
-                >
+              {optionList.focused && !target && options.length > 0 && query.trim() && (
+                <OptionList id="cost-target-options">
                   {options.map((o) => (
                     <li key={o.skuId} role="option" aria-selected={false}>
                       <button
                         type="button"
                         className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
+                        {...optionList.optionProps}
                         onClick={() => {
                           setTarget(o);
                           setOptions([]);
+                          optionList.close();
                         }}
                       >
                         <code className="text-xs">{o.productCode}</code> {o.productName}
                       </button>
                     </li>
                   ))}
-                </ul>
+                </OptionList>
               )}
             </div>
             <div className="space-y-1">
@@ -253,7 +254,7 @@ export function CostManagement({ costs, warehouses, isAdmin }: { costs: CostRowV
                 className="text-right"
               />
             </div>
-            <Button type="submit" disabled={busy || !target || newCost.trim() === ''}>
+            <Button type="submit" className="sm:mt-5" disabled={busy || !target || newCost.trim() === ''}>
               {t.add}
             </Button>
           </form>

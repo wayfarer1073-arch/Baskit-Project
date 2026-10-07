@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { OptionList, useOptionListOpen } from '@/components/ui/option-list';
 
 export interface PickedSku {
   skuId: string;
@@ -33,6 +34,7 @@ export function SkuPicker({
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? '');
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<Omit<PickedSku, 'warehouseId'>[]>([]);
+  const list = useOptionListOpen();
 
   useEffect(() => {
     if (!warehouseId || query.trim().length < 1 || value) return;
@@ -50,7 +52,7 @@ export function SkuPicker({
   }, [warehouseId, query, value]);
 
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-2">
+    <div className="grid items-start gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
       <div className="space-y-1">
         <Label className="text-xs">{warehouseLabel}</Label>
         <Select
@@ -61,7 +63,7 @@ export function SkuPicker({
             setOptions([]);
           }}
         >
-          <SelectTrigger className="h-9 w-32" aria-label={warehouseLabel}>
+          <SelectTrigger className="h-9 w-full sm:w-32" aria-label={warehouseLabel}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -73,7 +75,7 @@ export function SkuPicker({
           </SelectContent>
         </Select>
       </div>
-      <div className="relative space-y-1">
+      <div className="space-y-1">
         <Label htmlFor={id} className="text-xs">
           {label}
         </Label>
@@ -88,24 +90,28 @@ export function SkuPicker({
           }}
           aria-autocomplete="list"
           aria-controls={`${id}-options`}
+          {...list.inputProps}
         />
-        {!value && options.length > 0 && query.trim() && (
-          <ul id={`${id}-options`} role="listbox" className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+        {list.focused && !value && options.length > 0 && query.trim() && (
+          <OptionList id={`${id}-options`}>
             {options.map((o) => (
               <li key={o.skuId} role="option" aria-selected={false}>
                 <button
                   type="button"
                   className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
+                  {...list.optionProps}
                   onClick={() => {
                     onChange({ ...o, warehouseId });
                     setOptions([]);
+                    setQuery('');
+                    list.close();
                   }}
                 >
                   <code className="text-xs">{o.productCode}</code> {o.productName}
                 </button>
               </li>
             ))}
-          </ul>
+          </OptionList>
         )}
       </div>
     </div>

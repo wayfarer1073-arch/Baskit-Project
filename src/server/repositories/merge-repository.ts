@@ -6,16 +6,29 @@ export interface MergeLinkRow {
   productCode: string;
   productName: string;
   mergeKey: string;
+  /** 묶음의 기준 품목(상품코드가 묶음 키와 같고 직접 묶지 않은 품목) — 다른 창고 품목들이 이 품목에 묶여 있다. 풀 수 없다. */
+  anchor: boolean;
 }
 
-/** 창고 간 같은 품목으로 직접 묶어 둔 품목(상품코드가 같아 자동으로 묶이는 경우는 제외). */
+/**
+ * 창고 간 같은 품목으로 직접 묶어 둔 품목과, 그 묶음의 기준 품목(묶음 키와 상품코드가 같은 다른 창고 품목)까지 함께.
+ * 상품코드가 같아 자동으로 묶이는 경우만 있는 묶음은 보이지 않는다.
+ */
 export async function listMergeLinks(orgId: string): Promise<MergeLinkRow[]> {
-  const rows = await prisma.sku.findMany({
-    where: { mergeKey: { not: null }, warehouse: { organizationId: orgId, isArchived: false, kind: 'STOCK' } },
-    orderBy: [{ mergeKey: 'asc' }, { productCode: 'asc' }],
-    select: { id: true, productCode: true, currentProductName: true, mergeKey: true, warehouse: { select: { name: true } } },
+  const inOrg = { organizationId: orgId, isArchived: false, kind: 'STOCK' as const };
+  const select = { id: true, productCode: true, currentProductName: true, mergeKey: true, warehouse: { select: { name: true } } };
+  const linked = await prisma.sku.findMany({ where: { mergeKey: { not: null }, warehouse: inOrg }, orderBy: [{ mergeKey: 'asc' }, { productCode: 'asc' }], select });
+  const keys = [...new Set(linked.map((r) => r.mergeKey!))];
+  const anchors = keys.length ? await prisma.sku.findMany({ where: { mergeKey: null, productCode: { in: keys }, warehouse: inOrg }, orderBy: { productCode: 'asc' }, select }) : [];
+  const row = (r: (typeof linked)[number], anchor: boolean): MergeLinkRow => ({
+    skuId: r.id,
+    warehouseName: r.warehouse.name,
+    productCode: r.productCode,
+    productName: r.currentProductName,
+    mergeKey: r.mergeKey ?? r.productCode,
+    anchor,
   });
-  return rows.map((r) => ({ skuId: r.id, warehouseName: r.warehouse.name, productCode: r.productCode, productName: r.currentProductName, mergeKey: r.mergeKey! }));
+  return [...anchors.map((r) => row(r, true)), ...linked.map((r) => row(r, false))];
 }
 
 export class MergeLinkError extends Error {}

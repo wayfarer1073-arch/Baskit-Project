@@ -28,7 +28,11 @@ it('links an item to the same item in another warehouse, and refuses same-wareho
   const other = await sku(second.id, 'X-9');
   const sameWarehouse = await sku(a.warehouse.id, 'P-200');
   expect(await setSkuMerge(a.org.id, other.id, main.id)).toBe(true);
-  expect((await listMergeLinks(a.org.id)).map((l) => [l.productCode, l.mergeKey])).toEqual([['X-9', 'P-100']]);
+  // 묶음의 기준 품목(P-100)도 함께 나와 어느 창고의 무엇과 묶였는지 보인다.
+  expect((await listMergeLinks(a.org.id)).map((l) => [l.productCode, l.mergeKey, l.anchor])).toEqual([
+    ['P-100', 'P-100', true],
+    ['X-9', 'P-100', false],
+  ]);
   await expect(setSkuMerge(a.org.id, sameWarehouse.id, main.id)).rejects.toBeInstanceOf(MergeLinkError);
   expect(await setSkuMerge(b.org.id, other.id, null)).toBe(false);
   expect(await setSkuMerge(a.org.id, other.id, null)).toBe(true);
