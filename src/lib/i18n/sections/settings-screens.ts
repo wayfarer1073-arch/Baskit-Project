@@ -1,6 +1,6 @@
 import type { Dictionary } from '../dictionary';
 
-/** 설정 화면의 카드들(판단 기준·노출 관리·사용자·창고·공휴일·소비기한·추가 정보·매장/실사 설정). */
+/** 설정 화면의 카드들(판단 기준·노출 관리·사용자·창고·소비기한·추가 정보·매장/실사 설정). */
 export const ko = {
   page: {
     title: '설정',
@@ -106,21 +106,6 @@ export const ko = {
     newPlaceholder: '새 창고 이름 (예: 성수 물류센터)',
     newAria: '새 창고 이름',
     submit: '창고 추가',
-  },
-  holidays: {
-    required: '날짜와 공휴일 이름을 입력하세요.',
-    added: '공휴일을 추가했습니다.',
-    deleteConfirm: "{date} '{name}'을(를) 삭제할까요?",
-    deleted: '공휴일을 삭제했습니다.',
-    title: '공휴일 관리',
-    description:
-      '여기서 지정한 날짜는 주말처럼 취급돼요. 업로드 화면에서 회색으로 표시되고 그 날짜엔 자료를 올릴 수 없습니다. 다만 매출·판매는 공휴일에도 계속 일어난다고 보기 때문에, 통계에서 "자료 없음"으로 빼지 않고 바로 전 영업일 자료를 그대로 사용합니다.',
-    empty: '등록된 공휴일이 없습니다.',
-    olderHidden: '{months}개월보다 지난 휴무일 {count}개는 목록에서 숨겼어요. 기록은 그대로 남아 재고 계산과 캘린더에 계속 쓰여요.',
-    deleteAria: '{name} 삭제',
-    date: '날짜',
-    name: '공휴일 이름',
-    namePlaceholder: '예: 설날',
   },
   packaging: {
     title: 'SKU 추가 정보 관리',
@@ -362,21 +347,6 @@ export const en: Dictionary<typeof ko> = {
     newPlaceholder: 'New warehouse name (e.g. East DC)',
     newAria: 'New warehouse name',
     submit: 'Add warehouse',
-  },
-  holidays: {
-    required: 'Enter a date and a holiday name.',
-    added: 'Holiday added.',
-    deleteConfirm: "Delete '{name}' on {date}?",
-    deleted: 'Holiday deleted.',
-    title: 'Holidays',
-    description:
-      'Dates listed here are treated like weekends: they appear gray on the upload screen and can’t take uploads. Sales are assumed to continue on holidays, so statistics don’t drop them as "no data" — the previous business day’s data is used instead.',
-    empty: 'No holidays registered.',
-    olderHidden: '{count} holidays older than {months} months are hidden from this list. They stay on record and are still used in stock calculations and the calendar.',
-    deleteAria: 'Delete {name}',
-    date: 'Date',
-    name: 'Holiday name',
-    namePlaceholder: 'e.g. New Year',
   },
   packaging: {
     title: 'SKU details',

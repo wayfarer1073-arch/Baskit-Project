@@ -101,7 +101,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Promi
           segment: w.segment === 'PERIODIC_COUNT' ? ('PERIODIC_COUNT' as const) : ('DAILY_SYNC' as const),
         }))}
         entries={calendarEntries}
-        holidays={holidays.map((h) => ({ date: h.date, name: h.name }))}
+        holidays={holidays}
         schedules={schedules}
         isAdmin={isAdmin}
         allowNonWorkingDayUploads={allowNonWorkingDayUploads}

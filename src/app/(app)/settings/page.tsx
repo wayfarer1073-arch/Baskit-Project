@@ -4,7 +4,6 @@ import { getSegmentSettings, getSettings } from '@/server/repositories/settings-
 import { listUsers } from '@/server/repositories/user-repository';
 import { listAllSkusForVisibilityAdmin } from '@/server/repositories/inventory-repository';
 import { listExpirationLots } from '@/server/repositories/expiration-repository';
-import { listHolidays } from '@/server/repositories/holiday-repository';
 import { listPackagingUploadStatus } from '@/server/repositories/packaging-repository';
 import { getOrganization } from '@/server/repositories/organization-repository';
 import { listStoreItemExtras, listSuppliers } from '@/server/repositories/store-repository';
@@ -55,7 +54,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     segmentSettings,
     users,
     skus,
-    holidays,
     suppliers,
     storeItems,
     codeAliases,
@@ -72,7 +70,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getSegmentSettings(tenant.orgId),
     isAdmin ? listUsers(tenant.orgId) : Promise.resolve([]),
     listAllSkusForVisibilityAdmin(tenant.orgId),
-    listHolidays(tenant.orgId),
     listSuppliers(tenant.orgId),
     getStoreItemLearning(tenant.orgId, todayKstDateString()),
     listCodeAliases(tenant.orgId),
@@ -106,7 +103,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             enabledSegments={enabledSegments}
             currentUserId={tenant.userId}
             users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
-            holidays={holidays}
             allowNonWorkingDayUploads={segmentSettings.allowNonWorkingDayUploads}
             account={tenant.actingAs || !account ? null : { email: account.email, verified: !!account.emailVerifiedAt, workspaceName: organization.name }}
           />

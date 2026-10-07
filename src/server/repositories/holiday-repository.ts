@@ -37,3 +37,11 @@ export async function deleteHoliday(orgId: string, id: string): Promise<boolean>
   const result = await prisma.holiday.deleteMany({ where: { id, organizationId: orgId } });
   return result.count > 0;
 }
+
+/** 휴무 사유(이름)를 바꾼다 — 캘린더 날짜 패널에서 쓴다. */
+export async function renameHoliday(orgId: string, id: string, name: string): Promise<HolidayRow | null> {
+  const found = await prisma.holiday.findFirst({ where: { id, organizationId: orgId } });
+  if (!found) return null;
+  const updated = await prisma.holiday.update({ where: { id }, data: { name } });
+  return { id: updated.id, date: dateOnlyToString(updated.date), name: updated.name };
+}

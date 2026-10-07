@@ -45,7 +45,7 @@ export interface CalendarEntry {
 interface UploadCalendarProps {
   warehouses: WarehouseOption[];
   entries: CalendarEntry[];
-  holidays: { date: string; name: string }[];
+  holidays: { id: string; date: string; name: string }[];
   schedules: ScheduleRow[];
   isAdmin: boolean;
   /** 설정의 '휴무일 업로드' — 켜져 있으면 주말·휴무일도 업로드할 수 있다(칸은 여전히 휴무일로 표시). */
@@ -185,6 +185,7 @@ export function UploadCalendar({
   }, [entryByKey, warehouses, selectedDate]);
 
   const holidayByDate = useMemo(() => new Map(holidays.map((h) => [h.date, h.name])), [holidays]);
+  const holidayInfoByDate = useMemo(() => new Map(holidays.map((h) => [h.date, { id: h.id, name: h.name }])), [holidays]);
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
@@ -434,6 +435,8 @@ export function UploadCalendar({
             onNextMonth={() => shiftMonth(1)}
             enabledSegments={enabledSegments}
             holidayByDate={holidayByDate}
+            holidayInfo={holidayInfoByDate.get(agendaDate) ?? null}
+            isAdmin={isAdmin}
             dailyWarehouses={dailyWarehouses}
             hasDailyEntry={(warehouseId, date) => entryByKey.has(`${warehouseId}|${date}`)}
             periodicCodesByDate={periodicCodesByDate}
@@ -463,6 +466,7 @@ export function UploadCalendar({
           warehouses={warehouses}
           entryByWarehouseId={entryByWarehouseIdForSelectedDate}
           stockBlocked={selectedDateBlocked}
+          holiday={holidayInfoByDate.get(selectedDate) ?? null}
           isAdmin={isAdmin}
           canEdit={canEdit}
           salesAmount={salesByDate.get(selectedDate) ?? null}

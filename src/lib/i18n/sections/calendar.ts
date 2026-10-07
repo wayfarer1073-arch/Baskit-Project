@@ -4,7 +4,7 @@ import type { Dictionary } from '../dictionary';
 export const ko = {
   title: '캘린더',
   description:
-    '날짜를 누르면 그날의 기록을 남길 수 있어요. 방식(일일 재고 연동·비정기 실사·매장 발주 예측)을 고른 뒤 업로드하거나 입력하세요. 색이 있는 막대는 등록한 일정이며, 눌러서 확인·수정할 수 있어요. 주말·공휴일은 옅은 회색이에요.',
+    '날짜를 누르면 그날의 기록을 남길 수 있어요. 방식(일일 재고 연동·비정기 실사·매장 발주 예측)을 고른 뒤 업로드하거나 입력하세요. 색이 있는 막대는 등록한 일정이며, 눌러서 확인·수정할 수 있어요. 주말·휴무일은 옅은 회색이에요. 휴무일은 날짜를 눌러 ‘휴무일로 지정’에서 사유와 함께 정해요.',
   markers: {
     skus: '{count} SKU',
     sales: '{amount} ₩',
@@ -12,6 +12,23 @@ export const ko = {
   },
   picker: { yearLabel: '연도', monthLabel: '월', yearOption: '{year}년', monthOption: '{month}월' },
   layers: { label: '캘린더에 표시할 정보', stock: '재고 데이터', schedules: '일정' },
+  holiday: {
+    label: '휴무일로 지정',
+    tip: '휴무일은 주말처럼 출고가 없는 날로 봐요. 소진 속도·신뢰도 계산에서 그날을 빼고, 설정의 ‘휴무일 업로드’가 꺼져 있으면 그날 재고 업로드를 막아요. 이미 올린 자료는 그대로 남아요.',
+    reasonLabel: '휴무 사유',
+    reasonPlaceholder: '직접 입력 (예: 창립기념일)',
+    presets: ['공휴일', '임시 휴무', '창고 휴무', '재고 실사'],
+    reason: '사유: {name}',
+    edit: '사유 바꾸기',
+    save: '저장',
+    cancel: '취소',
+    required: '휴무 사유를 고르거나 입력하세요.',
+    added: '{date}을(를) 휴무일로 지정했어요.',
+    renamed: '휴무 사유를 바꿨어요.',
+    removed: '{date} 휴무일 지정을 풀었어요.',
+    failed: '처리하지 못했습니다.',
+    readonly: '휴무일 · {name}',
+  },
   mobile: {
     dayListLabel: '고른 날짜의 기록',
     dayTitle: '{month}월 {day}일 ({weekday})',
@@ -168,7 +185,7 @@ export const ko = {
 export const en: Dictionary<typeof ko> = {
   title: 'Calendar',
   description:
-    'Click a date to record that day. Pick the type (daily stock sync, periodic count, store reorder forecast), then upload or enter. Colored bars are registered schedules — click one to view or edit it. Weekends and holidays are light gray.',
+    'Click a date to record that day. Pick the type (daily stock sync, periodic count, store reorder forecast), then upload or enter. Colored bars are registered schedules — click one to view or edit it. Weekends and days off are light gray. To set a day off, click the date and use ‘Mark as day off’ with a reason.',
   markers: {
     skus: '{count} SKU',
     sales: '{amount} ₩',
@@ -176,6 +193,23 @@ export const en: Dictionary<typeof ko> = {
   },
   picker: { yearLabel: 'Year', monthLabel: 'Month', yearOption: '{year}', monthOption: '{month}' },
   layers: { label: 'What to show on the calendar', stock: 'Stock data', schedules: 'Schedules' },
+  holiday: {
+    label: 'Mark as day off',
+    tip: 'A day off is treated like a weekend with no shipping. It is left out of usage-speed and reliability calculations, and stock uploads on that day are blocked unless ‘Uploads on non-working days’ is on in Settings. Data already uploaded stays.',
+    reasonLabel: 'Reason',
+    reasonPlaceholder: 'Type a reason (e.g. Company anniversary)',
+    presets: ['Public holiday', 'Temporary closure', 'Warehouse closed', 'Stock count'],
+    reason: 'Reason: {name}',
+    edit: 'Change reason',
+    save: 'Save',
+    cancel: 'Cancel',
+    required: 'Pick or type a reason.',
+    added: '{date} is now a day off.',
+    renamed: 'Reason updated.',
+    removed: '{date} is no longer a day off.',
+    failed: 'Could not apply the change.',
+    readonly: 'Day off · {name}',
+  },
   mobile: {
     dayListLabel: 'Records for the selected date',
     dayTitle: '{weekday}, {month}/{day}',

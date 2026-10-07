@@ -5,6 +5,7 @@ import { format, getDay, isSameMonth } from 'date-fns';
 import { CalendarPlus, Check, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { WarehouseOption } from '@/components/calendar/day-panels';
+import { HolidayToggle, type HolidayInfo } from '@/components/calendar/holiday-toggle';
 import type { ScheduleRow } from '@/domain/events/schedule-types';
 import type { Segment } from '@/lib/segments';
 import { SCHEDULE_COLOR_CLASSNAMES, type ScheduleColor } from '@/lib/schedule-colors';
@@ -29,6 +30,9 @@ export interface MobileCalendarProps {
   onNextMonth: () => void;
   enabledSegments: Segment[];
   holidayByDate: Map<string, string>;
+  /** 선택한 날의 휴무일 정보 — 목록 아래 '휴무일로 지정' 스위치. */
+  holidayInfo: HolidayInfo | null;
+  isAdmin: boolean;
   dailyWarehouses: WarehouseOption[];
   /** 그날 업로드한 일일 창고 id. */
   hasDailyEntry: (warehouseId: string, date: string) => boolean;
@@ -238,6 +242,11 @@ export function MobileCalendar(props: MobileCalendarProps) {
           ))}
         </ul>
         {selectedIsFuture && <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">{c.panel.future}</p>}
+        {props.isAdmin && (
+          <div className="border-t border-border p-3">
+            <HolidayToggle key={selectedDate} date={selectedDate} holiday={props.holidayInfo} isAdmin />
+          </div>
+        )}
       </section>
     </div>
   );

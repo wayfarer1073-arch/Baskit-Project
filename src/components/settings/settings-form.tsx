@@ -15,7 +15,6 @@ import { Separator } from '@/components/ui/separator';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { ExpirationManagement } from '@/components/settings/expiration-management';
 import { SkuPackagingManagement } from '@/components/settings/sku-packaging-management';
-import { HolidayManagement } from '@/components/settings/holiday-management';
 import { WarehouseManagement } from '@/components/settings/warehouse-management';
 import { HolidayUploadToggle } from '@/components/settings/holiday-upload-toggle';
 import { EnabledSegments } from '@/components/settings/enabled-segments';
@@ -68,14 +67,13 @@ interface PackagingUploadStatus {
 
 type UserRow = { id: string; email: string; name: string; role: 'VIEWER' | 'MEMBER' | 'ADMIN'; createdAt: string };
 
-/** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(창고, 휴무일, 업로드 양식, 사용자). */
+/** 공통 탭 — 어떤 대시보드를 쓰든 필요한 워크스페이스 설정(사용 대시보드, 언어, 휴무일 업로드, 사용자). 휴무일 지정은 캘린더 날짜 패널에서 한다. */
 export function CommonSettings({
   isAdmin,
   enabledSegments,
   currentUserId,
   users: initialUsers,
   account,
-  holidays,
   allowNonWorkingDayUploads,
 }: {
   isAdmin: boolean;
@@ -83,7 +81,6 @@ export function CommonSettings({
   currentUserId: string | null;
   users: UserRow[];
   account: { email: string; verified: boolean; workspaceName: string } | null;
-  holidays: { id: string; date: string; name: string }[];
   allowNonWorkingDayUploads: boolean;
 }) {
   const [users, setUsers] = useState(initialUsers);
@@ -94,7 +91,6 @@ export function CommonSettings({
       <EnabledSegments isAdmin={isAdmin} enabled={enabledSegments} />
       <LanguageSettings />
       {usesStock && <HolidayUploadToggle isAdmin={isAdmin} initial={allowNonWorkingDayUploads} />}
-      <HolidayManagement isAdmin={isAdmin} initialHolidays={holidays} />
       {isAdmin && <UserManagement users={users} onUsersChange={setUsers} currentUserId={currentUserId} />}
       {isAdmin && <TeamInvitations />}
       {account && <AccountDangerZone email={account.email} verified={account.verified} isAdmin={isAdmin} workspaceName={account.workspaceName} />}

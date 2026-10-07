@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DailyDayPanel, PeriodicDayPanel, StoreDayPanel, type WarehouseOption } from '@/components/calendar/day-panels';
 import type { CalendarEntry } from '@/components/upload/upload-calendar';
+import { HolidayToggle, type HolidayInfo } from '@/components/calendar/holiday-toggle';
 import type { OrderEntryRow, StoreItemLearning } from '@/domain/segments/read-model';
 import type { Segment } from '@/lib/segments';
 import { useI18n } from '@/components/i18n/i18n-provider';
@@ -23,6 +24,8 @@ export interface CalendarDayDialogProps {
   entryByWarehouseId: Map<string, CalendarEntry>;
   /** 휴무일이고 '휴무일 업로드'가 꺼져 있음 — 재고 업로드·실사만 막힌다(매출은 항상 가능). */
   stockBlocked: boolean;
+  /** 그날이 휴무일로 지정돼 있으면 그 정보 — 패널 위쪽 스위치로 지정·해제·사유 변경. */
+  holiday: HolidayInfo | null;
   isAdmin: boolean;
   canEdit: boolean;
   salesAmount: number | null;
@@ -66,6 +69,7 @@ export function CalendarDayDialog(props: CalendarDayDialogProps) {
           <CalendarPlus className="size-4" aria-hidden="true" />
           {t.addSchedule}
         </Button>
+        <HolidayToggle date={date} holiday={props.holiday} isAdmin={isAdmin} />
 
         {mode === null ? (
           <div className="grid gap-2.5 sm:grid-cols-3">
