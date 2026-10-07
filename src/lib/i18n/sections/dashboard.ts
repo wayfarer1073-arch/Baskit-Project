@@ -93,7 +93,7 @@ export const ko = {
     valueRule: '업로드 원가합 우선, 없으면 정상재고 × 유효 원가',
     valueScope: '평가 범위 {valued} / {observed} SKU ({ratio}) · 원가 미상·오류 {unvalued}개 제외',
     soldOut: '품절 SKU',
-    soldOutTip: '최신 업로드 목록에서 빠졌거나 재고 0으로 품절 인식된 뒤, 아직 1개월이 지나지 않은 SKU 수입니다.',
+    soldOutTip: '최신 업로드 목록에서 빠졌거나 재고 0으로 품절 인식된 뒤, 아직 180일이 지나지 않은 SKU 수입니다.',
     soldOutList: '품절 SKU 목록 보기',
     details: '상세보기',
     unexplained: '미입고재고',
@@ -203,7 +203,7 @@ export const ko = {
   soldOut: {
     title: '품절 SKU {count}개',
     description:
-      '최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 1개월이 지나지 않은 SKU예요. 1개월 동안은 전체 재고 표에도 품절 배지로 남아요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.',
+      '최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 180일이 지나지 않은 SKU예요. 180일 동안은 전체 재고 표에도 품절 배지로 남아요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.',
     empty: '품절 SKU가 없습니다.',
     detected: ' · 품절 인식 {date}',
   },
@@ -430,7 +430,7 @@ export const en: Dictionary<typeof ko> = {
   soldOut: {
     title: '{count} sold-out SKUs',
     description:
-      'SKUs recognized as sold out within the last month — missing from the latest upload or uploaded with 0 stock (layout set to “sold out”). They also stay in the stock table with a sold-out badge for one month. Click one to see details such as the stock trend before selling out.',
+      'SKUs recognized as sold out within the last 180 days — missing from the latest upload or uploaded with 0 stock (layout set to “sold out”). They also stay in the stock table with a sold-out badge for 180 days. Click one to see details such as the stock trend before selling out.',
     empty: 'No sold-out SKUs.',
     detected: ' · sold out since {date}',
   },

@@ -86,7 +86,7 @@ export const ko = {
   row: {
     openDetail: '{name} 상세 보기',
     soldOut: '품절',
-    soldOutTip: '최근 자료에서 빠졌거나 재고 0으로 올라와 품절로 판단했어요. {date}부터 한 달 동안은 참고용으로 계속 보여드리고, 현재 재고 합계에는 넣지 않습니다.',
+    soldOutTip: '최근 자료에서 빠졌거나 재고 0으로 올라와 품절로 판단했어요. {date}부터 180일 동안은 참고용으로 계속 보여드리고, 현재 재고 합계에는 넣지 않습니다.',
     b2bTip:
       '정기 발주·B2B 납품·무상 증정품처럼 따로 관리하는 재고예요. 매일 조금씩 팔리는 걸 가정한 예상 소진일·재고 부족 예측에서는 빠지니, 일정과 소비기한을 직접 확인해 주세요.',
     periodDetail: '추정 소진 {depletion} · 미설명 증가 {increase}',
@@ -287,7 +287,7 @@ export const en: Dictionary<typeof ko> = {
     openDetail: 'Open details for {name}',
     soldOut: 'Sold out',
     soldOutTip:
-      'Recognized as sold out because the item was missing from the latest data or uploaded with 0 stock. It stays visible for reference for one month from {date} and is not counted in current stock totals.',
+      'Recognized as sold out because the item was missing from the latest data or uploaded with 0 stock. It stays visible for reference for 180 days from {date} and is not counted in current stock totals.',
     b2bTip:
       'Stock managed separately, such as scheduled orders, B2B deliveries or free giveaways. It’s excluded from stock-out forecasts that assume small daily sales, so check its schedule and expiry directly.',
     periodDetail: 'Est. usage {depletion} · unexplained increase {increase}',

@@ -131,7 +131,7 @@ export async function createSnapshot(input: CreateSnapshotInput) {
             "currentWarningQty" = CASE WHEN ${isLatestSnapshot} THEN r."warningQty" ELSE s."currentWarningQty" END,
             "currentDangerQty" = CASE WHEN ${isLatestSnapshot} THEN r."dangerQty" ELSE s."currentDangerQty" END,
             "isActive" = CASE WHEN ${isLatestSnapshot} THEN r."zeroStockStatus" IS NULL ELSE s."isActive" END,
-            -- 재고 0이 이어지는 동안은 처음 품절·제외된 날짜를 유지한다(1개월 노출 기간의 시작점).
+            -- 재고 0이 이어지는 동안은 처음 품절·제외된 날짜를 유지한다(180일 노출 기간의 시작점).
             "soldOutDetectedDate" = CASE WHEN ${isLatestSnapshot} THEN (CASE WHEN r."zeroStockStatus" = 'soldOut' THEN COALESCE(s."soldOutDetectedDate", ${input.snapshotDate}::date) ELSE NULL END) ELSE s."soldOutDetectedDate" END,
             "removedDate" = CASE WHEN ${isLatestSnapshot} THEN (CASE WHEN r."zeroStockStatus" = 'removed' THEN COALESCE(s."removedDate", ${input.snapshotDate}::date) ELSE NULL END) ELSE s."removedDate" END,
             "updatedAt" = NOW()

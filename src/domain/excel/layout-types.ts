@@ -41,7 +41,7 @@ export interface ImportLayout {
   /** 없으면 EA(낱개). */
   stockUnit?: StockUnit;
   /**
-   * 재고가 0인 행을 어떻게 볼지. true(기본): 품절 — 관리 목록에서 빠지고 1개월 동안 품절 목록에 보인다.
+   * 재고가 0인 행을 어떻게 볼지. true(기본): 품절 — 관리 목록에서 빠지고 180일 동안 품절 목록에 보인다.
    * false: 관리 품목에서 제외 — 대시보드에 보이지 않는다. 어느 쪽이든 그 전 날짜로 조회하면 평소처럼 보인다.
    */
   zeroStockAsSoldOut?: boolean;

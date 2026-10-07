@@ -1,10 +1,10 @@
-import { addMonths, format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { dateOnlyToString } from '@/lib/date';
 import type { StockObservation } from '@/domain/inventory/types';
 import { resolveInventoryCost } from '@/domain/inventory/costs';
 import type { Prisma } from '@prisma/client';
-import type { SkuDescriptor, DailyWarehouseTotal } from '@/domain/inventory/read-model';
+import { SOLD_OUT_VISIBLE_DAYS, type SkuDescriptor, type DailyWarehouseTotal } from '@/domain/inventory/read-model';
 import type { DatedInbound } from '@/domain/inventory/inbounds';
 import { observationsFromLedger, type LedgerEntry } from '@/domain/ledger/ledger';
 import { NO_HOLIDAYS, type ClosedDays } from '@/domain/inventory/shipping-calendar';
@@ -22,9 +22,9 @@ function activeWarehouseOf(orgId: string) {
   return { organizationId: orgId, isArchived: false, kind: 'STOCK' as const, segment: 'DAILY_SYNC' as const };
 }
 
-/** 품절 인식일로부터 정확히 1개월 뒤(유예기간 종료일, 이 날짜부터는 더 이상 노출하지 않음). */
+/** 품절 인식일로부터 SOLD_OUT_VISIBLE_DAYS(180일) 뒤(유예기간 종료일, 이 날짜부터는 더 이상 노출하지 않음). */
 function soldOutGraceEndDate(soldOutDetectedDateStr: string): string {
-  return format(addMonths(parseISO(soldOutDetectedDateStr), 1), 'yyyy-MM-dd');
+  return format(addDays(parseISO(soldOutDetectedDateStr), SOLD_OUT_VISIBLE_DAYS), 'yyyy-MM-dd');
 }
 
 /** 저장된 재고 행의 재고 0 상태(양식 설정에 따라 품절/관리 제외). 없으면 평소 품목. */
@@ -42,13 +42,13 @@ function trailingSoldOutStart(items: { extra: Prisma.JsonValue | null; snapshot:
 }
 
 /**
- * 최신 업로드 목록에서 빠져 품절로 인식됐지만(soldOutDetectedDate), asOfDate 기준 아직 1개월
+ * 최신 업로드 목록에서 빠져 품절로 인식됐지만(soldOutDetectedDate), asOfDate 기준 아직 180일
  * 유예기간 이내인 SKU의 id를 돌려준다. 마지막 관측 데이터가 그대로 노출되도록(휘발 방지) 하는 게
  * 목적이라 관측치 자체는 건드리지 않고, 어떤 SKU를 결과 집합에 추가로 포함할지만 결정한다.
  */
 async function resolveSoldOutGraceSkuIds(orgId: string, warehouseId: string | undefined, asOfDate: string): Promise<Set<string>> {
   const asOfDateOnly = new Date(`${asOfDate}T00:00:00.000Z`);
-  const graceWindowStart = new Date(`${format(addMonths(parseISO(asOfDate), -1), 'yyyy-MM-dd')}T00:00:00.000Z`);
+  const graceWindowStart = new Date(`${format(addDays(parseISO(asOfDate), -SOLD_OUT_VISIBLE_DAYS), 'yyyy-MM-dd')}T00:00:00.000Z`);
   const candidates = await prisma.sku.findMany({
     where: {
       warehouse: activeWarehouseOf(orgId),
@@ -259,7 +259,7 @@ export async function loadActiveSkusWithSeries(
   const activeSkuIds = latestItems.filter((item) => stockStatusOf(item.extra) === null).map((item) => item.skuId);
   const zeroSoldOutSkuIds = new Set(latestItems.filter((item) => stockStatusOf(item.extra) === 'soldOut').map((item) => item.skuId));
 
-  // 최신 목록엔 없어도 품절 인식 1개월 유예기간 이내인 SKU는 계속 포함한다(휘발 방지).
+  // 최신 목록엔 없어도 품절 인식 180일 유예기간 이내인 SKU는 계속 포함한다(휘발 방지).
   // 최신 목록에 있는 품목은 위에서 그 행의 상태로 이미 판단했으므로 제외한다(관리 제외된 재고 0 행 포함).
   const missingSoldOutSkuIds = asOfDate ? await resolveSoldOutGraceSkuIds(orgId, warehouseId, asOfDate) : new Set<string>();
   for (const id of inLatest) missingSoldOutSkuIds.delete(id);
@@ -303,7 +303,7 @@ export async function loadActiveSkusWithSeries(
     return last ? attributesAt(historyBySku.get(skuId), dateOnlyToString(last.snapshot.snapshotDate)) : null;
   };
 
-  // 재고 0으로 품절된 품목은 그날 기준으로 재고 0이 시작된 날부터 1개월 동안만 품절 목록에 보인다.
+  // 재고 0으로 품절된 품목은 그날 기준으로 재고 0이 시작된 날부터 180일 동안만 품절 목록에 보인다.
   const zeroSoldOutSince = new Map<string, string>();
   const expired = new Set<string>();
   for (const id of zeroSoldOutSkuIds) {
@@ -438,7 +438,7 @@ export async function loadSkuWithSeries(
   const latestStatus = latestRow ? stockStatusOf(latestRow.extra) : null;
   // 재고 0을 '관리 제외'로 올린 품목은 그날부터 보이지 않는다(그 전 날짜로 보면 평소대로 보인다).
   if (latestStatus === 'removed') return null;
-  // 최신 목록에는 없어도 품절 인식 1개월 유예기간 이내면(휘발 방지) 목록과 동일하게 계속 보여준다.
+  // 최신 목록에는 없어도 품절 인식 180일 유예기간 이내면(휘발 방지) 목록과 동일하게 계속 보여준다.
   let isSoldOut = latestStatus === 'soldOut';
   if (!isInLatestSnapshot) {
     if (!asOfDate || !sku.soldOutDetectedDate) return null;
@@ -458,7 +458,7 @@ export async function loadSkuWithSeries(
     select: observationSelect,
     orderBy: { snapshot: { snapshotDate: 'asc' } },
   });
-  // 재고 0으로 품절된 품목: 그날 기준 재고 0이 시작된 날부터 1개월까지만 보여준다(목록과 같은 규칙).
+  // 재고 0으로 품절된 품목: 그날 기준 재고 0이 시작된 날부터 180일까지만 보여준다(목록과 같은 규칙).
   const zeroSoldOutSince = latestStatus === 'soldOut' ? trailingSoldOutStart(items) : null;
   if (zeroSoldOutSince && asOfDate && asOfDate >= soldOutGraceEndDate(zeroSoldOutSince)) return null;
   const [inboundsBySku, historyBySku] = await Promise.all([loadInboundsBySku([skuId], asOfDate), loadSkuAttributeHistory([skuId], asOfDate)]);

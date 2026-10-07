@@ -46,7 +46,7 @@ const view = async (asOf: string) => {
 };
 const skuId = (code: string) => prisma.sku.findFirstOrThrow({ where: { warehouseId: a.warehouse.id, productCode: code } }).then((s) => s.id);
 
-it('yes: a zero-stock item is sold out for one month from its first zero day, and shows normally on earlier dates', async () => {
+it('yes: a zero-stock item is sold out for 180 days from its first zero day, and shows normally on earlier dates', async () => {
   await upload('2026-08-03', [
     ['Z1', 10],
     ['K', 5],
@@ -66,13 +66,16 @@ it('yes: a zero-stock item is sold out for one month from its first zero day, an
   expect(detail?.descriptor.isSoldOut).toBe(true);
   expect(detail?.observations.map((o) => o.normalStock)).toEqual([10, 0, 0]);
 
-  // 재고 0이 시작된 날부터 1개월이 지나면 품절 목록에서도 빠진다.
+  // 1개월이 지나도 180일 동안은 품절로 남아 있다.
   await upload('2026-09-04', [
     ['Z1', 0],
     ['K', 3],
   ]);
-  expect(await view('2026-09-04')).toEqual({ K: 'active' });
-  expect(await getSkuDetail(a.org.id, await skuId('Z1'), '2026-09-04')).toBeNull();
+  expect(await view('2026-09-04')).toEqual({ Z1: 'soldOut:2026-08-04', K: 'active' });
+  expect(await view('2027-01-30')).toEqual({ Z1: 'soldOut:2026-08-04', K: 'active' });
+  // 재고 0이 시작된 날부터 180일(2027-01-31)이 되면 품절 목록에서도 빠진다.
+  expect(await view('2027-01-31')).toEqual({ K: 'active' });
+  expect(await getSkuDetail(a.org.id, await skuId('Z1'), '2027-01-31')).toBeNull();
   expect(await view('2026-08-20')).toEqual({ Z1: 'soldOut:2026-08-04', K: 'active' });
 
   // 다시 재고가 생기면 관리 목록으로 돌아온다.

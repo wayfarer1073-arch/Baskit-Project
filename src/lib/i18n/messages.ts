@@ -130,7 +130,7 @@ const baseKo = {
     settingsButton: '양식 설정',
     zeroStock: '재고가 0인 품목을 품절로 볼까요?',
     zeroStockYes: '예 — 품절로 봐요',
-    zeroStockYesHint: '재고 0이 된 날부터 1개월 동안 재고 표에 품절 배지로 남고 품절 SKU 목록에도 보여요(누르면 품절 전 재고 추이 확인). 재고 합계에서는 빠져요.',
+    zeroStockYesHint: '재고 0이 된 날부터 180일 동안 재고 표에 품절 배지로 남고 품절 SKU 목록에도 보여요(누르면 품절 전 재고 추이 확인). 재고 합계에서는 빠져요.',
     zeroStockNo: '아니오 — 관리 품목에서 빼요',
     zeroStockNoHint: '품절이 아니라 더 이상 관리하지 않는 품목으로 보고, 그날부터 대시보드에 보이지 않아요.',
     zeroStockPast: '어느 쪽이든 재고가 남아 있던 이전 날짜로 조회하면 평소처럼 보여요.',
@@ -595,7 +595,7 @@ const baseEn: Dictionary<typeof baseKo> = {
     zeroStock: 'Treat items with 0 stock as sold out?',
     zeroStockYes: 'Yes — sold out',
     zeroStockYesHint:
-      'For one month from the day they hit 0 they stay in the stock table with a sold-out badge and appear in the sold-out list (click to see the trend before selling out). They are left out of stock totals.',
+      'For 180 days from the day they hit 0 they stay in the stock table with a sold-out badge and appear in the sold-out list (click to see the trend before selling out). They are left out of stock totals.',
     zeroStockNo: 'No — stop managing them',
     zeroStockNoHint: 'They are treated as items you no longer manage, not as sold out, and disappear from the dashboard from that day.',
     zeroStockPast: 'Either way, looking up an earlier date when the item still had stock shows it as usual.',

@@ -1,5 +1,8 @@
 import type { SkuAnalysis, InventoryValueBreakdown, PeriodComparison } from './types';
 
+/** 품절로 인식된 SKU를 재고 표·품절 목록에 남겨 두는 기간(일). 이 기간이 지나면 자동으로 빠진다. */
+export const SOLD_OUT_VISIBLE_DAYS = 180;
+
 export interface SkuDescriptor {
   skuId: string;
   warehouseId: string;
@@ -22,7 +25,7 @@ export interface SkuDescriptor {
   specialNote?: string;
   /** 이 SKU가 이 창고에서 처음 관측된 날짜(최초 업로드로 인식된 시점). */
   firstSeenDate: string;
-  /** 최신 업로드 목록에는 없지만 품절 인식 후 1개월 유예기간 이내라 마지막 관측 그대로 노출 중인지. */
+  /** 최신 업로드 목록에는 없지만 품절 인식 후 180일 유예기간 이내라 마지막 관측 그대로 노출 중인지. */
   isSoldOut: boolean;
   /** 품절로 인식된 날짜(그 날짜의 업로드 목록에서 처음 빠짐). isSoldOut이 false면 null. */
   soldOutDetectedDate: string | null;
