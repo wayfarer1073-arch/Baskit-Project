@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PackageX } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { formatKstDate } from '@/lib/date';
-import type { InventoryRow } from '@/domain/inventory/read-model';
+import { isRecentlySoldOut, type InventoryRow } from '@/domain/inventory/read-model';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { LIST_PAGE_SIZE } from '@/lib/use-paged';
@@ -14,6 +14,7 @@ const PAGE_SIZE = LIST_PAGE_SIZE;
 
 interface SoldOutSkuSheetProps {
   rows: InventoryRow[];
+  asOfDate: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectSku: (skuId: string) => void;
@@ -21,7 +22,7 @@ interface SoldOutSkuSheetProps {
 
 /** 품절 SKU 수 옆 상세보기 링크로 여는 목록 패널. 행을 클릭하면 이 패널을 닫고 해당 SKU의
  * 상세보기(SkuDetailSheet)를 연다 — 같은 우측 슬라이드 자리를 두 시트가 번갈아 쓴다. */
-export function SoldOutSkuSheet({ rows, open, onOpenChange, onSelectSku }: SoldOutSkuSheetProps) {
+export function SoldOutSkuSheet({ rows: allRows, asOfDate, open, onOpenChange, onSelectSku }: SoldOutSkuSheetProps) {
   const { m } = useI18n();
   const t = m.dashboard.soldOut;
   const [page, setPage] = useState(1);
@@ -33,6 +34,11 @@ export function SoldOutSkuSheet({ rows, open, onOpenChange, onSelectSku }: SoldO
     if (open) setPage(1);
   }
 
+  // 최근 품절된 순서로 — 대시보드 숫자(최근 7일 전환)에 들어간 SKU가 맨 위에 오고 배지가 붙는다.
+  const rows = useMemo(
+    () => [...allRows].sort((a, b) => (b.descriptor.soldOutDetectedDate ?? '').localeCompare(a.descriptor.soldOutDetectedDate ?? '') || a.descriptor.productCode.localeCompare(b.descriptor.productCode)),
+    [allRows],
+  );
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -61,6 +67,9 @@ export function SoldOutSkuSheet({ rows, open, onOpenChange, onSelectSku }: SoldO
                     <span className="inline-flex items-center gap-1.5 text-sm font-medium">
                       <PackageX className="size-3.5 shrink-0 text-status-soldout" aria-hidden="true" />
                       {r.descriptor.productName}
+                      {isRecentlySoldOut(r.descriptor, asOfDate) && (
+                        <span className="shrink-0 rounded-full bg-status-soldout-bg px-1.5 py-0.5 text-[10px] font-semibold text-status-soldout">{t.recent}</span>
+                      )}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {r.descriptor.productCode} · {r.descriptor.warehouseCode}

@@ -142,7 +142,7 @@ export function DashboardClient({
         <StaleDataBanner rows={rows} asOfDate={asOfDate} />
       </div>
       <TodayActions actions={todayActions} onSelect={setSelectedSkuId} />
-      <KpiCards kpis={kpis} fromDate={fromDate} asOfDate={asOfDate} onOpenSoldOutList={() => setSoldOutPanelOpen(true)} />
+      <KpiCards kpis={kpis} fromDate={fromDate} asOfDate={asOfDate} soldOutListCount={soldOutRows.length} onOpenSoldOutList={() => setSoldOutPanelOpen(true)} />
       <OperatingSummary rows={rows} />
       <ActionCenter cards={actionCenterCards} onSelect={handleActionCenterSelect} />
       <WarehouseSummaryCards summaries={warehouseSummaries} activeWarehouseId={warehouseFilter} onSelect={setWarehouseFilter} latestUploads={latestUploads} />
@@ -209,6 +209,7 @@ export function DashboardClient({
       </div>
       <SoldOutSkuSheet
         rows={soldOutRows}
+        asOfDate={asOfDate}
         open={soldOutPanelOpen}
         onOpenChange={setSoldOutPanelOpen}
         onSelectSku={(skuId) => {

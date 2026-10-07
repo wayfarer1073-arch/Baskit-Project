@@ -1,7 +1,18 @@
 import type { SkuAnalysis, InventoryValueBreakdown, PeriodComparison } from './types';
+import { daysBetween } from './shipping-calendar';
 
 /** 품절로 인식된 SKU를 재고 표·품절 목록에 남겨 두는 기간(일). 이 기간이 지나면 자동으로 빠진다. */
 export const SOLD_OUT_VISIBLE_DAYS = 180;
+
+/** 대시보드 "품절 SKU"가 세는 기간(일) — 기준일 포함 최근 7일 안에 재고가 있다가 품절로 바뀐 SKU만 센다. */
+export const SOLD_OUT_RECENT_DAYS = 7;
+
+/** 기준일 포함 최근 SOLD_OUT_RECENT_DAYS일 안에 품절로 바뀌었는지(품절 인식일 = 재고가 있다가 목록에서 빠지거나 0이 된 첫날). */
+export function isRecentlySoldOut(descriptor: { isSoldOut: boolean; soldOutDetectedDate: string | null }, asOfDate: string): boolean {
+  if (!descriptor.isSoldOut || !descriptor.soldOutDetectedDate) return false;
+  const days = daysBetween(descriptor.soldOutDetectedDate, asOfDate);
+  return days >= 0 && days < SOLD_OUT_RECENT_DAYS;
+}
 
 export interface SkuDescriptor {
   skuId: string;

@@ -10,10 +10,12 @@ interface KpiCardsProps {
   kpis: CompanyKpis;
   fromDate: string | null;
   asOfDate: string;
+  /** 상세보기 목록의 품절 SKU 수(180일 이내 전체) — 최근 7일 전환이 0이어도 목록은 열 수 있다. */
+  soldOutListCount?: number;
   onOpenSoldOutList?: () => void;
 }
 
-export function KpiCards({ kpis, fromDate, asOfDate, onOpenSoldOutList }: KpiCardsProps) {
+export function KpiCards({ kpis, fromDate, asOfDate, soldOutListCount = 0, onOpenSoldOutList }: KpiCardsProps) {
   const { m } = useI18n();
   const t = m.dashboard.kpi;
   const unit = (n: number | string) => format(m.dashboard.unit, { count: typeof n === 'number' ? formatNumber(n) : n });
@@ -50,12 +52,13 @@ export function KpiCards({ kpis, fromDate, asOfDate, onOpenSoldOutList }: KpiCar
             label={t.soldOut}
             value={unit(s.soldOutSkuCount)}
             emphasis={s.soldOutSkuCount ? 'warning' : undefined}
+            detail={t.soldOutDetail}
             tooltip={t.soldOutTip}
             action={
               <button
                 type="button"
                 onClick={onOpenSoldOutList}
-                disabled={s.soldOutSkuCount === 0}
+                disabled={soldOutListCount === 0}
                 aria-label={t.soldOutList}
                 className="rounded px-1 text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
               >

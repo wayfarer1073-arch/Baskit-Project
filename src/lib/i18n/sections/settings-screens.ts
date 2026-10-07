@@ -116,6 +116,7 @@ export const ko = {
     description:
       '여기서 지정한 날짜는 주말처럼 취급돼요. 업로드 화면에서 회색으로 표시되고 그 날짜엔 자료를 올릴 수 없습니다. 다만 매출·판매는 공휴일에도 계속 일어난다고 보기 때문에, 통계에서 "자료 없음"으로 빼지 않고 바로 전 영업일 자료를 그대로 사용합니다.',
     empty: '등록된 공휴일이 없습니다.',
+    olderHidden: '{months}개월보다 지난 휴무일 {count}개는 목록에서 숨겼어요. 기록은 그대로 남아 재고 계산과 캘린더에 계속 쓰여요.',
     deleteAria: '{name} 삭제',
     date: '날짜',
     name: '공휴일 이름',
@@ -371,6 +372,7 @@ export const en: Dictionary<typeof ko> = {
     description:
       'Dates listed here are treated like weekends: they appear gray on the upload screen and can’t take uploads. Sales are assumed to continue on holidays, so statistics don’t drop them as "no data" — the previous business day’s data is used instead.',
     empty: 'No holidays registered.',
+    olderHidden: '{count} holidays older than {months} months are hidden from this list. They stay on record and are still used in stock calculations and the calendar.',
     deleteAria: 'Delete {name}',
     date: 'Date',
     name: 'Holiday name',

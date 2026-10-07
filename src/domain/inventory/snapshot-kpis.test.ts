@@ -127,7 +127,7 @@ describe('weekend/holiday carry-forward (매출은 발생하지만 업로드는 
 
 describe('목록 미관측 SKU는 마지막 재고를 현재 재고로 합산하지 않는다', () => {
   it('이력 노출 중인 미관측 SKU도 현재 보유 수량·금액에서는 제외한다', () => {
-    const s = calculateSnapshotKpis([row('a', [obs('2026-08-01', 50)], '2026-09-08', undefined, true)]);
+    const s = calculateSnapshotKpis([row('a', [obs('2026-09-04', 50)], '2026-09-08', undefined, true)]);
     expect(s).toMatchObject({ observedSkuCount: 0, staleSkuCount: 1, positiveStockSkuCount: 0, knownInventoryValue: null, soldOutSkuCount: 1 });
   });
   it('isSoldOut이 아니면 동일한 공백은 여전히 stale로 집계되지만, "품절 SKU"에는 잡히지 않는다(대조군)', () => {
@@ -135,7 +135,7 @@ describe('목록 미관측 SKU는 마지막 재고를 현재 재고로 합산하
     expect(s).toMatchObject({ observedSkuCount: 0, staleSkuCount: 1, soldOutSkuCount: 0 });
   });
   it('"품절 SKU"는 정상재고=0인 SKU나 단순 업로드 지연 SKU를 세지 않고, isSoldOut인 SKU만 센다', () => {
-    const soldOut = row('soldout', [obs('2026-08-01', 50)], '2026-09-08', undefined, true);
+    const soldOut = row('soldout', [obs('2026-09-02', 50)], '2026-09-08', undefined, true);
     const zeroStock = row('zero', [obs('2026-09-08', 0)]);
     const lateUpload = row('late', [obs('2026-09-01', 10)], '2026-09-08');
     const s = calculateSnapshotKpis([soldOut, zeroStock, lateUpload]);
@@ -172,5 +172,14 @@ describe('forecast and risk regressions', () => {
     const expiry = { expirationDate: '2026-09-01', expirationRiskDays: 14 };
     expect(analyzeSku([obs('2026-09-08', 10)], '2026-09-08', undefined, undefined, expiry)!.expirationRisk.isAtRisk).toBe(true);
     expect(analyzeSku([obs('2026-09-01', 100), obs('2026-09-08', 0)], '2026-09-08', undefined, undefined, expiry)!.expirationRisk.isAtRisk).toBe(false);
+  });
+});
+
+describe('"품절 SKU"는 최근 7일 안에 품절로 바뀐 SKU만 센다', () => {
+  it('기준일 포함 7일(9/2~9/8) 안의 품절 전환만 세고, 그 전부터 이어진 품절은 세지 않는다', () => {
+    const at = (id: string, date: string) => row(id, [obs(date, 30)], '2026-09-08', undefined, true);
+    const s = calculateSnapshotKpis([at('today', '2026-09-08'), at('day7', '2026-09-02'), at('day8', '2026-09-01'), at('old', '2026-08-01')]);
+    expect(s.soldOutSkuCount).toBe(2);
+    expect(s.staleSkuCount).toBe(4);
   });
 });

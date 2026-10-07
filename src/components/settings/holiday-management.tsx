@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { format as formatDate, parseISO, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +9,13 @@ import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { formatKstDate } from '@/lib/date';
+import { formatKstDate, todayKstDateString } from '@/lib/date';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format } from '@/lib/i18n/locales';
 import { Paged } from '@/components/ui/paged';
+
+/** 목록에 보여 줄 지난 휴무일의 범위(개월) — 그보다 오래된 휴무일은 목록에서만 숨기고 기록·계산에는 그대로 남는다. */
+const VISIBLE_PAST_MONTHS = 6;
 
 interface HolidayRow {
   id: string;
@@ -31,6 +35,12 @@ export function HolidayManagement({ isAdmin, initialHolidays }: HolidayManagemen
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // 최근 6개월 이후(앞으로 올 휴무일 포함)만 보여 준다.
+  const { visible, olderCount } = useMemo(() => {
+    const cutoff = formatDate(subMonths(parseISO(todayKstDateString()), VISIBLE_PAST_MONTHS), 'yyyy-MM-dd');
+    const visible = holidays.filter((h) => formatKstDate(h.date) >= cutoff);
+    return { visible, olderCount: holidays.length - visible.length };
+  }, [holidays]);
 
   async function addHoliday() {
     if (!date || !name.trim()) {
@@ -90,10 +100,10 @@ export function HolidayManagement({ isAdmin, initialHolidays }: HolidayManagemen
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {holidays.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="text-xs text-muted-foreground">{t.holidays.empty}</p>
         ) : (
-          <Paged items={holidays} pagerClassName="mt-2">
+          <Paged items={visible} pagerClassName="mt-2">
             {(pageItems) => (
               <div className="space-y-1.5">
                 {pageItems.map((h) => (
@@ -120,6 +130,7 @@ export function HolidayManagement({ isAdmin, initialHolidays }: HolidayManagemen
             )}
           </Paged>
         )}
+        {olderCount > 0 && <p className="text-xs text-muted-foreground">{format(t.holidays.olderHidden, { count: olderCount, months: VISIBLE_PAST_MONTHS })}</p>}
 
         {isAdmin && (
           <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/20 p-3">

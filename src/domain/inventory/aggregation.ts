@@ -1,7 +1,7 @@
 import { latestShippingDay as mostRecentBusinessDayOnOrBefore, NO_HOLIDAYS } from './shipping-calendar';
 import { buildDailyDeltas, isNewlyAtRisk } from './calculations';
 import type { CompanyKpis, SnapshotKpis, WarehouseSummary } from './types';
-import type { InventoryRow } from './read-model';
+import { isRecentlySoldOut, type InventoryRow } from './read-model';
 
 // ---- 집계 ----
 
@@ -44,9 +44,9 @@ export function calculateSnapshotKpis(rows: InventoryRow[], compareFromDate?: st
     // 목록 이탈은 품절의 증거가 아니다. 마지막 재고를 현재 자산으로 다시 집계하지 않는다.
     if (row.descriptor.isSoldOut) {
       result.staleSkuCount++;
-      // "품절 SKU"는 이 값(실제로 품절 인식되어 180일 유예기간 내 노출 중인 SKU 수)만 센다 —
-      // 정상재고=0이지만 여전히 목록에 있는 SKU나, 단순히 오늘 업로드가 늦은 SKU는 포함하지 않는다.
-      result.soldOutSkuCount++;
+      // "품절 SKU"는 최근 7일 안에 재고가 있다가 품절로 바뀐 SKU만 센다 — 그 전부터 이어진 품절,
+      // 정상재고=0이지만 여전히 목록에 있는 SKU, 단순히 오늘 업로드가 늦은 SKU는 포함하지 않는다.
+      if (isRecentlySoldOut(row.descriptor, asOfDate)) result.soldOutSkuCount++;
       continue;
     }
     // 주말·등록 공휴일은 출고가 없으므로 마지막 영업일 재고를 인정한다. 운영 분석이 이미 창고별 달력(휴무일에

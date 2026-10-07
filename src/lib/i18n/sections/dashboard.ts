@@ -93,7 +93,9 @@ export const ko = {
     valueRule: '업로드 원가합 우선, 없으면 정상재고 × 유효 원가',
     valueScope: '평가 범위 {valued} / {observed} SKU ({ratio}) · 원가 미상·오류 {unvalued}개 제외',
     soldOut: '품절 SKU',
-    soldOutTip: '최신 업로드 목록에서 빠졌거나 재고 0으로 품절 인식된 뒤, 아직 180일이 지나지 않은 SKU 수입니다.',
+    soldOutDetail: '최근 7일 새로 품절',
+    soldOutTip:
+      '기준일을 포함한 최근 7일 동안 재고가 있다가 품절로 바뀐 SKU 수예요. 업로드 목록에서 빠지거나 재고 0으로 올라온 첫날을 품절로 바뀐 날로 봐요. 그보다 먼저 품절돼 계속 품절인 SKU는 세지 않고, 상세보기에서 함께 볼 수 있어요(품절 SKU는 180일 동안 목록에 남아요).',
     soldOutList: '품절 SKU 목록 보기',
     details: '상세보기',
     unexplained: '미입고재고',
@@ -158,7 +160,7 @@ export const ko = {
     skuCount: '관리 SKU',
     value: '평가 가능한 재고금액',
     valueRatio: '평가 가능한 SKU 비율',
-    soldOut: '품절 SKU',
+    soldOut: '품절 SKU(최근 7일)',
     danger: '위험 SKU',
     dangerValue: '{count}개 ({ratio})',
     stockoutSoon: '설정 기간 내 소진 추정',
@@ -203,7 +205,8 @@ export const ko = {
   soldOut: {
     title: '품절 SKU {count}개',
     description:
-      '최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 180일이 지나지 않은 SKU예요. 180일 동안은 전체 재고 표에도 품절 배지로 남아요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.',
+      '최신 업로드 목록에서 빠졌거나 재고 0(양식에서 ‘품절로 보기’)으로 올라와 품절로 인식된 뒤 180일이 지나지 않은 SKU예요. 최근 7일 안에 품절로 바뀐 SKU가 맨 위에 와요. 누르면 품절 전 재고 추이 등 상세를 볼 수 있어요.',
+    recent: '최근 7일',
     empty: '품절 SKU가 없습니다.',
     detected: ' · 품절 인식 {date}',
   },
@@ -319,7 +322,9 @@ export const en: Dictionary<typeof ko> = {
     valueRule: 'Uploaded total cost first, otherwise on-hand × effective unit cost',
     valueScope: 'Valued {valued} / {observed} SKUs ({ratio}) · {unvalued} without cost or with errors excluded',
     soldOut: 'Sold-out SKUs',
-    soldOutTip: 'SKUs recognized as sold out (missing from the latest file or uploaded with 0 stock) within the last month.',
+    soldOutDetail: 'Newly sold out, last 7 days',
+    soldOutTip:
+      'SKUs that went from in stock to sold out during the last 7 days, including the selected date. The first day an item drops out of the upload or comes in with 0 stock counts as the day it sold out. Items that were already sold out before that are not counted here but appear under Details (sold-out SKUs stay listed for 180 days).',
     soldOutList: 'Show sold-out SKUs',
     details: 'Details',
     unexplained: 'Unrecorded inbound',
@@ -385,7 +390,7 @@ export const en: Dictionary<typeof ko> = {
     skuCount: 'Managed SKUs',
     value: 'Valued inventory',
     valueRatio: 'Share of valued SKUs',
-    soldOut: 'Sold-out SKUs',
+    soldOut: 'Sold out (last 7 days)',
     danger: 'At-risk SKUs',
     dangerValue: '{count} ({ratio})',
     stockoutSoon: 'Expected to run out within the set period',
@@ -430,7 +435,8 @@ export const en: Dictionary<typeof ko> = {
   soldOut: {
     title: '{count} sold-out SKUs',
     description:
-      'SKUs recognized as sold out within the last 180 days — missing from the latest upload or uploaded with 0 stock (layout set to “sold out”). They also stay in the stock table with a sold-out badge for 180 days. Click one to see details such as the stock trend before selling out.',
+      'SKUs recognized as sold out within the last 180 days — missing from the latest upload or uploaded with 0 stock (layout set to “sold out”). Items that sold out in the last 7 days are listed first. Click one to see details such as the stock trend before selling out.',
+    recent: 'Last 7 days',
     empty: 'No sold-out SKUs.',
     detected: ' · sold out since {date}',
   },
