@@ -49,10 +49,10 @@ type SortKey =
   | 'accelerationDesc'
   | 'valueDesc'
   | 'stagnantDesc'
-  | 'increaseDesc'
   | 'netChangeDesc';
 
-const SORT_OPTIONS: SortKey[] = ['stockoutFast', 'coverageAsc', 'depletionRateDesc', 'accelerationDesc', 'valueDesc', 'stagnantDesc', 'increaseDesc', 'netChangeDesc'];
+/** 탭을 고르면 그 탭의 기준으로 정렬한다 — 소진 가속·장기 정체 열은 좁은 화면에서 숨겨져 머리글로 정렬할 수 없으므로. */
+const TAB_SORT: Partial<Record<TableTab, SortKey>> = { ACCELERATING: 'accelerationDesc', STAGNANT: 'stagnantDesc', STOCKOUT_RISK: 'stockoutFast' };
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -99,13 +99,7 @@ function sortValue(row: InventoryRow, key: SortKey): number | null {
       return row.valueBreakdown.normalStockValue;
     case 'stagnantDesc':
       return row.analysis.stagnation.isMeaningful ? row.analysis.stagnation.stagnantDays : null;
-    case 'increaseDesc':
-      return row.periodComparison
-        ? row.periodComparison.totalIncrease
-        : row.analysis.dailyChange !== null && row.analysis.dailyChange > 0 ? row.analysis.dailyChange : null;
-    // "직전 관측 대비"/"기간 변화" 열이 실제로 보여주는 값(순증감, 감소도 음수로 포함)과 동일한
-    // 기준으로 정렬한다. increaseDesc는 증가분만 보는 별도 지표(정렬 드롭다운 전용)라 이 열의
-    // 헤더 클릭 정렬에는 맞지 않는다 — 대부분의 행이 감소(null 처리)라 정렬이 안 먹는 것처럼 보였다.
+    // "직전 관측 대비"/"기간 변화" 열이 실제로 보여주는 값(순증감, 감소도 음수로 포함)과 동일한 기준으로 정렬한다.
     case 'netChangeDesc':
       return row.periodComparison ? row.periodComparison.netChange : row.analysis.dailyChange;
     default:
@@ -244,6 +238,11 @@ export function InventoryTable({
         value={tab}
         onValueChange={(v) => {
           onChangeTab(v as TableTab);
+          const tabSort = TAB_SORT[v as TableTab];
+          if (tabSort) {
+            setSortKey(tabSort);
+            setSortAsc(ASCENDING_BY_DEFAULT.includes(tabSort));
+          }
           setPage(1);
         }}
       >
@@ -352,15 +351,6 @@ export function InventoryTable({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Select value={sortKey} onValueChange={(v) => toggleSort(v as SortKey)}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t.sort} /></SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map((o) => (
-                <SelectItem key={o} value={o}>{t.sortOptions[o]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 text-xs">
