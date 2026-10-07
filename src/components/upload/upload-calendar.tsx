@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
+import { CalendarRange } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarDayDialog } from '@/components/calendar/calendar-day-dialog';
@@ -20,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/i18n/i18n-provider';
 import { format as fill } from '@/lib/i18n/locales';
 import type { WarehouseOption } from '@/components/calendar/day-panels';
+import { PeriodUploadSheet } from '@/components/upload/period-upload-sheet';
 
 export interface CalendarEntry {
   warehouseId: string;
@@ -109,6 +112,7 @@ export function UploadCalendar({
   const [selectedDate, setSelectedDate] = useState<string | null>(initialDate ?? null);
   const [selectedMode, setSelectedMode] = useState<Segment | null>(initialMode ?? null);
   const [scheduleForm, setScheduleForm] = useState<{ schedule: ScheduleRow | null; date: string } | null>(null);
+  const [periodOpen, setPeriodOpen] = useState(false);
   // 캘린더 머리글의 표시 선택(재고 데이터·일정) — 보는 사람 기기에 기억한다.
   const [showStockLayer, setShowStockLayer] = usePersistedFlag('limenote_calendar_show_stock', true);
   const [showScheduleLayer, setShowScheduleLayer] = usePersistedFlag('limenote_calendar_show_schedules', true);
@@ -223,8 +227,18 @@ export function UploadCalendar({
           <LayerCheckbox label={c.layers.stock} checked={showStockLayer} onChange={setShowStockLayer} />
           <LayerCheckbox label={c.layers.schedules} checked={showScheduleLayer} onChange={setShowScheduleLayer} />
         </fieldset>
-        <MonthPicker year={month.getFullYear()} month={month.getMonth() + 1} todayYear={Number(today.slice(0, 4))} onChange={(y, mo) => goToMonth(new Date(y, mo - 1, 1))} />
+        <div className="flex items-center gap-2">
+          {showDaily && canEdit && dailyWarehouses.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setPeriodOpen(true)} className="h-8">
+              <CalendarRange aria-hidden="true" />
+              <span className="hidden sm:inline">{c.period.open}</span>
+              <span className="sr-only sm:hidden">{c.period.open}</span>
+            </Button>
+          )}
+          <MonthPicker year={month.getFullYear()} month={month.getMonth() + 1} todayYear={Number(today.slice(0, 4))} onChange={(y, mo) => goToMonth(new Date(y, mo - 1, 1))} />
+        </div>
       </div>
+      {periodOpen && <PeriodUploadSheet warehouses={dailyWarehouses} isAdmin={isAdmin} onClose={() => setPeriodOpen(false)} />}
 
       <div className="p-4 sm:p-5">
         <div className="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="list" aria-label={c.todo.title}>
