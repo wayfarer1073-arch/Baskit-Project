@@ -83,7 +83,9 @@ function compactAmount(value: number, locale: string) {
 const MAX_LANES = 3;
 const BAR_H = 15;
 const BAR_GAP = 3;
-const BARS_TOP_OFFSET = 28; // 셀 padding(8) + 날짜 줄 높이(16) + 여백(4)
+const BARS_TOP_OFFSET = 28; // 셀 padding(8) + 날짜 줄 높이(16) + 여백(4) — 칸이 좁아도 막대가 날짜 줄을 덮지 않는 한계
+const BARS_BOTTOM_OFFSET = 8; // 셀 padding
+const SALES_LINE_HEIGHT = 16; // 칸 아래쪽 매출 표시 줄(+여백)
 
 function chunkIntoWeeks(days: Date[]): Date[][] {
   const weeks: Date[][] = [];
@@ -205,7 +207,11 @@ export function UploadCalendar({
     for (const s of monthSchedules) max = Math.max(max, laneOf.get(s.id) ?? -1);
     return Math.min(MAX_LANES, max + 1);
   }, [monthSchedules, laneOf]);
-  const barsSpacerHeight = showScheduleLayer && lanesUsed > 0 ? lanesUsed * BAR_H + (lanesUsed - 1) * BAR_GAP : 0;
+  // 칸이 좁아도 막대가 들어갈 만큼은 칸 높이를 확보한다(막대가 다음 주 칸으로 넘치지 않게).
+  // 일정 막대는 칸 아래쪽에 붙인다(매장 매출 줄이 보이면 그 위). 칸이 좁으면 날짜 줄 아래까지만 올라간다.
+  const salesReserve = showStore && showStockLayer ? SALES_LINE_HEIGHT : 0;
+  const barsBottomOffset = BARS_BOTTOM_OFFSET + salesReserve;
+  const barsSpacerHeight = showScheduleLayer && lanesUsed > 0 ? lanesUsed * BAR_H + (lanesUsed - 1) * BAR_GAP + 4 + salesReserve : 0;
 
   const openSchedule = scheduleList.find((s) => s.id === openScheduleId) ?? null;
   const selectedDateBlocked =
@@ -367,7 +373,14 @@ export function UploadCalendar({
                               </span>
                             )}
                           </div>
-                          {barsSpacerHeight > 0 && <div style={{ height: barsSpacerHeight }} aria-hidden="true" />}
+                          {barsSpacerHeight > 0 && (
+                            <div
+                              className="shrink-0"
+                              // 매출 줄이 있는 칸은 그 줄이 아래 자리를 채우므로 그만큼 뺀다.
+                              style={{ height: barsSpacerHeight - (showStockLayer && salesAmount !== undefined ? salesReserve : 0) }}
+                              aria-hidden="true"
+                            />
+                          )}
                           {showStockLayer && salesAmount !== undefined && (
                             <span
                               className={cn('mt-auto truncate text-right text-[10px] font-semibold tabular-nums', markerTone)}
@@ -386,7 +399,9 @@ export function UploadCalendar({
                       className="pointer-events-none absolute inset-x-0"
                       style={{
                         top: BARS_TOP_OFFSET,
+                        bottom: barsBottomOffset,
                         display: 'grid',
+                        alignContent: 'safe end',
                         gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
                         columnGap: '0px',
                         rowGap: `${BAR_GAP}px`,
